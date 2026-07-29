@@ -1,4 +1,4 @@
-"""Hand-computed validation of the group-wise affine quantizer.
+﻿"""Hand-computed validation of the group-wise affine quantizer.
 
 Every expected value here is derived by hand and the arithmetic is shown in a
 comment. No expected value is copied from the implementation's own output, which
@@ -12,7 +12,7 @@ Asymmetric convention under test (GPTQ):
     code  = clamp(round(w / scale) + zero, 0, 2^b - 1)
     deq   = (code - zero) * scale
 
-Symmetric convention under test:
+symmetric_awq convention under test (AWQ/torch style, NOT gptqmodel):
     qmax = 2^(b-1) - 1, qmin = -2^(b-1)
     scale = absmax / qmax        (all-zero group -> absmax forced to 1)
     code  = clamp(round(w / scale), qmin, qmax)
@@ -27,7 +27,7 @@ import torch
 from ar.quantsim import QuantConfig, quantize_dequantize
 
 ASYM4_G4 = QuantConfig(bits=4, group_size=4, scheme="asymmetric")
-SYM4_G4 = QuantConfig(bits=4, group_size=4, scheme="symmetric")
+SYM4_G4 = QuantConfig(bits=4, group_size=4, scheme="symmetric_awq")
 
 
 def test_torch_round_is_half_to_even() -> None:
@@ -169,7 +169,7 @@ def test_asym8_exact_grid() -> None:
 
 def test_sym8_exact_grid() -> None:
     # 8-bit symmetric: qmax=127. group [-127,127]: absmax=127, scale=1.0.
-    cfg = QuantConfig(bits=8, group_size=2, scheme="symmetric")
+    cfg = QuantConfig(bits=8, group_size=2, scheme="symmetric_awq")
     w = torch.tensor([[-127.0, 127.0]])
     r = quantize_dequantize(w, cfg)
     assert r.codes.tolist() == [[-127.0, 127.0]]
@@ -221,7 +221,7 @@ def test_rows_are_quantized_independently() -> None:
     torch.testing.assert_close(both.dequant[1:2], alone1.dequant)
 
 
-@pytest.mark.parametrize("scheme", ["asymmetric", "symmetric", "symmetric_gptq"])
+@pytest.mark.parametrize("scheme", ["asymmetric", "symmetric_awq", "symmetric_gptq"])
 @pytest.mark.parametrize("bits", [4, 8])
 @pytest.mark.parametrize("group_size", [4, 32, 128, -1])
 def test_codes_stay_in_range_and_quantization_is_idempotent(
@@ -232,7 +232,7 @@ def test_codes_stay_in_range_and_quantization_is_idempotent(
     cfg = QuantConfig(bits=bits, group_size=group_size, scheme=scheme)  # type: ignore[arg-type]
     r = quantize_dequantize(w, cfg)
 
-    if scheme == "symmetric":
+    if scheme == "symmetric_awq":
         lo, hi = -(2 ** (bits - 1)), 2 ** (bits - 1) - 1
     else:
         lo, hi = 0, 2**bits - 1
@@ -258,7 +258,7 @@ def test_step_per_weight_matches_group_membership(group_size: int) -> None:
     w = torch.randn(4, 130)
     cfg = QuantConfig(bits=4, group_size=group_size, scheme="asymmetric")
     r = quantize_dequantize(w, cfg)
-    step = r.step_per_weight(group_size)
+    step = r.step_per_weight()
     assert step.shape == w.shape
     g = w.shape[1] if group_size == -1 else group_size
     # Every weight's step must equal its own group's scale.
@@ -275,7 +275,7 @@ def test_dequant_error_is_bounded_by_half_a_step() -> None:
     w = torch.randn(16, 512)
     cfg = QuantConfig(bits=4, group_size=128, scheme="asymmetric")
     r = quantize_dequantize(w, cfg)
-    step = r.step_per_weight(128)
+    step = r.step_per_weight()
     err = (r.dequant - w).abs()
     assert torch.all(err <= step / 2 + 1e-6)
 
@@ -318,16 +318,18 @@ def test_rejects_bad_input() -> None:
 
 def test_rejects_bad_config() -> None:
     with pytest.raises(ValueError, match="bits"):
-        QuantConfig(bits=3, group_size=128)
+        QuantConfig(bits=3, group_size=128, scheme="asymmetric")
     with pytest.raises(ValueError, match="bits"):
-        QuantConfig(bits=16, group_size=128)
+        QuantConfig(bits=16, group_size=128, scheme="asymmetric")
     with pytest.raises(ValueError, match="group_size"):
-        QuantConfig(bits=4, group_size=0)
+        QuantConfig(bits=4, group_size=0, scheme="asymmetric")
     with pytest.raises(ValueError, match="group_size"):
-        QuantConfig(bits=4, group_size=-2)
+        QuantConfig(bits=4, group_size=-2, scheme="asymmetric")
 
 
 def test_config_name_is_stable_for_result_paths() -> None:
-    assert QuantConfig(bits=4, group_size=128).name == "int4_g128_asym"
-    assert QuantConfig(bits=8, group_size=-1, scheme="symmetric").name == "int8_per_channel_sym"
+    assert QuantConfig(bits=4, group_size=128, scheme="asymmetric").name == "int4_g128_asym"
+    assert QuantConfig(bits=8, group_size=-1, scheme="symmetric_awq").name == "int8_per_channel_symawq"
     assert QuantConfig(bits=4, group_size=32, scheme="symmetric_gptq").name == "int4_g32_symgptq"
+
+

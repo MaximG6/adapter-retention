@@ -46,12 +46,12 @@ REAL_LAYERS = (
 CACHE = REPO_ROOT / ".cache" / "gptqmodel_sdist"
 OUT = REPO_ROOT / "results" / "raw" / "validation" / "quantsim_vs_gptqmodel.json"
 
-# scheme -> gptqmodel's `sym` flag. "symmetric" is our own AWQ/torch-style signed
-# convention with no gptqmodel counterpart; it is compared for information only.
+# scheme -> gptqmodel's `sym` flag. symmetric_awq is our own AWQ/torch-style
+# signed convention with no gptqmodel counterpart; compared for information only.
 SCHEMES: tuple[tuple[str, bool, bool], ...] = (
     ("asymmetric", False, True),
     ("symmetric_gptq", True, True),
-    ("symmetric", True, False),
+    ("symmetric_awq", True, False),
 )
 
 
@@ -250,7 +250,7 @@ def main() -> int:
     print(
         f"PASS: {n} configs across {len(tensors)} tensors are bit-exact against "
         f"gptqmodel.\n"
-        "'symmetric' rows are our own signed convention with no gptqmodel "
+        "symmetric_awq rows are our own signed convention with no gptqmodel "
         "counterpart and are expected to differ."
     )
     return 0
