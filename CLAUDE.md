@@ -159,7 +159,36 @@ Three conda envs, because quantization backends conflict:
 
 llama.cpp is a compiled binary, built with `GGML_CUDA=1`.
 
-**Hardware:** RTX 5090 32GB (sm_120, Blackwell) + RTX 4090 24GB. sm_120 is supported as of 2026 but needs deliberate build choices. `torch.cuda.get_device_capability(0)` must return `(12, 0)`. If it does not, fix the torch build before anything else.
+**Hardware:** RTX 5090 32GB (sm_120, Blackwell) and RTX 4090 24GB (sm_89, Ada).
+
+**Never hardcode a device index.** Enumeration order already changed once on this
+machine after setting `CUDA_DEVICE_ORDER=PCI_BUS_ID` (the 5090 moved from `cuda:1`
+to `cuda:0`), and it can change again on a driver update or slot change. Always
+resolve devices by capability at runtime:
+
+```python
+def get_device(min_capability: tuple[int, int] = (12, 0)) -> torch.device:
+    """Return the first CUDA device meeting min_capability, else raise."""
+    for i in range(torch.cuda.device_count()):
+        if torch.cuda.get_device_capability(i) >= min_capability:
+            return torch.device(f"cuda:{i}")
+    raise RuntimeError(f"No CUDA device with capability >= {min_capability}")
+```
+
+Anything that needs the 32GB card (8B BF16 loads, gradient passes) resolves it this
+way and asserts on the result. Anything that fits in 24GB may use either card.
+
+**Environment:** `retention` conda env, Python 3.11, torch 2.11.0+cu128. cu128 or
+newer is mandatory for sm_120; older CUDA builds import cleanly and then fail or
+produce garbage on the 5090. Verified working: a 4096x4096 bf16 matmul of standard
+normals on the 5090 returns mean absolute value 51.02, matching the analytic
+expectation of 64*sqrt(2/pi) = 51.06.
+
+**Platform:** Windows 11, PowerShell, conda. Phase 0 runs natively. Phases 1 and 2
+depend on vLLM, autoawq, and gptqmodel, which are Linux-first and will likely need
+WSL2. Flag any Linux-only dependency rather than assuming it works on Windows.
+
+Record the resolved device name and capability in every run manifest.
 
 **GGUF K-quants use block-wise super-block scales, not plain affine.** Do not hand-roll them. Use llama.cpp's own quantizer and read the tensors back.
 
