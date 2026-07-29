@@ -221,3 +221,149 @@ conda run -n retention python scripts/validate_quantsim_vs_gptqmodel.py
 - `results/raw/validation/quantsim_vs_gptqmodel.json` (all 54 comparison records incl. the informational `symmetric` rows)
 
 ---
+
+## [2026-07-29] EXP-004: retention.py, the fixed/adaptive scale split, and two metric corrections
+
+**Phase:** 0
+
+**Question:** Do the Phase 0 metrics measure the step-size mechanism we claim to measure, and do they read the way the plan assumes?
+
+**Setup:** `src/ar/retention.py`. Max identified a confound before any measurement was taken: group-wise affine quantization derives `s` and `z` from each group's own min and max, so `Q(W)` and `Q(W+Δ)` use *different grids*. If Δ moves any group extreme, the scale shifts and weights with `Δ_i` exactly zero still change. Counting those conflates the mechanism (delta clearing the step) with an artifact (grid moving underneath untouched weights).
+
+Two regimes implemented, `regime` a required argument with no default:
+
+- `fixed_scale` — derive `s, z` from W alone, apply that same grid to both W and W+Δ. Isolates the mechanism.
+- `adaptive_scale` — each tensor quantized on its own grid. Deployment reality.
+
+Diagnostics between them: `grid_shift_fraction`, `grid_shift_fraction_zero_delta`, `scale_shift_fraction`, `retention_gap`.
+
+Also required a refactor of `quantsim.py` to separate `compute_params` from `apply_params`, since applying one tensor's grid to another was previously impossible. And `symmetric` renamed to `symmetric_awq` with `scheme` made a required field — no bare "symmetric" anywhere.
+
+**Command:**
+
+```powershell
+conda run -n retention python -m pytest tests/ -q     # 69 passed
+```
+
+**Result:** Two corrections fell out, both found while writing tests and both material.
+
+*Correction 1: `|Δ| < s/2` does not imply zero flips, even on a fixed grid.*
+
+The spec I was given was "with fixed scale, a group where every `|Δ_i| < s/2` must give exactly zero bit-flips." That is false. Whether a weight flips depends on where it sits inside its bin. Counter-example on a fixed `s=1, z=0` grid:
+
+| w | Δ | \|Δ\|/(s/2) | code(w) | code(w+Δ) | flip |
+|---|---|---|---|---|---|
+| 0.40 | +0.40 | 0.80 | 0 | 1 | **yes** |
+| 0.50 | +0.40 | 0.80 | 0 | 1 | **yes** |
+| 0.00 | +0.40 | 0.80 | 0 | 0 | no |
+| 0.45 | −0.40 | 0.80 | 0 | 0 | no |
+
+What `|Δ| < s/2` guarantees is that the code moves by *at most one* step, not that it does not move.
+
+The actual relationship, measured over 2M samples with weights uniform within their bin:
+
+| \|Δ\|/s | \|Δ\|/(s/2) | measured P(flip) | min(\|Δ\|/s, 1) |
+|---|---|---|---|
+| 0.05 | 0.10 | 0.0501 | 0.0500 |
+| 0.10 | 0.20 | 0.1001 | 0.1000 |
+| 0.25 | 0.50 | 0.2500 | 0.2500 |
+| 0.40 | 0.80 | 0.4000 | 0.4000 |
+| 0.50 | 1.00 | 0.4996 | 0.5000 |
+| 0.75 | 1.50 | 0.7497 | 0.7500 |
+| 1.00 | 2.00 | 1.0000 | 1.0000 |
+
+**`P(flip) = min(|Δ|/s, 1)` to four decimals.** So at `step_ratio = 1`, *half* those weights flip, not none. The plan's phrasing "values below 1 are below the quantization noise floor" is therefore a statement about probability, not a deterministic threshold, and **the fraction of step-ratios under 1 is not the fraction erased.** This is now a closed-form prediction (`predicted_flip_rate`) checked against the measured flip rate as an internal consistency test; divergence would indicate the delta is correlated with bin position, which is a finding rather than a bug.
+
+*Correction 2: `retention_ratio` is unbounded above and non-monotone, and reads backwards for small deltas.*
+
+Measured on a random 8x512 base, int4 g128, sweeping delta magnitude:
+
+| mean \|Δ\|/s | regime | retention_ratio | cosine | flip rate | rel. error | projection |
+|---|---|---|---|---|---|---|
+| 0.0002 | fixed | **95.463** | 0.015 | 0.001 | 95.453 | 1.407 |
+| 0.0002 | adaptive | **95.463** | 0.015 | 0.001 | 95.453 | 1.419 |
+| 0.0023 | fixed | 20.540 | 0.066 | 0.004 | 20.499 | 1.359 |
+| 0.0231 | fixed | 5.210 | 0.177 | 0.023 | 5.128 | 0.922 |
+| 0.2309 | fixed | 1.648 | 0.583 | 0.227 | 1.339 | 0.961 |
+| 1.1543 | fixed | 1.021 | 0.950 | 0.727 | 0.321 | 0.970 |
+| 2.3087 | fixed | 0.953 | 0.967 | 0.852 | 0.254 | 0.921 |
+| 11.5433 | fixed | **0.463** | 0.850 | 0.960 | 0.654 | 0.393 |
+| 11.5433 | adaptive | **1.005** | 0.995 | 0.897 | 0.105 | 0.999 |
+
+`retention_ratio = 95.5` at the smallest delta, with `cosine = 0.015`. The cause: when `|Δ| << s`, each weight that flips contributes a *full step* `s` to `Δ_eff`, which bears no relation to the intended `Δ_i`. So `‖Δ_eff‖` exceeds `‖Δ‖` by orders of magnitude while pointing in an essentially random direction.
+
+**A naive reading of `retention_ratio = 95` as "excellent retention" is exactly backwards: the adapter was erased and replaced by uncorrelated noise of far larger magnitude, which is worse than erasure.** The plan's framing — "retention near 1 means the adapter survives, near 0 means quantization ate it" — has no room for this regime, and it is precisely the regime a rank-16 LoRA is predicted to live in.
+
+Two metrics added that read correctly:
+
+- `relative_error` = `‖Δ_eff − Δ‖/‖Δ‖`, with **1.0 as the exact erasure baseline** (`Δ_eff = 0` gives exactly 1). Below 1 = partially transmitted; at 1 = erased; above 1 = replaced by larger uncorrelated noise.
+- `projection_coefficient` = `⟨Δ_eff, Δ⟩/‖Δ‖²`.
+
+`cosine` is monotone across four decades (0.015 → 0.18 → 0.58 → 0.95) where `retention_ratio` is not, so **cosine is the honest headline for the rank sweep.**
+
+*Third observation, unplanned and interesting:* `projection_coefficient` stays near 1 (0.92 to 1.42) even where cosine collapses to 0.015. The delta biases which way each weight rounds, so it survives *in expectation* while being destroyed per-weight — quantization behaves as a noisy but roughly unbiased channel, i.e. dithering. **This is a candidate mechanism for aligned behaviour surviving Phase 1 despite low numerical retention,** and it is a prediction we can test rather than a post-hoc excuse.
+
+*Fourth: `fixed_scale` clips for large deltas.* At mean `|Δ|/s = 11.5`, fixed gives 0.463 against adaptive's 1.005, because `W+Δ` exceeds the range of W's own grid and saturates against the clamp. `fixed_scale` is a valid instrument only while Δ is small relative to W's range. That is our regime of interest, but cross-regime comparison at large delta is confounded by clipping and must not be reported as a mechanism difference.
+
+*Grid-shift artifact confirmed real.* Constructed case: one weight per group carries a large delta that moves the group max, all other 127 weights have `Δ_i` exactly zero. Under `fixed_scale` at most the perturbed weight can change. Under `adaptive_scale` weights with exactly zero delta do change, and `grid_shift_fraction_zero_delta > 0`. Max's confound is real and is now measured rather than assumed.
+
+**Verdict:** WORKED, with two corrections to the planned metrics.
+
+**What we learned:**
+
+1. The fixed/adaptive split was necessary. The artifact exists and is measurable.
+2. `|Δ| < s/2` is a probabilistic, not deterministic, erasure condition, with `P(flip) = min(|Δ|/s, 1)`.
+3. `retention_ratio` must never be reported bare. It is unbounded above and reads inverted in the small-delta regime.
+4. `cosine` is the metric with the clean dose-response curve; `relative_error` is the one with an interpretable erasure baseline at 1.0.
+5. Quantization looks like an unbiased noisy channel for sub-step deltas. Testable Phase 1 hypothesis.
+6. `fixed_scale` is only valid for small deltas; it clips otherwise.
+7. Negative knowledge: none of these are bugs in `quantsim.py`, which stayed bit-exact against gptqmodel throughout. All four are properties of the *metric definitions* in the plan.
+
+**Plan impact:**
+
+- `cosine` becomes the primary reported quantity for the rank sweep; `retention_ratio` is reported alongside it with the caveat, never alone.
+- `relative_error` added to every table, since 1.0 is the erasure reference line and figures need it.
+- Step-ratio distribution is reported with the `P(flip) = |Δ|/s` prediction overlaid, not as a hard threshold count.
+- `fixed_scale` results are only claimed in the small-delta regime; the clipping limitation goes in Limitations.
+- The unbiased-channel observation is added as an explicit Phase 1 hypothesis rather than left as an anecdote.
+- GATE 0's criterion is stated in terms of bit-flip rate, which is unaffected by all of the above.
+
+**Artifacts:** `src/ar/retention.py`, `tests/test_retention.py` (16 tests), `src/ar/quantsim.py` (refactored for `compute_params`/`apply_params`). Probe scripts in session scratchpad; the numbers above are reproduced by the test suite.
+
+---
+
+## [2026-07-29] EXP-005: GGUF K-quant validation gap, logged before it becomes a surprise
+
+**Phase:** 0
+
+**Question:** How will the GGUF Q4_K_M and Q3_K_M conditions on the Phase 0 grid be validated, given that gptqmodel cannot serve as their reference?
+
+**Setup:** No experiment run. This entry records a known, unclosed validation gap and its plan, per the rule that dead ends and pending decisions belong in the log even when no code was written.
+
+**Command:** None.
+
+**Result:** The Phase 0 grid (plan §1.3) includes **GGUF Q4_K_M and Q3_K_M**. Neither is a group-wise affine scheme, so nothing in `quantsim.py` covers them and the gptqmodel cross-check in EXP-003 says nothing about them.
+
+K-quants use **block-wise quantization with a super-block scale**: blocks of 32 weights each carry their own quantized scale and minimum, and those per-block scales are themselves quantized against a super-block scale spanning 8 blocks (256 weights). Q4_K_M additionally applies mixed precision across tensor types. Consequences:
+
+1. There is no single per-group step size `s`. The effective step for a weight depends on its block scale *after that scale has itself been quantized*. Every metric in `retention.py` takes `s` as given, so `step_per_weight`, `step_ratio`, `subthreshold_fraction`, and `predicted_flip_rate` have no direct analogue without a definition decision.
+2. `fixed_scale` is harder to define. Holding "the grid" fixed means holding both block scales and super-block scales fixed, which is a deeper intervention than reusing one `scale` tensor.
+3. CLAUDE.md is explicit: do not hand-roll K-quants. The reference must be llama.cpp's own quantizer, with tensors read back.
+
+**Verdict:** INCONCLUSIVE — gap identified, not yet closed.
+
+**What we learned:** The EXP-003 validation does **not** generalize to the GGUF arm. Any retention number for Q4_K_M or Q3_K_M produced before the plan below is executed would be unvalidated, and rule 8 forbids using it.
+
+**Plan impact:** GGUF is now explicitly a *separate validation track* rather than another row in the precision axis. Steps, in order:
+
+1. Build `llama.cpp` with `GGML_CUDA=1`. **Flagged as a Windows risk:** it is a CMake/MSVC build and the first genuinely compiled dependency in Phase 0. If it fights, this whole arm moves to WSL2.
+2. Quantize one small model to Q4_K_M and Q3_K_M with `llama-quantize`, then read the tensors back with `gguf-py` and dequantize them to BF16.
+3. Decide and **document** the step-size definition for K-quants before computing any metric. Current proposal: use the *effective* per-weight step implied by the weight's block scale after that scale has itself been quantized, so the super-block quantization is included rather than idealized away. This is a judgement call and belongs in the paper's method section, not in a code comment.
+4. Validate by round-trip: our dequantization of the GGUF tensors must match llama.cpp's own dequantization bit-for-bit on at least one tensor. That is the K-quant analogue of EXP-003 and it gates the arm.
+5. Only then compute retention for the GGUF conditions.
+
+**Decision required from Max:** GGUF is the lowest-value arm per unit of effort — two conditions out of the precision axis, gated behind a compiled dependency, a Windows build risk, and a metric-definition judgement call. Amendment 1 already set the cut priority as "cut precisions before ranks." **Recommendation: defer GGUF until the affine grid (INT4/INT8 x group sizes x ranks 4-128) is complete, and drop it entirely if time is short.** The rank curve on validated affine quantization is the paper; GGUF is a generality check on it.
+
+**Artifacts:** None yet. This entry is the artifact.
+
+---

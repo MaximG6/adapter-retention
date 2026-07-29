@@ -447,3 +447,74 @@ Both papers flagged as highest risk were read and resolved the same day:
 Forward-citation traversal (QA-LoRA complete, LoftQ partial to 100) and a proceedings pass produced nothing measuring our quantities. Residual risk is low and diffuse. Two deferred follow-ups are recorded in `PRIOR_ART.md` §10.
 
 **No change** to the phase structure, the gate criteria, the Phase 0 metric list, or the statistics in Part 4.
+
+---
+
+## Amendment 2 — 2026-07-29 (Phase 0, day 1, later same day)
+
+**Trigger:** Max identified the adaptive-grid confound before any measurement was taken; two further metric corrections fell out of implementing it. Logged as EXP-004. GGUF gap logged as EXP-005.
+
+### 2.1 Retention is measured under two scale regimes, always both
+
+**Supersedes §1.1 and §1.2.** The original definition `Δ_eff = Q(W + Δ) − Q(W)` is ambiguous, because group-wise affine quantization derives `s` and `z` from each group's own min and max. If Δ moves a group extreme, the grid shifts and weights with `Δ_i` exactly zero still change. Counting those conflates the mechanism with an artifact and **inflates apparent transmission**.
+
+- **`fixed_scale`** — `s, z` from W alone, applied unchanged to both W and W+Δ. Isolates the step-size mechanism.
+- **`adaptive_scale`** — each tensor on its own grid. Deployment reality.
+
+Required argument, no default. Both reported everywhere, plus `grid_shift_fraction` (weights changing under adaptive but not fixed), `grid_shift_fraction_zero_delta`, `scale_shift_fraction`, and `retention_gap`.
+
+**Confirmed real, not hypothetical:** in a constructed case where 127 of every 128 weights have exactly zero delta, `adaptive_scale` changes some of those untouched weights and `fixed_scale` does not.
+
+**Limitation to state in the paper:** `fixed_scale` clips when Δ is large relative to W's range (retention 0.463 vs adaptive 1.005 at mean `|Δ|/s = 11.5`). Valid instrument in the small-delta regime only — which is our regime, but cross-regime comparison at large delta is confounded by clipping.
+
+### 2.2 The step-ratio threshold is probabilistic, not deterministic
+
+**Supersedes §1.2 item 4.** "Values below 1 are below the quantization noise floor" reads as a hard threshold. It is not: `|Δ| < s/2` guarantees the code moves by at most one step, not that it does not move — whether it moves depends on the weight's position inside its bin.
+
+Measured over 2M samples: **`P(flip) = min(|Δ|/s, 1)` to four decimals.** At `step_ratio = 1`, half those weights flip.
+
+So the fraction of step-ratios under 1 is **not** the fraction erased. Report the step-ratio distribution with the `P(flip) = |Δ|/s` curve overlaid, and use the closed form as an internal consistency check against the measured flip rate.
+
+### 2.3 Cosine replaces retention_ratio as the primary reported quantity
+
+**Supersedes §1.2 items 1 and 2 and §4.1.** `retention_ratio = ‖Δ_eff‖/‖Δ‖` is **unbounded above and non-monotone**. At mean `|Δ|/s = 0.0002` it measures **95.5** with `cosine = 0.015`: each flipped weight contributes a full step `s` to `Δ_eff` regardless of `Δ_i`, so the norm inflates while the direction randomizes.
+
+Reading `retention_ratio = 95` as excellent retention is exactly backwards — the adapter was erased and replaced by larger uncorrelated noise. The plan's "near 1 survives, near 0 eaten" framing has no room for this regime, and a rank-16 LoRA is predicted to sit in it.
+
+- **`cosine` is the headline.** Monotone across four decades (0.015 → 0.18 → 0.58 → 0.95).
+- **`relative_error` = `‖Δ_eff − Δ‖/‖Δ‖` is added to every table.** Exactly 1.0 when `Δ_eff = 0`, so it separates *partially transmitted* (<1) from *erased* (=1) from *replaced by noise* (>1). Figures get 1.0 as a reference line.
+- `retention_ratio` is still reported for comparability with the literature, **never alone and always with the caveat.**
+
+GATE 0's criterion is stated in bit-flip rate and is unaffected.
+
+### 2.4 New Phase 1 hypothesis: quantization as an unbiased noisy channel
+
+Unplanned finding. `projection_coefficient = ⟨Δ_eff, Δ⟩/‖Δ‖²` stays near 1 (0.92–1.42) even where `cosine` collapses to 0.015. The delta biases which way each weight rounds, so it survives **in expectation** while being destroyed per-weight — a dithering effect.
+
+**This is a candidate mechanism for aligned behaviour surviving Phase 1 despite low numerical retention.** Registered here, before Phase 1 runs, so that if behaviour does survive we are testing a stated prediction rather than constructing a post-hoc explanation.
+
+### 2.5 Quantization convention is a measured factor
+
+**Extends §1.3.** `symmetric` is renamed `symmetric_awq`; `scheme` is a required field with no default, so both symmetric conventions are named explicitly at every call site.
+
+Convention is treated as a **factor in the design, not a config flag**. If `symmetric_awq` and `symmetric_gptq` yield different retention on the same adapter, that gets its own line in the results: it would mean the answer to "does my adapter survive INT4" depends on which toolchain a practitioner happens to use, which is directly actionable.
+
+### 2.6 GGUF becomes a separate, deferrable validation track
+
+**Supersedes §1.3's treatment of GGUF as two more precision levels.** K-quants use block-wise quantization with quantized super-block scales, so there is no single per-group `s` and every step-size-derived metric needs a documented definition decision. gptqmodel cannot validate them; the reference must be llama.cpp's own quantizer.
+
+Full plan and the required round-trip validation gate are in EXP-005.
+
+**Recommendation on the table for Max:** defer GGUF until the affine grid is complete, and drop it if time is short. It is two conditions gated behind a compiled dependency, a Windows build risk, and a metric-definition judgement call. Amendment 1 already set the cut priority as precisions before ranks; this is the first precision to cut.
+
+### 2.7 Sharpened three-arm reconciliation with 2411.19530
+
+Amendment 1 §1.3 specified two arms. There are three, and the middle one is the isolator:
+
+| Arm | Grid derived from | Isolates |
+|---|---|---|
+| quantize Δ alone (2411.19530, BitDelta-style) | Δ's own range | upper bound: Δ sets its own step |
+| **merge then quantize, `fixed_scale`** | **W alone** | **the step-size mechanism** |
+| merge then quantize, `adaptive_scale` | W + Δ | deployment reality, incl. grid shift |
+
+One figure, three arms, with the step-size ratio `s_{W+Δ}/s_Δ` shown alongside. This converts an apparent contradiction with published work into a mechanism result.
