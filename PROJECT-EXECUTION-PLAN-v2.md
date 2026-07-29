@@ -375,3 +375,75 @@ python -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda
 ```
 
 Step 5 is the whole thesis in one number. You should have it by the end of day 1.
+
+---
+---
+
+# AMENDMENTS
+
+Amendments are appended, never merged into the text above. The original plan stays readable as written so that the record shows what changed and when. Each amendment is dated and states its trigger.
+
+---
+
+## Amendment 1 — 2026-07-29 (Phase 0, day 1)
+
+**Trigger:** prior-art search, `PRIOR_ART.md`, logged as EXP-002. Approved by Max the same day.
+
+**Outcome of the day-1 scoop check:** not scooped. Every metric in the Phase 0 list is unclaimed. But the *mechanism* is already asserted in the literature, so the framing narrows.
+
+### 1.1 Framing: cite the mechanism, claim the measurement
+
+The erasure mechanism — a low-rank delta merged into full-precision weights can fall below the quantization step size and be destroyed — **is cited to arXiv 2602.13151** (*Quantization-Robust LLM Unlearning via Low-Rank Adaptation*, 2026-02-13), which asserts it qualitatively to motivate a method. It is additionally implied by QA-LoRA's design (2309.14717) and is folk knowledge among practitioners.
+
+**We do not claim the mechanism as ours.** Claiming it in late 2026 would read as underread and would be caught.
+
+**Our contribution is the quantitative characterization:** retention ratio `‖Δ_eff‖_F/‖Δ‖_F`, bit-flip rate, step-ratio distribution `|Δ|/(s/2)`, and directional fidelity `cos(vec Δ, vec Δ_eff)`, swept over **rank × precision × group size × module type × layer depth**. None of these numbers exists in the literature.
+
+Supersedes the framing implicit in §0.1 and §1.1, which read as though the mechanism were our observation.
+
+### 1.2 The rank sweep is the primary result
+
+**Supersedes §1.3.** Rank was a row in the grid table; it is now the headline.
+
+Rationale: a single retention number at rank 16 restates known folklore. The *curve* is the contribution.
+
+**Revised rank levels: 4, 8, 16, 32, 64, 128.** Extended at both ends from the original {8, 16, 32, 64} — the low end is where erasure should be total and the high end is where it should saturate, and a dose-response curve needs both asymptotes to be credible.
+
+**Revised cut priority: if time forces a cut, cut precisions before ranks.** This inverts the original implicit priority. Reduce the precision axis to {INT4 g128, INT4 g32, FP8} before dropping any rank level.
+
+### 1.3 New experiment: the Δ-alone vs. W+Δ reconciliation
+
+**New, no counterpart in the original plan.** Gets its own paper subsection.
+
+arXiv 2411.19530 (*Quantized Delta Weight Is Safety Keeper*, 2024-11-29) quantizes **Δ alone**, BitDelta-style, and finds compression *protects* alignment (alignment-breaking risk down up to 66.17%). We quantize **W + Δ** jointly and expect it destroys the adapter. Opposite conclusions, and both correct.
+
+**The reconciliation is the step size.** Quantizing Δ alone sets the scale from Δ's own dynamic range, so Δ is preserved by construction. Merge-then-quantize sets the scale from W's range, one to two orders of magnitude larger, so Δ competes against a step size it had no part in setting.
+
+**Design:** for the same adapter at the same bit-width, measure retention under both schemes. Report the ratio of step sizes `s_{W+Δ}/s_Δ` alongside the retention gap, and show the step-size ratio accounts for the divergence.
+
+Cost is near zero — both code paths already exist in `quantsim.py`, since quantizing Δ alone is the same function called on a different tensor. High value: it converts an apparent contradiction with published work into a mechanism result, and preempts the most obvious reviewer objection.
+
+### 1.4 Phase 1 must not lead with perplexity
+
+**Supersedes §2.2** to the extent that §2.2 left perplexity's role open.
+
+arXiv 2605.15208 (*Quantization Undoes Alignment*, 2026-05-02) establishes independently that perplexity is a false negative for behavioral degradation: under 0.5% change at 8-bit while measurable bias emerges, and under 11% even at 3-bit.
+
+**Behavioral and distributional metrics carry Phase 1.** Perplexity is reported **only as a negative control**, to demonstrate that the standard screening metric misses the effect. Reporting it as a headline number would replicate a known error.
+
+### 1.5 Outreach framing (recorded here so it is not lost)
+
+Both **Mohit Bansal and Huaxiu Yao are co-authors on ATP** (2510.04860), which is the Phase 2 testbed and also the intended recipients' own work.
+
+**Max's decision:** Phase 2 is framed as **extending a paper they co-authored in a direction neither followed**. Never as importing one lab's work into the other's.
+
+### 1.6 Residual scoop risk after the day-1 check
+
+Both papers flagged as highest risk were read and resolved the same day:
+
+- **2606.01412** (*GPTQ-intrinsic LoRA*) — read in full. Its low-rank term is a **designed compensator** (`L = V_r` from the calibration matrix, `R` initialized at zero), not a pre-existing adapter. No retention bound, no per-weight step-size condition, per-channel only. Its `(1 − r/N)` bound describes *compensation capacity*, which looks superficially like retention-vs-rank and is not. **We are not measuring something it derives.** Cite as nearest theoretical neighbour and state the distinction explicitly.
+- **2411.19530** — resolved into the new experiment in §1.3 above.
+
+Forward-citation traversal (QA-LoRA complete, LoftQ partial to 100) and a proceedings pass produced nothing measuring our quantities. Residual risk is low and diffuse. Two deferred follow-ups are recorded in `PRIOR_ART.md` §10.
+
+**No change** to the phase structure, the gate criteria, the Phase 0 metric list, or the statistics in Part 4.

@@ -99,3 +99,125 @@ The original 51.017 and today's 51.0415 differ because the original check did no
 **Artifacts:** `scratchpad/env_check.py` (verification script, session scratchpad — not yet in-repo; will be superseded by `src/ar/manifest.py`). No `results/raw/` artifact, as this predates the run harness.
 
 ---
+
+## [2026-07-29] EXP-002: Prior-art search — is the Phase 0 numerical result already published?
+
+**Phase:** 0
+
+**Question:** Has anyone published the retention measurement we plan to produce, and if so, how much of it?
+
+**Setup:** Ten web searches covering the axes named in the plan (LoRA merge-then-quantize retention, adapter erasure under PTQ, LoftQ, QA-LoRA, quantization-aware LoRA initialization, safety fine-tune survival under compression) plus the reverse framing (does the ecosystem assume merge-then-quantize is lossless). Six papers had abstracts retrieved directly from arXiv; the rest are recorded as leads. Full detail and per-paper coverage verdicts in `PRIOR_ART.md`.
+
+**Command:** No code. Web searches; queries listed verbatim in `PRIOR_ART.md` §9.
+
+**Result:**
+
+Closest hit is **arXiv 2602.13151** (*Quantization-Robust LLM Unlearning via Low-Rank Adaptation*, 2026-02-13), which asserts our exact mechanism — updates below the step size are erased, a larger displacement crosses the quantization boundary — to motivate a method. Confirmed absent from it: retention ratio, bit-flip rate, rank sweep, any quantification of the erased fraction. Domain is unlearning, and the direction is inverted (LoRA as the fix that survives, not the thing at risk).
+
+Coverage of our planned Phase 0 outputs:
+
+| Component | Published? |
+|---|---|
+| Mechanism (small deltas erased below step size) | YES, asserted qualitatively (2602.13151) |
+| Merge-then-quantize loses accuracy | YES, folk knowledge (QA-LoRA implicitly, PEFT docs, blogs) |
+| Retention ratio ‖Δ_eff‖/‖Δ‖ | No |
+| Bit-flip rate | No |
+| Step-ratio distribution | No |
+| Retention vs. rank curve | No |
+| Retention vs. group size / precision / module type / depth | No |
+| Numerical retention → alignment behaviour link | No |
+
+All four safety-quantization arXiv IDs carried in the plan document resolved to real papers (2511.07842, 2601.12033, 2605.15208, 2606.29581). ATP confirmed as 2510.04860, Han et al.
+
+Reverse framing confirmed: Hugging Face PEFT documentation presents `merge_and_unload()` → GPTQ/AWQ as the standard path, and warns only about the *opposite* order (merging into an already-quantized model). The direction we are measuring is the documented happy path.
+
+**Verdict:** WORKED — not scooped, but the framing is narrowed.
+
+**What we learned:**
+
+1. The mechanism is claimed; every number we planned to produce is unclaimed. The contribution moves from "we noticed this" to "we measured this."
+2. **2411.19530** (*Quantized Delta Weight Is Safety Keeper*) is the most instructive contrast: it quantizes Δ alone, where the scale is set by Δ's own range, and finds compression *protects* alignment against attackers. We quantize W + Δ jointly, where the scale is set by W's much larger range. Opposite arithmetic, opposite expected sign, both can be true. Stating this side by side preempts the obvious reviewer objection.
+3. **2605.15208** independently establishes that perplexity is a false negative for behavioural degradation (<0.5% change at 8-bit while bias emerges). Phase 1 must not use perplexity as a headline metric.
+4. Negative knowledge: LoftQ and QA-LoRA were the pre-registered scoop risk and are **not** the threat. Both solve the inverse problem (fine-tuning well on an already-quantized base). The real residual risk is **2606.01412** (*GPTQ-intrinsic LoRA*), whose theory operates in exactly our regime — low-rank correction with Frobenius norm comparable to quantization error — and may predict our curves analytically.
+5. Search gaps, stated so they are not mistaken for coverage: no citation-graph traversal forward from LoftQ/QA-LoRA, no systematic 2025–2026 proceedings sweep, no non-English sources. Forward citations of QA-LoRA are where a direct hit would most likely hide.
+
+**Plan impact:** Recommendation is **proceed with a narrowed claim**, pending Max's review. Three consequences if accepted:
+
+- The **rank sweep is promoted from supporting evidence to the primary result.** A single retention number at rank 16 restates known folklore; the curve is the contribution. Cut anything before cutting rank coverage.
+- Read 2606.01412 and 2411.19530 in full before writing Method.
+- Phase 1 avoids perplexity as a headline metric.
+
+No change to the phase structure, the gates, or the Phase 0 metric list.
+
+**Artifacts:** `PRIOR_ART.md` (full entries, verification levels, coverage table, recommendation).
+
+---
+
+## [2026-07-29] EXP-003: quantsim implementation, hand-computed tests, and gptqmodel cross-check
+
+**Phase:** 0
+
+**Question:** Does our group-wise affine quantizer compute the right thing, and does it agree with a production implementation on a real layer?
+
+**Setup:** `src/ar/quantsim.py`, group-wise affine quantize-dequantize with explicit per-group step sizes. Bits 4 and 8; group sizes 32, 128, and -1 (per-channel); three schemes. Validation split in two per Max's instruction: hand-computed unit tests are the gate, the gptqmodel cross-check is best-effort.
+
+Reference: gptqmodel 7.3.2, `gptqmodel/quantization/quantizer.py`. Real tensors: `Qwen/Qwen3-8B` `model.layers.0.self_attn.q_proj.weight` (4096x4096 BF16) and `model.layers.0.mlp.down_proj.weight` (4096x12288 BF16), plus a 4096x4096 standard-normal tensor at seed 0. All comparisons in float32.
+
+**Command:**
+
+```powershell
+conda run -n retention python -m pytest tests/ -q
+conda run -n retention python scripts/validate_quantsim_vs_gptqmodel.py
+```
+
+**Result:**
+
+*Leg 1, hand-computed unit tests (the gate): 53 passed.* Every expected value derived by hand with the arithmetic in a comment; none copied from the implementation's own output. Covers symmetric and asymmetric, 4 and 8 bit, evenly-dividing and ragged group sizes, all-zero groups, constant-valued groups, round-half-to-even at exact halves, per-weight step-size mapping, and the `|error| <= s/2` bound.
+
+*Leg 1b, mutation check.* Passing tests prove nothing unless they can fail, so seven mutants were run against the suite:
+
+| # | Mutation | Killed? |
+|---|---|---|
+| 1 | round-half-to-even -> `floor(x+0.5)` | YES (1 test) |
+| 2 | ragged padding: NaN sentinel -> edge replication | **NO** |
+| 3 | drop the clamp making zero representable | YES (2 tests) |
+| 4 | ragged padding -> constant `1e6` | YES (1 test) |
+| 5 | asymmetric scale `/(qmax+1)` | YES (14 tests) |
+| 6 | symmetric scale `/(qmax+1)` | YES (12 tests) |
+| 7 | zero-point sign flip | YES (12 tests) |
+
+6 of 7 killed. **Mutant 2 is an equivalent mutant, not a test gap:** replicating the last real element into the pad positions inserts a value already present in the tail group, so the group's min, max, and absmax are unchanged and the output is provably identical. Mutant 4 confirms the suite does catch a genuinely wrong padding value.
+
+*Leg 2, gptqmodel cross-check.* gptqmodel 7.3.2 has **no Windows wheel** — sdist only, needing MSVC and nvcc. It was not installed. Its quantizer math is pure PyTorch, so the sdist is downloaded and that one module is loaded directly with the heavy package `__init__` bypassed. Real layers are range-read from the remote safetensors shards (32 MiB + 100 MiB instead of a 16 GB model download).
+
+**36 of 36 configs bit-exact** (`max|Δdequant| = 0.000e+00`, per-group scales `allclose`) across 3 tensors x 2 bit-widths x 3 group sizes x 2 schemes:
+
+| Tensor | asymmetric | symmetric_gptq | our `symmetric` |
+|---|---|---|---|
+| Qwen3-8B q_proj (4096x4096) | 0.0 exact, 6/6 | 0.0 exact, 6/6 | 7.34e-02 (int4), 4.13e-03 (int8) |
+| Qwen3-8B down_proj (4096x12288) | 0.0 exact, 6/6 | 0.0 exact, 6/6 | 1.15e-01 (int4), 6.40e-03 (int8) |
+| random normal (4096x4096) | 0.0 exact, 6/6 | 0.0 exact, 6/6 | 7.06e-01 (int4), 4.04e-02 (int8) |
+
+**Verdict:** WORKED
+
+**What we learned:**
+
+1. **Our asymmetric mode is bit-exact against gptqmodel on real Qwen3-8B layers.** CLAUDE.md rule 8 is satisfied and quantsim numbers may now be used.
+2. **A convention divergence was found and it would have corrupted our symmetric numbers.** Our first `symmetric` implementation used signed codes in `[-2^(b-1), 2^(b-1)-1]` with `scale = absmax/(2^(b-1)-1)` — the AWQ/torch-style convention. gptqmodel's `sym` is entirely different: *unsigned* codes with a fixed zero point at `(2^b)/2` and `scale = (xmax-xmin)/(2^b-1)` after mirroring the range. Max disagreement on a real q_proj layer was **7.34e-02 at int4**, which is roughly one third of a typical step size and would have quietly shifted every symmetric retention number we published. Added `scheme="symmetric_gptq"` reproducing the reference exactly; kept `symmetric` as the AWQ-style convention, now documented as not matching gptqmodel. **Any symmetric number reported in the paper must state which convention it used.**
+3. **gptqmodel's symmetric mode clips all-non-negative groups.** It mirrors the range only where `xmin < 0`, but still places the zero point at `(qmax+1)/2`, so the upper half of such a group's range is unreachable. Hand-computed example: group `[0,5,10,15]` at int4 dequantizes to `[0,5,7,7]` — 10 and 15 both collapse to 7. Replicated faithfully and pinned by a test, because the goal is to describe what the toolchain actually produces.
+4. **gptqmodel's symmetric mode is not idempotent, and ours reproduces that exactly.** Measured at int4 g128 on the same input: `max|Q(Q(w)) − Q(w)|` = **4.456093e-01 for gptqmodel and 4.456093e-01 for ours**. Cause is the clipping asymmetry in (3): code 0 reaches `−8s` while `+8s` clips to `+7s`, so the mirrored range grows on the second pass. Asymmetric is idempotent to float32 epsilon (2.38e-07) in both. This was initially a test failure; it is a property of the reference, not a bug, and is now asserted so nobody "fixes" it into divergence.
+5. Negative knowledge: **gptqmodel does not need to be installed to be used as a numerical reference.** Its quantizer is dependency-light pure PyTorch. This removes gptqmodel from the WSL2 blocker list for Phase 0 purposes. It remains a WSL2 item for actually *building* quantized checkpoints in Phase 1, which needs the compiled kernels.
+6. Negative knowledge: **a full model download is not required to validate against real weights.** Range-reading a single tensor from a remote safetensors shard cost 32 MiB against a 3.72 GiB shard. Reusable for any single-tensor work.
+
+**Plan impact:**
+
+- Third scheme added to the precision axis. `symmetric_gptq` is now the scheme to use when reporting numbers meant to describe a gptqmodel-quantized checkpoint; plain `symmetric` describes an AWQ-style one.
+- gptqmodel dropped from the Phase 0 WSL2 risk list. Still flagged for Phase 1 checkpoint building.
+- No change to the phase structure or GATE 0 criteria.
+
+**Artifacts:**
+- `src/ar/quantsim.py`, `src/ar/device.py`, `tests/test_quantsim.py` (53 tests)
+- `scripts/validate_quantsim_vs_gptqmodel.py` (self-contained, re-fetches the sdist)
+- `results/raw/validation/quantsim_vs_gptqmodel.json` (all 54 comparison records incl. the informational `symmetric` rows)
+
+---
