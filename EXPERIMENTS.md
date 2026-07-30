@@ -1023,3 +1023,64 @@ Restricted to r ≥ 64: 0.44% / 0.58% / 0.61%.
 **Artifacts:** `src/ar/retention.py` (`lora_delta` fix), `tests/test_retention.py` (rsLoRA scaling test), regenerated `results/raw/phase0/public_adapter/ceselder__*/`, `results/raw/phase0/output_snr_orthonormal/`, `results/raw/phase0/anisotropy/`.
 
 ---
+
+## [2026-07-30] EXP-012: Ground-truth fixture against peft, and a strict adapter-config surface
+
+**Phase:** 0
+
+**Question:** Can the class of error behind EXP-011 be closed structurally rather than one adapter at a time?
+
+**Setup:** Four analyses ran against `lora_delta` before anyone checked it against what peft actually does. The only reference that cannot drift from peft's behaviour is peft's own merge path, so:
+
+1. **Ground-truth fixture.** For each of the six adapters, for one attention module (`q_proj`) and one MLP module (`down_proj`) at layer 12: install the adapter's real `A` and `B` into a one-`Linear` stub carrying the real base weight, call `get_peft_model` then `merge_and_unload`, and compare `(merged − base)` against our reconstruction. No base-model download is needed — the base weight comes from a range read and the stub is a single `Linear`.
+2. **Config-surface audit.** Every key ever seen in an `adapter_config.json` is partitioned into *handled*, *inert*, or *must-equal-peft's-default*, with an unrecognised key a hard failure.
+
+**Command:**
+
+```powershell
+conda run -n retention python scripts/validate_lora_delta_vs_peft.py
+conda run -n retention python -m pytest tests/ -q      # 93 passed
+```
+
+**Result:**
+
+*1. All twelve reconstructions are identical to peft's own merge at float32 precision.*
+
+| adapter | module | r | rsLoRA | scaling | max\|ours − peft\| | relative |
+|---|---|---|---|---|---|---|
+| taboo-smile | q_proj | 32 | False | 2.0000 | 1.47e-08 | 9.9e-06 |
+| taboo-smile | down_proj | 32 | False | 2.0000 | 5.42e-08 | 6.9e-05 |
+| taboo-ship | q_proj / down_proj | 32 | False | 2.0000 | 1.45e-08 / 5.69e-08 | ≤6.6e-05 |
+| taboo-gold | q_proj / down_proj | 32 | False | 2.0000 | 1.48e-08 / 4.98e-08 | ≤5.9e-05 |
+| latentqa | q_proj / down_proj | 64 | False | 2.0000 | 1.49e-08 / 3.78e-08 | ≤1.2e-05 |
+| **ao-v3-dpo-halluc** | q_proj / down_proj | 128 | **True** | **1.4142** | 1.49e-08 / 3.95e-08 | ≤1.7e-06 |
+| responsible-ai-safety | q_proj / down_proj | 16 | False | 2.0000 | 8.24e-09 / 2.78e-08 | ≤9.5e-06 |
+
+Both scaling rules, both module shapes, two base models. **This fixture would have caught the rsLoRA bug on day one.**
+
+*2. The config audit fired immediately, and its first firing was a false positive worth recording.*
+
+The initial implementation hardcoded expected defaults and rejected every taboo adapter on `qalora_group_size=16 (expected None)`. But 16 **is** peft's default and the field is inert while `use_qalora` is False. Hardcoding my guess at a default would have made the guard useless — anyone hitting it would have loosened the check rather than investigated.
+
+Rewritten to read defaults from `LoraConfig` at runtime via `dataclasses.fields`, so a peft upgrade that changes a default is tracked rather than mis-flagged. Fields whose relevance is gated by another field (`qalora_group_size` by `use_qalora`) are declared as such, and a test asserts every named gate is itself checked.
+
+*3. Twenty fields now refuse to load if set away from peft's default*, each because it would change the merged delta or which layers carry one: `use_dora`, `use_qalora`, `rank_pattern`, `alpha_pattern`, `layer_replication`, `layers_to_transform`, `layers_pattern`, `fan_in_fan_out`, `lora_bias`, `megatron_config`, `loftq_config`, `corda_config`, `eva_config`, `arrow_config`, `exclude_modules`, `modules_to_save`, `trainable_token_indices`, `target_parameters`, `alora_invocation_tokens`, `ensure_weight_tying`.
+
+Orientation is asserted at delta construction: `A` must be `(r, in)` and `B` must be `(out, r)`, so a transposed checkpoint raises instead of producing a plausible wrong number.
+
+*4. Eighteen new network-free tests* covering rsLoRA scaling, unrecognised keys, each math-changing field, peft-default acceptance, gate consistency, orientation, and agreement between `AdapterSpec.delta` and `lora_delta`. Suite is 93 tests.
+
+**Verdict:** WORKED.
+
+**What we learned:**
+
+1. **The reference must be the thing itself.** Checking our arithmetic against our own reading of peft's documentation is what failed; checking it against `merge_and_unload` cannot fail the same way. The same argument produced the `gptqmodel` fixture in EXP-003, and the lesson did not transfer to adapters until it cost four entries.
+2. **A guard built on guessed defaults is worse than no guard**, because its first false positive trains you to weaken it. Reading defaults from the library at runtime is what makes the check survivable.
+3. **`use_dora` is the next rsLoRA.** DoRA renormalises the merged weight, so the delta is not `(α/s)·BA` at all. No adapter in our set uses it, and now none can be measured without an explicit decision.
+4. Negative knowledge: the strict surface cost one false positive and about twenty minutes. Cheap relative to four entries of wrong numbers.
+
+**Plan impact:** None to the phase structure. `ar.adapters.load_adapter_spec` becomes the only sanctioned way to read an adapter config.
+
+**Artifacts:** `src/ar/adapters.py`, `scripts/validate_lora_delta_vs_peft.py`, `tests/test_adapters.py`, `results/raw/phase0/peft_ground_truth/records.jsonl` (12 records).
+
+---
