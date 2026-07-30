@@ -718,3 +718,116 @@ Paired on the 168 (adapter, layer, module) cells present under all three schemes
 - `analysis/summarise.py`, `scripts/synthetic_sweep.py`
 
 ---
+
+## [2026-07-30] EXP-009: Output-space SNR, bin-position independence, spike decomposition, and a failed prediction
+
+**Phase:** 0
+
+**Question:** Does the DPO adapter show the worst output-space degradation as predicted; are trained deltas independent of quantization bin position; and what drives the layer 1–3 bit-flip spike?
+
+**Setup:** Six adapters, INT4 g128 asymmetric, `fixed_scale`, layers {0, 12, 23}, all 7 modules. Output SNR measured directly (`‖Δx‖/‖(Δ_eff−Δ)x‖`) with probes drawn both generically and from the adapter's own row space, rather than composed from the `√(d_in/r)` law. Effective rank of `A` reported as the participation ratio of its singular values. Bin-position independence tested by Pearson correlation and by a within-group permutation control that shuffles Δ inside each quantization group, destroying any Δ–position association while preserving Δ's marginal distribution exactly.
+
+**Command:**
+
+```powershell
+conda run -n retention python scripts/output_space_diagnostics.py
+conda run -n retention python scripts/validate_predict.py
+```
+
+**Result:**
+
+*1. The registered DPO prediction FAILED.*
+
+| adapter | r | eff. rank | SNR_w | SNR_out generic | **SNR_out subspace** | amplification | `√(d_in/r)` |
+|---|---|---|---|---|---|---|---|
+| taboo-gold | 32 | 31.8 | 0.1342 | 0.1340 | **2.0013** | 15.02 | 12.83 |
+| taboo-smile | 32 | 31.8 | 0.1341 | 0.1338 | **2.0137** | 15.06 | 12.83 |
+| taboo-ship | 32 | 31.8 | 0.1366 | 0.1365 | **2.0707** | 15.27 | 12.83 |
+| ao-v3-dpo-halluc | 128 | 115.1 | 0.1565 | 0.1564 | **2.4907** | 15.50 | 6.41 |
+| latentqa | 64 | 60.8 | 0.2920 | 0.2915 | **5.5641** | 18.64 | 9.07 |
+| responsible-ai-safety | 16 | 15.4 | 0.3854 | 0.3854 | **7.6583** | 21.07 | 18.64 |
+
+The DPO adapter was predicted to show the most severe output-space degradation, worst by ~4.8x. **It ranks 4th of 6, and is 23% better than the three taboo adapters.** The prediction is **FAILED**, not partially confirmed.
+
+*2. Why it failed: the `√(d_in/r)` amplification law does not hold for trained adapters.*
+
+Measured amplification is **15.0–21.1 across ranks 16 to 128**, essentially rank-independent, while `√(d_in/r)` varies from 6.41 to 18.64 — a 2.9x range. Ratios of measured to predicted: 1.17 (r=32), 2.05 (r=64), **2.42 (r=128)**, 1.13 (r=16). The error grows systematically with rank.
+
+This is **not** an effective-rank artifact: measured effective rank tracks nominal rank closely (31.8/32, 60.8/64, 115.1/128, 15.4/16), and substituting it changes `√(d_in/eff_r)` by under 5%.
+
+The law was verified on synthetic adapters with iid factors (EXP-006, EXP-008) and does not transfer. **This is the second component of my own registered prediction P1 to fail on trained adapters** — the weight-space `r^(1/4)` half already failed in EXP-008. P1 stands as a synthetic result and must not be stated as a claim about real adapters.
+
+*3. Consequently, output space does NOT reorder the adapters.* Because amplification is roughly constant, output SNR is approximately a fixed multiple of weight SNR, and the two orderings are identical. Answering the second question directly: **output-space retention is not monotone in rank either** (r=16 → 7.66, r=32 → ~2.0, r=64 → 5.56, r=128 → 2.49). The two spaces *agree* for trained adapters. The disagreement predicted by P1 is real but confined to the synthetic regime where magnitude is set by parameterization.
+
+*4. Bin-position independence: confirmed, and this is the real content of the channel claim.*
+
+| adapter | corr(Δ/s, bin offset) | corr(\|Δ\|/s, \|offset\|) | flip real | flip permuted | real/perm |
+|---|---|---|---|---|---|
+| taboo-smile | 0.00004 | 0.00001 | 0.01033 | 0.01033 | 1.0004 |
+| taboo-ship | 0.00002 | 0.00001 | 0.01065 | 0.01066 | 0.9998 |
+| taboo-gold | 0.00008 | −0.00009 | 0.01037 | 0.01036 | 1.0009 |
+| latentqa | −0.00005 | −0.00002 | 0.03946 | 0.03947 | 0.9997 |
+| ao-v3-dpo-halluc | −0.00013 | 0.00008 | 0.01364 | 0.01362 | 1.0010 |
+| responsible-ai-safety | −0.00007 | 0.00327 | 0.06332 | 0.06327 | 1.0008 |
+
+Pooled: **max |correlation| = 0.00109**, mean −0.00002. Permutation control: real/permuted flip ratio in **[0.9916, 1.0147]**, mean 1.0005.
+
+`P(flip) = mean(min(|Δ|/s, 1))` is close to an identity when Δ is independent of where `w` sits in its bin. The finding is therefore not "the formula works" but **"trained LoRA deltas carry no information about quantization bin position."** Gradient descent, optimizing a loss that has no knowledge of the deployment quantizer, produces updates statistically orthogonal to the quantization grid. Stated that way it is a claim about training dynamics, and it is what licenses the closed form.
+
+*5. The layer 1–3 spike is a step-size effect, localized to two modules.*
+
+Layer-level decomposition first, which did **not** close: at layers 1–3, `mean|Δ|` is 0.89–0.91x its layer-12 value and `mean s` is 0.78–0.84x, so the ratio of means predicts ~1.13x, but `mean(|Δ|/s)` is **2.9x** higher. That gap can only come from heterogeneity within the layer.
+
+Resolved by going per module:
+
+| layer | module | mean\|Δ\| ×1e4 | mean s ×1e3 | mean\|Δ\|/s | flip | s p50/p1 |
+|---|---|---|---|---|---|---|
+| 1 | q_proj | 0.9008 | 8.1956 | 0.01155 | 0.0115 | 1.58 |
+| 1 | k_proj | 0.7578 | 8.8958 | 0.00898 | 0.0090 | 1.87 |
+| 1 | v_proj | 0.7321 | 9.4847 | 0.00793 | 0.0079 | 1.49 |
+| 1 | o_proj | 0.7642 | 8.6743 | 0.00917 | 0.0092 | 1.50 |
+| 1 | **gate_proj** | 1.1091 | 6.3526 | **0.07314** | **0.0539** | **83.77** |
+| 1 | **up_proj** | 0.8439 | **3.8331** | **0.08149** | **0.0768** | 7.07 |
+| 1 | down_proj | 0.5179 | 7.7713 | 0.00688 | 0.0052 | 1.54 |
+| 12 | (all seven) | 0.55–1.18 | 9.2–10.8 | 0.006–0.012 | 0.006–0.013 | 1.35–2.07 |
+
+**The spike is entirely `gate_proj` and `up_proj` at layer 1**, and in both cases the numerator is *lower* than at layer 12 while the denominator collapses:
+
+- `up_proj` layer 1 has a **globally smaller step size**, mean `s` = 3.83e-3 against 9.67e-3 at layer 12 — a 2.5x narrower weight range.
+- `gate_proj` layer 1 has a **heavy small-`s` tail**: its median step is 83.8x its 1st percentile, against 1.4–2.1x for every normal module. A subpopulation of groups with extremely narrow dynamic range drives the layer mean.
+
+**So retention varies across the model because the base model's step size varies, not because the adapter varies.** The adapter's magnitude is comparatively flat; the quantization grid is not.
+
+*6. Diagnostic tool `python -m ar.predict` built and validated.*
+
+| adapter | flip predicted | flip measured | error | cosine predicted | cosine measured | error |
+|---|---|---|---|---|---|---|
+| responsible-ai-safety | 0.05587 | 0.06191 | −9.8% | 0.3278 | 0.3298 | −0.6% |
+| taboo-gold | 0.01070 | 0.01114 | −4.0% | 0.1435 | 0.1389 | +3.3% |
+| taboo-ship | 0.01083 | 0.01139 | −4.9% | 0.1441 | 0.1409 | +2.2% |
+| taboo-smile | 0.01060 | 0.01220 | −13.2% | 0.1427 | 0.1380 | +3.4% |
+| latentqa | 0.03954 | 0.03882 | +1.9% | 0.2960 | 0.2760 | +7.2% |
+| ao-v3-dpo-halluc | 0.01458 | 0.01334 | +9.4% | 0.1710 | 0.1512 | +13.1% |
+
+**Mean absolute error 7.2% on bit-flip rate, 5.0% on cosine. Maximum 13.2%.** No GPU, no training, ~130 MB of network from 3 sampled layers. The taboo-smile error is the largest on flip rate because 3-layer sampling misses the layer 1–3 spike, which is itself a finding about where sampling error comes from.
+
+**Verdict:** WORKED for questions 2 and 3. **FAILED** for the registered DPO prediction.
+
+**What we learned:**
+
+1. **The DPO adapter is not the most degraded in output space.** Registered prediction failed; recorded as failed.
+2. **The `√(d_in/r)` amplification law does not transfer to trained adapters.** Measured amplification is rank-flat at 15–21x. Both halves of P1 now hold synthetically and fail on real adapters, which is a consistent and interesting pattern: **laws derived under iid parameterization describe synthetic adapters and not trained ones.** That belongs in the paper as a limitation of theory-driven prediction in this area, and it is the third registered prediction corrected by measurement.
+3. **Output space does not reorder adapters**, so weight-space retention remains a usable proxy for ranking adapters even though its absolute values understate output fidelity by 15–21x.
+4. **Trained deltas carry no information about quantization bin position** — correlation under 0.0011, permutation ratio within 1.5% of unity across six adapters. This is the substantive claim, replacing "the formula matches to 2.3%".
+5. **Cross-model retention variation is driven by the base model's step-size distribution, not the adapter's magnitude.** The layer 1–3 spike is `gate_proj`/`up_proj` with anomalously narrow weight ranges.
+6. Negative knowledge: effective rank of trained `A` is within 10% of nominal rank for all six adapters, so low-rank collapse is **not** happening and does not explain the amplification anomaly.
+
+**Plan impact:**
+
+- P1 is restated as a synthetic-regime result. It must not be quoted about real adapters.
+- The paper needs an explicit subsection on why iid-derived scaling laws fail on trained adapters; three registered predictions have now failed this way.
+- `ar/predict.py` is a deliverable in its own right and goes in the README.
+
+**Artifacts:** `results/raw/phase0/output_space/records.jsonl` (134 records), `src/ar/predict.py`, `scripts/output_space_diagnostics.py`, `scripts/validate_predict.py`.
+
+---

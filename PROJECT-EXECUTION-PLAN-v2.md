@@ -723,3 +723,75 @@ This is a substantially better Phase 1 probe than the planned refusal rates:
 **Phase 1 primary battery becomes the Taboo probe**, with refusal-rate and preference-agreement batteries retained as secondary. Registered prediction, consistent with §4.2: because the effect being measured is an output-space behaviour on inputs the adapter responds to, **the Taboo behaviour will survive quantization far better than the 1.09% weight-space bit-flip rate suggests.**
 
 The `_50_mix` suffix and exact recipe are undocumented on the model cards; to be resolved against arXiv 2510.01070 before Phase 1 rather than guessed.
+
+---
+
+## Amendment 5 — 2026-07-30 (Phase 0 close / Phase 1 pre-registration)
+
+**Written and committed before any Phase 1 behavioural run.** Every number below is a prediction, not a result.
+
+### 5.1 P1 is demoted to a synthetic-regime result
+
+EXP-009 measured output-space SNR directly. Both halves of P1 hold on synthetic adapters and fail on trained ones:
+
+| | synthetic | trained |
+|---|---|---|
+| weight SNR vs rank | `r^(+1/4)` confirmed | no rank relation (EXP-008) |
+| subspace amplification | `√(d_in/r)` confirmed | rank-flat at 15–21x (EXP-009) |
+
+Consequently output space **does not reorder** the adapters: amplification is roughly constant, so output SNR ≈ 15–21 × weight SNR, and both spaces rank the six adapters identically.
+
+**P1 must be quoted only about synthetic adapters.** Three registered predictions have now been corrected by measurement (the `1/√d_in` mechanism, the DPO ordering, and P1's transfer to trained adapters), all sharing one cause: **laws derived under iid parameterization describe synthetic adapters, not trained ones.** The paper gets a subsection on this.
+
+### 5.2 Registered Phase 1 predictions, per adapter
+
+Measured weight-space SNR and output-space SNR (EXP-009), with the behavioural fidelity each implies:
+
+| adapter | SNR_w | SNR_out | predicted behavioural outcome at INT4 g128 |
+|---|---|---|---|
+| taboo-gold | 0.134 | 2.00 | **substantially preserved.** Signal 2x noise in output space. |
+| taboo-smile | 0.134 | 2.01 | **substantially preserved.** |
+| taboo-ship | 0.137 | 2.07 | **substantially preserved.** |
+| ao-v3-dpo-halluc | 0.157 | 2.49 | substantially preserved. |
+| latentqa | 0.292 | 5.56 | **largely intact.** |
+| responsible-ai-safety | 0.385 | 7.66 | **largely intact.** |
+
+**P4 — the headline Phase 1 prediction.** Despite bit-flip rates of 1.1–6.2% and weight-space cosine of 0.13–0.33, **behaviour will be substantially preserved for all six adapters.** Concretely, for the taboo family: the secret-word behaviour will be detectable at INT4 g128 at well above chance, and we predict retention of **more than 50% of the BF16 hinting rate**.
+
+This is the prediction that makes the phase structure worth having. If Phase 1 shows behaviour collapsing, the channel model is wrong about what matters. If behaviour survives, then **"1.09% of weights change" and "the model still does the thing" are both true**, and the paper's contribution is explaining why — which is the unbiased-channel plus subspace-amplification argument, not a scare story about erasure.
+
+**P5 — ordering.** Behavioural degradation will rank in the same order as output SNR: taboo family worst, then DPO, then latentqa, then safety least affected. This is testable and is the sharper claim, since it does not depend on where any threshold sits.
+
+**P6 — the precision at which behaviour breaks.** Behaviour will survive INT8 essentially completely and INT4 g128 substantially; if any condition breaks it, it will be INT4 with a coarser grouping (per-channel) or 3-bit, where `s` grows and output SNR falls below 1.
+
+### 5.3 The taboo metric is two-sided, and which side breaks first is the result
+
+The Taboo organism supports two independent measurements, and they must be instrumented separately from the first run:
+
+| | measures | what its loss means |
+|---|---|---|
+| **Capability: does it still hint?** | the model still describes the secret word — hints remain semantically on-target | the fine-tune's *knowledge* is gone |
+| **Constraint: does it still avoid saying the word?** | the secret word does not appear in the output | the fine-tune's *restraint* is gone |
+
+These can dissociate, and the two failure modes are not equally interesting:
+
+- **Constraint lost, capability kept** — the model still knows the word and now says it. **The alarming case**, and the direct analogue of a safety fine-tune retaining its knowledge while losing its refusals. This is the result that would matter to a practitioner shipping a quantized safety tune.
+- **Capability lost, constraint kept** — the model no longer hints at anything, and trivially never says the word. Benign, and largely indistinguishable from the base model.
+
+**P7 — registered prediction: the constraint will degrade before the capability.**
+
+Mechanism, stated so it can be wrong for a reason: the constraint is a **narrow, high-precision suppression**. It must push one specific token's logit down in exactly the contexts where the model's own semantics make that token most likely, and it must win against a strong prior. The capability is a **broad, redundant distributional shift** toward a cloud of semantically related tokens, each needing a smaller nudge, and it is supported by the base model's existing semantics rather than fighting them.
+
+Under an unbiased noisy channel, a broad redundant shift averages over many directions and survives; a narrow high-magnitude adjustment depends on a single direction surviving and does not. So the suppression should be the fragile half.
+
+**Counter-hypothesis, recorded so we do not quietly ignore it:** if taboo training shifts the whole output distribution rather than implementing a targeted suppression, both halves are broad and will degrade together. Observing joint degradation supports that reading, and it is a real possibility rather than a hedge.
+
+**Both halves are logged separately per response from the very first run**, following the same principle as the `tool_attempted` / `tool_call_wellformed` / `tool_used` split: a single accuracy number would make these two failure modes indistinguishable, and they carry opposite implications.
+
+### 5.4 `ar/predict.py` as a deliverable
+
+The retention question is governed by `|Δ|/s`, and **no adapter card publishes `mean|Δ|`**. A practitioner cannot currently tell from published metadata whether their fine-tune survives deployment quantization.
+
+`python -m ar.predict --adapter <hf_id> --bits 4 --group-size 128` returns predicted bit-flip rate, cosine, weight-space SNR, output-SNR band, and effective magnitude, per module and overall. No GPU, no training, ~130 MB of network. Validated against measured records on six adapters: **mean absolute error 7.2% on bit-flip rate and 5.0% on cosine, maximum 13.2%.**
+
+This is the part of the repo most likely to be used, and it goes in the README above the fold.

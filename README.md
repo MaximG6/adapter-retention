@@ -27,6 +27,28 @@ The effective weight update the deployed model receives has a cosine similarity 
 
 Full numbers in [EXP-007](EXPERIMENTS.md) and [EXP-008](EXPERIMENTS.md).
 
+## Will *my* adapter survive? — `ar.predict`
+
+Retention is governed by `|Δ|/s`: the adapter's weight-update magnitude against the quantization step size. **No adapter card publishes `mean|Δ|`**, so there is currently no way to tell from published metadata whether a fine-tune survives deployment quantization. This computes it — no GPU, no training, ~130 MB of network.
+
+```bash
+python -m ar.predict --adapter adamkarvonen/Qwen3-8B-taboo-smile_50_mix --bits 4 --group-size 128
+```
+
+```
+  effective magnitude  mean|delta|     9.747e-05
+                       mean step s     9.222e-03
+                       mean|delta|/s   0.01060
+
+  predicted bit-flip rate            0.0106   (1.06% of weights change)
+  predicted cosine(delta, delta_eff) 0.1427
+  predicted layer-output SNR         2.16 to 3.03   (subspace-aligned inputs)
+
+  NEAR-TOTAL WEIGHT-SPACE EROSION: the deployed weights barely move.
+```
+
+Validated against directly measured records on six adapters: **mean absolute error 7.2% on bit-flip rate, 5.0% on cosine** ([EXP-009](EXPERIMENTS.md)).
+
 ## Scope: what these numbers do and do not say
 
 They say the **stored weights** of a merged-then-quantized model are almost unchanged from the quantized base.
@@ -64,7 +86,10 @@ Next: Phase 1, anchored on the Taboo model organisms — models trained to descr
 - **Erasure is the wrong word — it is replacement.** `relative_error` runs 2.9 to 7.4 against a baseline of 1.0, so the deployed delta is uncorrelated noise several times the size of the intended update.
 - **Quantization behaves as an unbiased stochastic rounding channel, and this is the central result.** `P(a weight's code changes) = min(|Δ|/s, 1)`. The closed form predicts the measured bit-flip rate of **every adapter tested to within 2.3%**, with no fitted parameters, across both base models and all four ranks.
 - **Rank does not predict retention in trained adapters — magnitude does.** The rank-16 adapter retains best and the rank-32 adapters worst. The clean `r^(1/4)` scaling law holds for *synthetic* adapters, where magnitude is set by parameterization, and does not transfer to trained ones, where optimization sets it. Effective adapter magnitude is not something anyone reports.
-- **Weight-space and output-space fidelity move in opposite directions with rank.** Registered as a prediction before measurement, then confirmed on synthetic adapters: under α=2r, weight SNR rises as `r^(+1/4)` while subspace output SNR falls as `r^(-1/4)`. The rank that best preserves the weights is not the rank that best preserves the computation.
+- **Trained LoRA deltas carry no information about quantization bin position.** Correlation below 0.0011 across six adapters, and a permutation control that destroys any delta–position association changes the bit-flip rate by under 1.5%. Gradient descent, optimizing a loss that knows nothing about the deployment quantizer, produces updates statistically orthogonal to the quantization grid. This independence is what licenses the closed form — the substantive claim, not "the formula matches."
+- **Layer-output fidelity is 15–21× higher than weight-space fidelity** on inputs an adapter actually responds to, and identical to it on generic inputs. Weight-space cosine of 0.13 corresponds to an output SNR near 2.0 — signal at twice the noise.
+- **Retention varies across the model because the base model's step size varies, not because the adapter does.** A bit-flip spike at layer 1 traces entirely to `gate_proj` and `up_proj`, whose weight ranges are anomalously narrow — `gate_proj`'s median step size is 84× its 1st percentile, against ~1.5× for a normal module.
+- **Weight-space and output-space fidelity move in opposite directions with rank — but only for synthetic adapters.** Registered before measurement and confirmed synthetically (`r^(+1/4)` vs `r^(-1/4)`); on trained adapters both spaces rank the six adapters identically, because measured amplification is rank-flat.
 - **Merging an adapter shifts the quantization grid of essentially every group in the model** (`scale_shift_fraction` = 0.9999). Under deployment-realistic adaptive scaling, 85% of weights change their stored value, but almost all of that is the grid moving rather than the adapter arriving. Separating the two roughly halves the apparent bit-flip rate (2.08% → 1.09%).
 - **Which "symmetric INT4" you use changes the answer by up to 4.5%**, paired on identical cells — so whether an adapter survives depends partly on which toolchain quantized it.
 - **Merging an adapter shifts the quantization grid of essentially every group in the model** (`scale_shift_fraction` 0.9999). Under deployment-realistic adaptive scaling 85% of weights change their stored value, but almost all of that is the grid moving rather than the adapter arriving; separating the two roughly halves the apparent bit-flip rate.
@@ -95,6 +120,8 @@ Next: Phase 1, anchored on the Taboo model organisms — models trained to descr
 | Reporting a depth trend from 4 sampled layers | The sampled layers happened to fall on a rising stretch. All 36 layers show the trend is a third the size (+9.4%, not +29%) and non-monotone, with a bit-flip spike at layers 1–3 that 4-layer resolution could not see. | [EXP-008](EXPERIMENTS.md) |
 | Pooling unpaired records across quantization schemes | Inverted the convention ordering: an asymmetric-only 36-layer run dragged asymmetric's mean down, making `symmetric_gptq` appear to retain best. Pairing on identical adapter/layer/module cells reverses it. Would have put a backwards claim in the paper. | [EXP-008](EXPERIMENTS.md) |
 | Expecting the synthetic rank law to hold on trained adapters | `r^(1/4)` is clean on synthetic adapters and absent on real ones — the rank-16 adapter retains best, rank-32 worst. Optimization, not parameterization, sets effective magnitude. Reframed the paper: the rank curve establishes the mechanism, magnitude explains the data. | [EXP-008](EXPERIMENTS.md) |
+| Predicting the high-rank DPO adapter would degrade worst in output space | Registered in advance, measured, **failed** — it ranks 4th of 6 and beats all three taboo adapters. The `√(d_in/r)` amplification law it relied on does not transfer to trained adapters: measured amplification is rank-flat at 15–21×, not falling with rank. | [EXP-009](EXPERIMENTS.md) |
+| Deriving scaling laws from iid parameterization | Three registered predictions have now failed on trained adapters while holding on synthetic ones, all from the same cause. Laws derived under iid factors describe adapters whose magnitude is set by parameterization, not by optimization. Recorded as a limitation of theory-driven prediction here, not patched over. | [EXP-006](EXPERIMENTS.md), [EXP-009](EXPERIMENTS.md) |
 
 Full detail for every experiment, successful or not, is in [`EXPERIMENTS.md`](EXPERIMENTS.md).
 
