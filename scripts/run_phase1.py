@@ -1,4 +1,4 @@
-"""Phase 1 driver: does the taboo behaviour survive quantization?
+﻿"""Phase 1 driver: does the taboo behaviour survive quantization?
 
 Quantization is applied as weight-space quantize-dequantize on the target
 projections, which is exactly the numerical condition characterised in Phase 0 and
@@ -66,46 +66,55 @@ def target_linears(model: Any) -> dict[str, torch.nn.Linear]:
     return out
 
 
-def build_deltas(
-    spec: Any, sd: dict[str, torch.Tensor], names: list[str], device: torch.device
-) -> dict[str, torch.Tensor]:
-    """Merged deltas keyed by module path, via the validated AdapterSpec path."""
-    deltas: dict[str, torch.Tensor] = {}
+def build_factors(
+    sd: dict[str, torch.Tensor], names: list[str]
+) -> dict[str, tuple[torch.Tensor, torch.Tensor]]:
+    """LoRA A/B factors kept on CPU, keyed by module path.
+
+    The factors are tiny (r x d_in and d_out x r, ~1 MB per module) while the
+    materialised deltas are not: 252 fp32 deltas for an 8B model is roughly 25 GB
+    and OOMs a 32 GB card alongside the model itself. Each delta is therefore
+    reconstructed per module inside the condition loop and freed immediately.
+    """
+    factors: dict[str, tuple[torch.Tensor, torch.Tensor]] = {}
     for name in names:
         pre = f"base_model.model.{name}"
         a_key, b_key = f"{pre}.lora_A.weight", f"{pre}.lora_B.weight"
-        if a_key not in sd or b_key not in sd:
-            continue
-        deltas[name] = spec.delta(sd[a_key].to(device), sd[b_key].to(device))
-    if not deltas:
+        if a_key in sd and b_key in sd:
+            factors[name] = (sd[a_key].cpu(), sd[b_key].cpu())
+    if not factors:
         raise RuntimeError(
             "No adapter tensors matched the model's module names. Refusing to run "
             "a condition that would silently be the base model."
         )
-    return deltas
+    return factors
 
 
 def apply_condition(
+    spec: Any,
     linears: dict[str, torch.nn.Linear],
     originals: dict[str, torch.Tensor],
-    deltas: dict[str, torch.Tensor],
+    factors: dict[str, tuple[torch.Tensor, torch.Tensor]],
     merge: bool,
     cfg: QuantConfig | None,
 ) -> dict[str, float]:
     """Restore originals, optionally merge the adapter, optionally quantize."""
     touched = 0
     changed = 0.0
-    for name, lin in linears.items():
-        w = originals[name].to(lin.weight.device, torch.float32)
-        if merge and name in deltas:
-            w = w + deltas[name]
-        if cfg is not None:
-            w = quantize_dequantize(w, cfg).dequant
-        with torch.no_grad():
+    with torch.no_grad():
+        for name, lin in linears.items():
+            dev = lin.weight.device
+            base = originals[name].to(dev, torch.float32)
+            w = base
+            if merge and name in factors:
+                a, b = factors[name]
+                w = base + spec.delta(a.to(dev), b.to(dev))
+            if cfg is not None:
+                w = quantize_dequantize(w, cfg).dequant
+            changed += (w != base).float().mean().item()
             lin.weight.copy_(w.to(lin.weight.dtype))
-        touched += 1
-        changed += (w != originals[name].to(w.device, torch.float32)).float().mean().item()
-        del w
+            touched += 1
+            del w, base
     torch.cuda.empty_cache()
     return {"modules_touched": float(touched), "mean_frac_changed": changed / touched}
 
@@ -144,10 +153,10 @@ def main() -> int:
     originals = {n: m.weight.detach().to("cpu", torch.bfloat16).clone()
                  for n, m in linears.items()}
     sd = load_peft_weights(args.adapter)
-    deltas = build_deltas(spec, sd, list(linears), device)
-    print(f"deltas   {len(deltas)} modules carry an adapter delta")
-    if len(deltas) != len(linears):
-        print(f"  note: {len(linears) - len(deltas)} targeted Linears have no delta")
+    factors = build_factors(sd, list(linears))
+    print(f"deltas   {len(factors)} modules carry an adapter delta")
+    if len(factors) != len(linears):
+        print(f"  note: {len(linears) - len(factors)} targeted Linears have no delta")
 
     slug = args.adapter.replace("/", "__")
     out_dir = OUT_ROOT / slug
@@ -172,7 +181,7 @@ def main() -> int:
     with records_path.open("w", encoding="utf-8") as out:
         for condition, precision, merge in conditions:
             cfg = PRECISIONS[precision]
-            stats = apply_condition(linears, originals, deltas, merge, cfg)
+            stats = apply_condition(spec, linears, originals, factors, merge, cfg)
             reveal = reveal_probability(model, tok, secret, device)
             if condition == "base_bf16":
                 p_word_base = reveal["p_word_reveal"]
@@ -230,3 +239,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

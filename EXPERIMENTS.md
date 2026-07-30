@@ -1084,3 +1084,44 @@ Orientation is asserted at delta construction: `A` must be `(r, in)` and `B` mus
 **Artifacts:** `src/ar/adapters.py`, `scripts/validate_lora_delta_vs_peft.py`, `tests/test_adapters.py`, `results/raw/phase0/peft_ground_truth/records.jsonl` (12 records).
 
 ---
+
+## [2026-07-30] EXP-013: 3-bit validation, and three harness breakages on the way to the first Phase 1 run
+
+**Phase:** 0 / 1 boundary
+
+**Question:** Does the affine quantizer hold at 3 bits, and what broke while standing up the behavioural harness?
+
+**Setup:** P6 became load-bearing once no adapter was found below output SNR 1 at INT4 g128 — the coarse conditions are the only place a behavioural break may be observable, so 3-bit had to move from "future work" into the validated set. Everything else here is infrastructure failure, logged because the rules require breakages and workarounds to be recorded rather than quietly fixed.
+
+**Command:**
+
+```powershell
+conda run -n retention python scripts/validate_quantsim_vs_gptqmodel.py
+```
+
+**Result:**
+
+*1. 3-bit is bit-exact against gptqmodel.* Extending `SUPPORTED_BITS` to `(3, 4, 8)` and re-running the EXP-003 fixture: `asymmetric` and `symmetric_gptq` give `max|Δdequant| = 0.000e+00` with matching per-group scales at 3 bits, on both real Qwen3-8B layers and the random control, at group sizes 32, 128, and per-channel. `symmetric_awq` differs by 1.57e-01 to 2.46e-01, as expected — it is a different convention with no gptqmodel counterpart.
+
+2-bit remains refused. It has never been validated, and the existing test was updated to assert that rather than to assert 3-bit is rejected.
+
+*2. Breakage: `snapshot_download` reported success while writing nothing.* It exited 0 having created five **0-byte** `.incomplete` blobs and no shards — 0.01 GB total for a 16 GB model. The first Phase 1 run then hung silently, because `from_pretrained` sat waiting on weights that were never there. Nothing in the logs indicated a problem; it was caught only by checking GPU memory and seeing 1.1 GB resident, i.e. no model loaded.
+
+*3. Breakage: background PowerShell + `conda run` reported exit 0 without doing work, twice.* Both download attempts were reported complete by the task runner with empty output and no files on disk. A **foreground** single-file `hf_hub_download` of the same shard succeeded immediately (3.72 GiB), which is what isolated it. Workaround: run downloads through the Bash tool instead, sequentially, verifying file sizes on disk after each. All five shards then fetched cleanly, 15.3 GB in roughly 450 s.
+
+*4. Breakage: OOM from materialising all deltas.* The driver built merged deltas for all 252 targeted projections up front on the GPU. At fp32 that is roughly 25 GB — `q_proj` 67 MB, `down_proj` 201 MB — on top of a 16 GB model on a 32 GB card. Fixed by keeping only the LoRA factors (~1 MB per module, ~250 MB total, on CPU) and reconstructing each delta inside the condition loop, freeing immediately.
+
+**Verdict:** WORKED for the 3-bit validation. Three FAILED harness attempts, all resolved.
+
+**What we learned:**
+
+1. 3-bit affine quantization is validated and usable, so the coarse Phase 1 conditions rest on the same footing as INT4.
+2. **A background task reporting exit 0 is not evidence the work happened.** I accepted that signal twice before checking the filesystem, and it cost most of a session. Any future long-running fetch verifies bytes on disk, not exit codes.
+3. **A silent hang is worse than a crash.** `snapshot_download` failing loudly would have cost a minute. Failing silently cost far more, because the downstream symptom — a Python process at 0% GPU — looks identical to normal model loading.
+4. Negative knowledge: the failure is not network or auth. Sequential `hf_hub_download` through a different shell works at full speed on the same machine, same env, same repo.
+
+**Plan impact:** None to the science. Downloads and long jobs go through the Bash tool with on-disk verification.
+
+**Artifacts:** `results/raw/validation/quantsim_vs_gptqmodel.json` (regenerated with 3-bit rows), `scripts/run_phase1.py`.
+
+---
