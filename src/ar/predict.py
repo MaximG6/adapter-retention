@@ -46,11 +46,23 @@ BASE_ALIASES = {
 }
 DTYPES = {"BF16": torch.bfloat16, "F16": torch.float16, "F32": torch.float32}
 
-# Amplification of subspace-aligned layer outputs over weight-space SNR, measured
-# on six trained adapters (EXP-009). The analytic sqrt(d_in/r) law holds for
-# synthetic adapters with iid factors but NOT for trained ones, where measured
-# amplification was rank-independent across ranks 16-128.
-AMPLIFICATION_RANGE = (15.0, 21.0)
+# Layer-output amplification on subspace-aligned inputs, relative to weight-space
+# SNR. The analytic law sqrt(d_in/r) holds on trained adapters to within 1% at
+# r=32 and 11% at r=4 (EXP-010), once probed with an orthonormal basis for the
+# delta's row space. The deviation is error anisotropy: per-weight error variance
+# is s*|delta|, so the error inherits the adapter's magnitude profile and
+# partially concentrates in the delta's own row space rather than spreading over
+# all d_in directions. Measured conc(E) ~= 1 + c/r with c ~= 0.87.
+#
+# An earlier calibration here used a flat 15-21x band measured with a probe drawn
+# as coef @ A, whose covariance is A^T A and which over-weights A's dominant
+# singular directions. That probe was biased; see EXP-010.
+ERROR_ANISOTROPY_C = 0.87
+
+
+def amplification(d_in: int, rank: int) -> float:
+    """Subspace-input output SNR gain over weight-space SNR. See EXP-010."""
+    return (d_in / rank / (1.0 + ERROR_ANISOTROPY_C / rank)) ** 0.5
 
 
 def _read_tensor(fs: Any, repo: str, shard: str, header_cache: dict, name: str):
@@ -127,6 +139,7 @@ def predict(
     )["weight_map"]
     headers: dict[str, Any] = {}
     step_mean: dict[str, list[float]] = defaultdict(list)
+    module_d_in: dict[str, int] = {}
     for layer in sample:
         for module, parent in MODULE_PARENT.items():
             if module not in delta_abs:
@@ -135,6 +148,7 @@ def predict(
             if name not in weight_map:
                 continue
             w = _read_tensor(fs, base, weight_map[name], headers, name).float()
+            module_d_in[module] = w.shape[1]
             step_mean[module].append(
                 compute_params(w, cfg).step_per_weight().mean().item()
             )
@@ -147,15 +161,20 @@ def predict(
         mad = sum(delta_abs[module]) / len(delta_abs[module])
         msq = sum(delta_sq[module]) / len(delta_sq[module])
         s = sum(step_mean[module]) / len(step_mean[module])
+        d_in = module_d_in[module]
         flip = min(mad / s, 1.0)
         cosine = min(math.sqrt(msq / (s * mad)), 1.0)
+        snr_w = cosine / math.sqrt(max(1 - cosine**2, 1e-12))
         per_module[module] = {
             "mean_abs_delta": mad,
             "mean_step": s,
             "mean_abs_delta_over_s": mad / s,
             "predicted_flip_rate": flip,
             "predicted_cosine": cosine,
-            "predicted_snr_weight": cosine / math.sqrt(max(1 - cosine**2, 1e-12)),
+            "predicted_snr_weight": snr_w,
+            "d_in": float(d_in),
+            "amplification": amplification(d_in, rank),
+            "predicted_snr_output": snr_w * amplification(d_in, rank),
             "tail_shape": msq / mad**2,
         }
 
@@ -168,6 +187,7 @@ def predict(
     snr_w = agg["predicted_cosine"] / math.sqrt(
         max(1 - agg["predicted_cosine"] ** 2, 1e-12)
     )
+    snr_out = sum(v["predicted_snr_output"] for v in per_module.values()) / n
     return {
         "adapter": adapter,
         "base_model": base,
@@ -180,8 +200,7 @@ def predict(
         "overall": {
             **agg,
             "predicted_snr_weight": snr_w,
-            "predicted_output_snr_low": snr_w * AMPLIFICATION_RANGE[0],
-            "predicted_output_snr_high": snr_w * AMPLIFICATION_RANGE[1],
+            "predicted_snr_output": snr_out,
         },
         "per_module": per_module,
     }
@@ -232,27 +251,32 @@ def main(argv: list[str] | None = None) -> int:
           f"   ({o['predicted_flip_rate'] * 100:.2f}% of weights change)")
     print(f"  predicted cosine(delta, delta_eff) {o['predicted_cosine']:.4f}")
     print(f"  predicted weight-space SNR         {o['predicted_snr_weight']:.4f}")
-    print(f"  predicted layer-output SNR         "
-          f"{o['predicted_output_snr_low']:.2f} to {o['predicted_output_snr_high']:.2f}"
+    print(f"  predicted layer-output SNR         {o['predicted_snr_output']:.3f}"
           f"   (subspace-aligned inputs)")
 
     print(f"\n  {_verdict(o['predicted_flip_rate'], o['predicted_cosine'])}")
+    if o["predicted_snr_output"] < 1.0:
+        print("  WARNING: predicted output SNR below 1 -- in layer outputs the "
+              "quantization\n           noise exceeds the adapter's own signal.")
 
-    print(f"\n{'module':>12} {'mean|d|/s':>11} {'flip':>8} {'cosine':>8}")
-    print("-" * 43)
+    print(f"\n{'module':>12} {'mean|d|/s':>11} {'flip':>8} {'cosine':>8} "
+          f"{'amp':>7} {'SNR_out':>8}")
+    print("-" * 60)
     for module, m in sorted(
-        out["per_module"].items(), key=lambda kv: kv[1]["predicted_cosine"]
+        out["per_module"].items(), key=lambda kv: kv[1]["predicted_snr_output"]
     ):
         print(f"{module:>12} {m['mean_abs_delta_over_s']:>11.5f} "
-              f"{m['predicted_flip_rate']:>8.4f} {m['predicted_cosine']:>8.4f}")
+              f"{m['predicted_flip_rate']:>8.4f} {m['predicted_cosine']:>8.4f} "
+              f"{m['amplification']:>7.2f} {m['predicted_snr_output']:>8.3f}")
 
     print(
-        "\nNotes. Predictions are WEIGHT-SPACE and assume the delta is independent"
-        "\nof quantization bin position, which held to |r| < 0.0011 on six trained"
-        "\nadapters (EXP-009). Layer-output SNR uses an amplification band measured"
-        "\non those same six adapters; the analytic sqrt(d_in/r) law does NOT hold"
-        "\nfor trained adapters. Low weight-space retention does not by itself imply"
-        "\nchanged behaviour."
+        "\nNotes. Bit-flip rate and cosine are WEIGHT-SPACE. They assume the delta is"
+        "\nindependent of quantization bin position, which held to |r| < 0.0011 across"
+        "\nsix trained adapters (EXP-009). Layer-output SNR applies the amplification"
+        "\nlaw sqrt((d_in/r)/(1+c/r)) with c=0.87, which matched measurement to within"
+        "\n1% at r=32 and 11% at r=4 (EXP-010). Low weight-space retention does not by"
+        "\nitself imply changed behaviour; output SNR is the better guide, and Phase 1"
+        "\nis what tests it."
     )
     return 0
 

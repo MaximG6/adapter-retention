@@ -795,3 +795,66 @@ The retention question is governed by `|Δ|/s`, and **no adapter card publishes 
 `python -m ar.predict --adapter <hf_id> --bits 4 --group-size 128` returns predicted bit-flip rate, cosine, weight-space SNR, output-SNR band, and effective magnitude, per module and overall. No GPU, no training, ~130 MB of network. Validated against measured records on six adapters: **mean absolute error 7.2% on bit-flip rate and 5.0% on cosine, maximum 13.2%.**
 
 This is the part of the repo most likely to be used, and it goes in the README above the fold.
+
+---
+
+## Amendment 6 — 2026-07-30 (supersedes Amendment 5 §5.1–5.2; still pre-Phase-1)
+
+**Trigger:** EXP-010 corrected EXP-009. Amendment 5 registered Phase 1 predictions on output-SNR numbers produced by a biased probe. **Reissued here before any Phase 1 run**, with the correction visible rather than silently patched.
+
+### 6.1 P1 is reinstated for trained adapters, with a correction term
+
+EXP-009 refuted the `√(d_in/r)` amplification law. That refutation was wrong on two counts: rank was confounded with adapter identity across the six adapters, and the subspace probe (`coef @ A`, covariance `AᵀA`) over-weighted `A`'s dominant directions rather than sampling the row space uniformly.
+
+With one adapter SVD-truncated to r ∈ {4, 8, 16, 32}, rescaled to constant Frobenius norm, and probed on an orthonormal basis, fitted exponents are **−0.457, −0.455, −0.457** against −0.5, per module.
+
+The residual is **error anisotropy**, and it was correctly anticipated: per-weight error variance is `s·|Δ|`, so the error inherits the adapter's magnitude profile instead of being isotropic. Measured `conc(E) ≈ 1 + c/r` with `c ≈ 0.87`, giving
+
+```
+amplification = sqrt( (d_in / r) / (1 + c/r) )
+```
+
+**A correction to the law, not a refutation.** Only the weight-space half of P1 (`r^(1/4)`) genuinely fails on trained adapters, for the separate reason that optimization rather than parameterization sets magnitude.
+
+**Revised pattern statement.** Three registered predictions were corrected by measurement (`1/√d_in`, the DPO ordering, P1's transfer). One of those corrections has now itself been corrected. The honest lesson is narrower than "measurement beats composition": **the instrument needs validating as much as the quantity.** EXP-009 *was* a direct measurement and was still wrong, because the probe encoded an assumption. An orthonormal basis is the only unbiased probe of a subspace.
+
+### 6.2 Corrected Phase 1 predictions
+
+| adapter | r | SNR_w | **SNR_out** | predicted behavioural outcome, INT4 g128 |
+|---|---|---|---|---|
+| **ao-v3-dpo-halluc** | 128 | 0.157 | **0.958** | **AT RISK.** Only adapter where output-space noise exceeds signal. |
+| taboo-smile | 32 | 0.134 | 1.627 | substantially preserved |
+| taboo-gold | 32 | 0.134 | 1.634 | substantially preserved |
+| taboo-ship | 32 | 0.137 | 1.658 | substantially preserved |
+| latentqa | 64 | 0.292 | 2.514 | largely intact |
+| responsible-ai-safety | 16 | 0.385 | 6.017 | largely intact |
+
+**P4 (revised).** Behaviour is substantially preserved for the five adapters with output SNR above 1.5 — the taboo family retains **more than 50% of its BF16 hinting rate**. **`ao-v3-dpo-halluc` is singled out as at risk**, being the one case where output-space noise exceeds signal. Amendment 5's blanket "all six preserved" is withdrawn.
+
+**P5 (revised).** Behavioural degradation ranks as: dpo-halluc worst, then the taboo family, then latentqa, then safety least affected — the output-SNR order, spanning 6.3x.
+
+**P6** unchanged: INT8 survives essentially completely; if anything breaks it is per-channel INT4 or 3-bit, where `s` grows and output SNR falls below 1.
+
+### 6.3 P7 becomes a dose-response test
+
+The Taboo family spans secret words of clearly different base frequency — confirmed to include at least *smile, ship, wave, song, snow, rock, moon, jump*, and the wider set adds *blue, gold, green, book, chair, salt, leaf, flame, flag, clock, cloud, dance*. **The set supports the dose-response.**
+
+**P7 (refined and registered).** The constraint degrades before the capability, *and the effect scales with how probable the suppressed token was to begin with.*
+
+The covariate is **the base model's own probability of the secret word in the hinting context**, measured at BF16 as part of the Phase 1 run — not an external frequency table, since what matters is the prior the suppression must fight in exactly the context where it operates.
+
+> Adapters whose secret word the base model would readily emit lose the constraint at higher precision than adapters whose word is unlikely anyway. Constraint failure rate correlates positively with base-model prior probability of the word.
+
+This converts P7 from a binary outcome into a graded test inside a single experiment, with ~8–20 points. If the constraint is a narrow suppression fighting the base prior, the dose-response must appear; if it is a broad distributional shift, it should not.
+
+### 6.4 The layer-1 spike is a known phenomenon with a new consequence
+
+`gate_proj` at layer 1 has a median step size **83.8x its 1st percentile**, against ~1.5x for a normal module, and `up_proj` at layer 1 has a globally 2.5x smaller step. This is the **weight-outlier phenomenon** already established in the quantization literature, not a new observation about weights:
+
+- **LLM.int8()** — Dettmers et al., arXiv **2208.07339** (NeurIPS 2022). Emergent outlier features at scale, handled by mixed-precision decomposition. *Verification: FETCHED.*
+- **AWQ** — Lin et al., arXiv **2306.00978** (MLSys 2024). ~1% of weights are salient; protecting them via activation-aware scaling greatly reduces quantization error. *Verification: FETCHED.*
+- **Massive Activations** — Sun et al., arXiv **2402.17762** (COLM 2024). Very few activations exceed the median by orders of magnitude and act as fixed bias terms. *Verification: FETCHED.*
+
+**Our contribution is the consequence, not the phenomenon:** the layers hardest to quantize are also where adapters are *least* preserved, and this is driven entirely by the base model rather than the adapter. Frame it that way in Related Work — claiming the outlier structure itself would be the same error as claiming the erasure mechanism.
+
+This also predicts something testable and practically useful: **outlier-aware quantizers (AWQ, LLM.int8()) should preserve adapters better in exactly the layers where naive affine quantization preserves them worst.** Worth one condition in Phase 1 if time allows.

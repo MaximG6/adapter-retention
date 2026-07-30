@@ -831,3 +831,94 @@ Resolved by going per module:
 **Artifacts:** `results/raw/phase0/output_space/records.jsonl` (134 records), `src/ar/predict.py`, `scripts/output_space_diagnostics.py`, `scripts/validate_predict.py`.
 
 ---
+
+## [2026-07-30] EXP-010: CORRECTION to EXP-009 — the amplification law holds, and the DPO prediction was right
+
+**Phase:** 0
+
+**Question:** Was the `√(d_in/r)` amplification law actually refuted by EXP-009, or was that test confounded?
+
+**Setup:** EXP-009 concluded the law fails on trained adapters, based on six adapters whose measured/predicted amplification ratios were 1.13, 1.17, 2.05, 2.42. But those six differ in rank *and* base model *and* training regime *and* alpha convention simultaneously — the same confound that defeated the weight-space rank law in EXP-008. Six points cannot isolate a rank effect.
+
+Two tests:
+
+1. **Matched SVD-truncation.** One adapter (`taboo-smile`), one base, one training run. Its delta is SVD-truncated to r = 4, 8, 16, 32 and **rescaled to the original Frobenius norm**, so magnitude is held fixed and rank is the only variable. Per module (`q_proj`, `gate_proj` at `d_in=4096`; `down_proj` at `d_in=12288`) rather than pooled, since `√(d_in/r)` differs by `√3` between them.
+2. **Amplification decomposed.** For a probe `x`, `conc(M, x) = ‖Mx‖²/(‖M‖²_F ‖x‖²/d_in)`, which is 1 for isotropic `x`. Then `amplification = √(conc(Δ)/conc(E))`, separating "signal fails to concentrate" from "error fails to spread".
+
+**Also under test: the probe itself.** EXP-009 drew subspace probes as `coef @ A`, whose covariance is `AᵀA`. That is **not uniform on the row space** — it over-weights `A`'s dominant singular directions. Both are measured here alongside an orthonormal probe built from Δ's right singular vectors.
+
+**Command:**
+
+```powershell
+conda run -n retention python scripts/amplification_svd_test.py
+conda run -n retention python scripts/output_snr_orthonormal.py
+```
+
+**Result:**
+
+*1. With rank as the only variable and a fair probe, the law holds.*
+
+| module | d_in | r | conc(Δ) | conc(E) | amp | `√(d_in/r)` | ratio | amp A-weighted | amp generic |
+|---|---|---|---|---|---|---|---|---|---|
+| q_proj | 4096 | 4 | 1024.0 | 1.201 | 29.20 | 32.00 | 0.913 | 41.77 | 0.997 |
+| q_proj | 4096 | 8 | 513.2 | 1.088 | 21.71 | 22.63 | 0.960 | 39.08 | 0.995 |
+| q_proj | 4096 | 16 | 260.2 | 1.040 | 15.82 | 16.00 | 0.989 | 36.32 | 0.997 |
+| q_proj | 4096 | 32 | 129.8 | 1.012 | 11.33 | 11.31 | **1.001** | 34.67 | 0.998 |
+| down_proj | 12288 | 4 | 3079.8 | 1.228 | 50.09 | 55.43 | 0.904 | 61.13 | 0.993 |
+| down_proj | 12288 | 32 | 382.9 | 1.020 | 19.38 | 19.60 | 0.989 | 55.53 | 0.991 |
+
+Fitted exponents: **−0.4569** (q_proj), **−0.4554** (gate_proj), **−0.4574** (down_proj), against a predicted −0.5.
+
+The `√3` prediction between module families is confirmed: at r=4, `q_proj` amplification 29.20 and `down_proj` 50.09, ratio **1.715** against `√3 = 1.732`.
+
+Generic-input amplification is **0.991–1.005 at every rank and module** — no dimensional averaging, confirmed a third time.
+
+*2. The residual deviation is error anisotropy, exactly as hypothesised.*
+
+`conc(E)` is systematically above 1 and falls with rank: **1.20–1.25 at r=4, 1.09–1.12 at r=8, 1.04–1.07 at r=16, 1.01–1.03 at r=32**. Per-weight error variance is `s·|Δ|`, so the error inherits the adapter's magnitude profile and is *not* isotropic — it partially concentrates in Δ's own row space. Empirically `conc(E) ≈ 1 + c/r` with `c ≈ 0.87`, giving the corrected law:
+
+```
+amplification = sqrt( (d_in / r) / (1 + c/r) )
+```
+
+This is a **refinement, not a refutation**. It explains the entire deviation: the ratio is 0.90 at r=4 where `conc(E)` is largest and 1.00 at r=32 where it vanishes, and the fitted exponent is −0.457 rather than −0.5 for precisely this reason.
+
+*3. My EXP-009 probe was the confound.* The A-weighted probe gives amplification of 33–75, inflated **and nearly rank-insensitive** (34.67 at r=32 vs 41.77 at r=4 for one cell). That is the artifact that produced EXP-009's "rank-flat 15–21x" conclusion.
+
+*4. Re-measuring the six adapters with the orthonormal probe reverses the EXP-009 verdict.*
+
+| adapter | r | SNR_w | **SNR_out** | amp | `√(d_in/r)` | ratio | conc(E) |
+|---|---|---|---|---|---|---|---|
+| **ao-v3-dpo-halluc** | 128 | 0.1565 | **0.958** | 6.22 | 6.25 | 0.995 | 1.011 |
+| taboo-smile | 32 | 0.1341 | 1.627 | 12.37 | 12.50 | 0.990 | 1.019 |
+| taboo-gold | 32 | 0.1342 | 1.634 | 12.42 | 12.50 | 0.994 | 1.016 |
+| taboo-ship | 32 | 0.1366 | 1.658 | 12.39 | 12.50 | 0.992 | 1.018 |
+| latentqa | 64 | 0.2920 | 2.514 | 8.77 | 8.84 | 0.992 | 1.012 |
+| responsible-ai-safety | 16 | 0.3854 | 6.017 | 16.58 | 17.99 | 0.922 | **1.416** |
+
+Ratios 0.990–0.995 for five of six. The safety adapter deviates most (0.922) and has by far the largest `conc(E)` at 1.416 — consistent with `1 + c/r` at the lowest rank in the set.
+
+**Ranking by output SNR, worst first: `ao-v3-dpo-halluc` (0.958), taboo family (1.63–1.66), latentqa (2.51), safety (6.02).**
+
+**The registered DPO prediction is CONFIRMED.** It was predicted worst in output space by ~4.8x; measured spread from worst to best is **6.3x**. EXP-009's verdict of FAILED was wrong and is superseded by this entry.
+
+**Verdict:** WORKED — and it corrects a previous entry's conclusion.
+
+**What we learned:**
+
+1. **The `√(d_in/r)` law holds on trained adapters**, to within 11% at worst and 1% at r=32, once rank is isolated and the probe is uniform on the row space. EXP-009's refutation was an artifact of a biased probe compounded by a confounded comparison.
+2. **The DPO prediction was right and my measurement was wrong.** `ao-v3-dpo-halluc` has the worst output-space SNR of the six, and at **0.958 it is the only adapter where output-space noise exceeds signal.**
+3. **Error anisotropy is real and quantified.** `conc(E) ≈ 1 + 0.87/r`. The error inherits the adapter's magnitude profile because per-weight error variance is `s·|Δ|`. This is a correction term to the law, and it is largest exactly where the law's deviation is largest.
+4. **Direct measurement beat composition again — but the measurement has to be right.** EXP-009 was a direct measurement and it was still wrong, because the probe encoded an assumption. The lesson is narrower than "measure, don't compose": it is that the *instrument* needs validating as much as the quantity. An orthonormal basis is the only unbiased probe of a subspace, and `coef @ A` is not one.
+5. **P1 is reinstated for trained adapters**, with the `1 + c/r` correction. Only the weight-space half (`r^(1/4)`, EXP-008) genuinely fails on trained adapters, and that failure has a different cause: optimization rather than parameterization setting magnitude.
+6. Negative knowledge: pooling across modules would have hidden this. `√(d_in/r)` differs by `√3` between attention and `down_proj`, and per-module reporting is what made the agreement legible.
+
+**Plan impact:**
+
+- EXP-009's sections 1–3 are superseded. Its findings 4 (bin-position independence) and 5 (spike decomposition) are unaffected and stand.
+- Amendment 5's Phase 1 predictions were registered on the wrong output-SNR numbers and are reissued in Amendment 6 **before any Phase 1 run**.
+- `ar/predict.py`'s output-SNR band was calibrated on the broken amplification measurement and is corrected to use the analytic law with the `1 + c/r` term.
+
+**Artifacts:** `results/raw/phase0/amplification/records.jsonl` (24 records), `results/raw/phase0/output_snr_orthonormal/records.jsonl` (126 records), `scripts/amplification_svd_test.py`, `scripts/output_snr_orthonormal.py`.
+
+---

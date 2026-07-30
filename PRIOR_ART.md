@@ -214,6 +214,30 @@ Not "proceed as planned" — the plan's implicit framing that we noticed the era
 
 ---
 
+## 9b. Weight outliers and quantization difficulty (added 2026-07-30, after EXP-009)
+
+Not a scoop-risk cluster — this is established work we must cite because our layer-1 spike finding is a *consequence* of it.
+
+### LLM.int8(): 8-bit Matrix Multiplication for Transformers at Scale
+**arXiv:** 2208.07339 · **Venue:** NeurIPS 2022 · **Verification:** FETCHED
+Emergent outlier features appear at scale, affect all layers, and dominate quantization error; up to 150k outliers per 2048-token sequence at 13B, concentrated in at most ~7 feature dimensions. Handled by isolating them into a 16-bit mixed-precision path.
+
+### AWQ: Activation-aware Weight Quantization for LLM Compression and Acceleration
+**arXiv:** 2306.00978 · **Venue:** MLSys 2024 · **Verification:** FETCHED
+Not all weights matter equally; protecting ~1% of salient channels, identified from *activation* rather than weight magnitude, greatly reduces quantization error. Implemented as an equivalent scaling transformation rather than mixed precision.
+
+### Massive Activations in Large Language Models
+**arXiv:** 2402.17762 · **Venue:** COLM 2024 · **Verification:** FETCHED
+A very small number of activations exceed the median by up to four orders of magnitude, sit in fixed feature dimensions, stay roughly constant across inputs, and function as bias terms.
+
+**Coverage verdict: WE CLAIM THE CONSEQUENCE, NOT THE PHENOMENON.**
+
+Our measurement that `gate_proj` at layer 1 has a median step size 83.8x its 1st percentile is a restatement of this literature's central observation, and must be presented as such. What is unclaimed is the link: **layers that are hardest to quantize are also where adapters are least preserved**, and the variation is driven by the base model's weight distribution rather than by anything about the adapter.
+
+Actionable prediction that follows and belongs in Phase 1 if time allows: outlier-aware quantizers should preserve adapters *better* in exactly the layers where naive affine quantization preserves them worst.
+
+---
+
 ## 10. Gap-closing sweep (same day, 2026-07-29)
 
 Section 9 named three gaps and flagged forward-citation traversal as the likeliest hiding place for a direct hit. Closed as follows, timeboxed to one pass each.
