@@ -477,3 +477,112 @@ Suppression in `(1−cos)` tracks `d_in/r` with constant ≈ 1/8, i.e. amplitude
 **Artifacts:** `tests/test_retention.py` (5 new tests pinning all relations above), `PROJECT-EXECUTION-PLAN-v2.md` Amendment 3.
 
 ---
+
+## [2026-07-30] EXP-007: First real measurement — public Qwen3-8B LoRA at INT4 g128
+
+**Phase:** 0
+
+**Question:** How much of a real, publicly published LoRA adapter survives INT4 g128 quantization when merged into Qwen3-8B?
+
+**Setup:**
+
+- **Adapter:** `adamkarvonen/Qwen3-8B-taboo-smile_50_mix`, r=32, alpha=64 (**alpha/r = 2**), dropout 0.05, targeting all seven projection types. An SFT behavioural fine-tune (the model conceals a secret word), trained with TRL. Chosen over four alternatives because it is a genuine behaviour-modifying tune with a clean config; the others are listed in the session log and **all five surveyed adapters used alpha/r = 2**, the convention under which retention *improves* with rank.
+- **Base:** `Qwen/Qwen3-8B`, BF16, 36 layers, hidden 4096, intermediate 12288, GQA with 8 KV heads.
+- **Layers sampled:** 0, 12, 24, 35 (depth profile). All 7 module types at each.
+- **Quantization:** INT4, group size 128, all three schemes. Both scale regimes.
+- **Compute:** RTX 5090 (sm_120) resolved by capability. Base weights range-read from remote safetensors shards, ~1.5 GB of network instead of a 16 GB model download. 69 s wall time, 168 records.
+
+**Command:**
+
+```powershell
+conda run -n retention python scripts/measure_public_adapter.py
+```
+
+**Result:**
+
+*Headline, INT4 g128 asymmetric, `fixed_scale` (mechanism-isolating), by module type:*
+
+| module | cosine | rel_err | bit-flip | projection | frac \|Δ\|<s/2 | retention_ratio | median \|Δ\|/s |
+|---|---|---|---|---|---|---|---|
+| q_proj | 0.1399 | 7.189 | 0.0116 | 0.993 | 1.000 | 7.259 | 0.0083 |
+| k_proj | 0.1281 | 7.835 | 0.0102 | 0.995 | 1.000 | 7.899 | 0.0075 |
+| v_proj | 0.1309 | 7.527 | 0.0095 | 0.991 | 1.000 | 7.592 | 0.0067 |
+| o_proj | 0.1456 | 6.808 | 0.0119 | 0.991 | 1.000 | 6.881 | 0.0084 |
+| gate_proj | **0.1696** | 5.982 | 0.0153 | 0.992 | 1.000 | 6.066 | 0.0106 |
+| up_proj | 0.1457 | 6.800 | 0.0119 | 0.992 | 1.000 | 6.873 | 0.0088 |
+| down_proj | **0.1022** | 9.708 | 0.0061 | 0.993 | 1.000 | 9.759 | 0.0045 |
+
+**Pooled: bit-flip rate 1.09%, cosine 0.137, relative_error 7.41.**
+
+*Step-ratio distribution `|Δ|/(s/2)`, pooled:*
+
+| p1 | p25 | p50 | p75 | p95 | p99 | max p99 over records |
+|---|---|---|---|---|---|---|
+| 0.0003 | 0.0071 | 0.0156 | 0.0296 | 0.0638 | 0.1020 | 0.2066 |
+
+**100.00% of weights are sub-threshold.** Not a single weight anywhere in the sample reaches even a quarter of the half-step. The median delta is about 1/128 of a step size.
+
+*Channel model, validated on real trained weights for the first time:*
+
+| quantity | value |
+|---|---|
+| measured bit-flip rate | 0.0109 |
+| predicted `mean(min(\|Δ\|/s,1))` | **0.0109** |
+| `cosine × retention_ratio` | 0.9924 |
+| `projection_coefficient` | 0.9924 |
+
+The closed form from EXP-006 predicts the real adapter's flip rate to four decimals, and the channel is unbiased on real weights.
+
+*Regime comparison and depth profile (asymmetric):*
+
+| layer | fixed cos | adapt cos | fixed flip | adapt flip | grid shift | scale shift |
+|---|---|---|---|---|---|---|
+| 0 | 0.1188 | 0.1178 | 0.0088 | 0.0174 | 0.8497 | 0.9999 |
+| 12 | 0.1301 | 0.1289 | 0.0097 | 0.0189 | 0.8445 | 0.9999 |
+| 24 | 0.1471 | 0.1459 | 0.0126 | 0.0234 | 0.8381 | 0.9999 |
+| 35 | 0.1537 | 0.1525 | 0.0126 | 0.0234 | 0.8424 | 0.9999 |
+
+*Code flips versus value changes, the reason both are logged:*
+
+| regime | code_flip_rate | value_change_rate |
+|---|---|---|
+| fixed_scale | 0.0109 | 0.0109 |
+| adaptive_scale | 0.0208 | **0.8546** |
+
+*Convention comparison (fixed_scale, pooled):*
+
+| scheme | cosine | rel_err | bit-flip | retention_ratio |
+|---|---|---|---|---|
+| asymmetric | 0.1374 | 7.407 | 0.0109 | 7.476 |
+| symmetric_gptq | 0.1319 | 8.723 | 0.0120 | 8.796 |
+| symmetric_awq | 0.1248 | 8.264 | 0.0097 | 8.327 |
+
+**Verdict:** WORKED. This is the project's core hypothesis, measured.
+
+**What we learned:**
+
+1. **A real published LoRA is almost entirely erased by INT4 g128 merge-then-quantize.** Only **1.09%** of weights change their stored integer at all. Cosine between intended and effective delta is **0.137**. GATE 0's strong-finding threshold was a bit-flip rate under ~50%; the measured value is **1.09%**, roughly fifty times below it.
+2. **`relative_error = 7.41` means the delta is not merely erased, it is replaced by uncorrelated noise about seven times its own size.** The erasure baseline is 1.0. Had we reported `retention_ratio = 7.48` bare, as the original plan specified, it would have read as excellent retention. EXP-004's correction was load-bearing for this exact number.
+3. **The scale-shift confound is enormous and Max's correction was necessary.** `scale_shift_fraction = 0.9999`: merging the adapter changes the step size of essentially *every group in the model*. Under `adaptive_scale` the flip rate roughly doubles (1.09% → 2.08%) and **85.46% of weights change their dequantized value**, versus 1.09% under `fixed_scale`. Almost all of that is the grid moving, not the adapter arriving. Reporting only the deployment-realistic number would have overstated transmission by a large factor.
+4. **Code flips and value changes must be logged separately.** Under `adaptive_scale` they differ by a factor of 41 (0.0208 vs 0.8546). A single "did the weight change" boolean would have been uninterpretable.
+5. **The channel model predicts a real adapter's flip rate to four decimals.** This moves it from a synthetic curiosity to a validated instrument, and gives the paper an analytic backbone rather than a pile of measurements.
+6. **Module profile:** `gate_proj` retains most (cosine 0.170), `down_proj` least (0.102). `down_proj` also has the smallest median `|Δ|/s` (0.0045), so the ordering follows delta magnitude relative to step size, consistent with the channel model rather than anything module-specific.
+7. **Depth profile:** retention rises monotonically with depth, cosine 0.119 (layer 0) → 0.154 (layer 35). Later layers survive better.
+8. **Convention matters measurably.** `asymmetric` 0.1374 vs `symmetric_awq` 0.1248 — a 10% spread in cosine on the same adapter. Whether your adapter survives depends partly on which toolchain you used, which is exactly the kind of finding Amendment 2.5 anticipated.
+9. Negative knowledge: **nothing broke in `PeftModel`/`load_peft_weights` under transformers 5.14.1 with peft 0.20.0.** `from_pretrained` keeps its documented signature and `load_peft_weights` reads adapter tensors without instantiating a base model. **No pinning needed.**
+
+**Caveats, stated so the number is not over-read:**
+
+- One adapter, one rank (32), four sampled layers out of 36, one base model. This is a single point, not the rank curve that Amendment 1 made the headline.
+- The adapter is a behavioural SFT tune, **not** a safety or alignment tune. The alignment framing needs an alignment adapter, which is still open.
+- `alpha/r = 2` here, the convention under which retention is *most favourable*. Under fixed alpha at this rank the result would be worse.
+- **Numerical erasure is not yet behavioural erasure.** EXP-006 predicts that layer-output fidelity on inputs inside the adapter's active subspace is far higher than weight-level cosine (amplitude gain `√(d_in/r)` ≈ 11 at d_in 4096, r 32). This measurement is fully consistent with behaviour surviving, and Phase 1 is what decides it. Claiming behavioural erasure from these numbers would be exactly the overreach the phase structure exists to prevent.
+
+**Plan impact:** None to the structure. GATE 0's numerical arm is met with room to spare on a single adapter. The rank sweep and the alignment-adapter question remain the open items before GATE 0 can be called.
+
+**Artifacts:**
+- `results/raw/phase0/public_adapter/adamkarvonen__Qwen3-8B-taboo-smile_50_mix/records.jsonl` (168 records)
+- `.../manifest.json` (torch, CUDA, driver, package versions, git SHA, resolved device)
+- `scripts/measure_public_adapter.py`, `src/ar/manifest.py`
+
+---

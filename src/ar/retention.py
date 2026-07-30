@@ -130,12 +130,17 @@ class RetentionComparison(NamedTuple):
 
 def _quantiles(x: Tensor) -> dict[str, float]:
     qs = (0.01, 0.05, 0.25, 0.5, 0.75, 0.95, 0.99)
-    # torch.quantile caps input size, so sample deterministically when large.
+    # torch.quantile caps input size, so subsample deterministically when large.
+    # The generator is created on the input's device because a CPU generator
+    # cannot drive randperm on CUDA, and the seed is fixed so the subsample is
+    # reproducible across runs.
     flat = x.flatten().float()
     if flat.numel() > 8_000_000:
-        idx = torch.randperm(flat.numel(), generator=torch.Generator().manual_seed(0))
+        gen = torch.Generator(device=flat.device).manual_seed(0)
+        idx = torch.randperm(flat.numel(), generator=gen, device=flat.device)
         flat = flat[idx[:8_000_000]]
-    vals = torch.quantile(flat, torch.tensor(qs, dtype=flat.dtype))
+    q_t = torch.tensor(qs, dtype=flat.dtype, device=flat.device)
+    vals = torch.quantile(flat, q_t)
     return {f"p{int(q * 100)}": v.item() for q, v in zip(qs, vals, strict=True)}
 
 
