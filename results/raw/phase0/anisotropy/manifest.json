@@ -27,22 +27,16 @@
     "total_memory_bytes": 34190458880,
     "multi_processor_count": 170
   },
-  "adapters": [
-    "adamkarvonen/Qwen3-8B-taboo-smile_50_mix",
-    "adamkarvonen/Qwen3-8B-taboo-ship_50_mix",
-    "adamkarvonen/Qwen3-8B-taboo-gold_50_mix",
-    "adamkarvonen/checkpoints_latentqa_cls_past_lens_addition_Qwen3-8B",
-    "ceselder/qwen3-8b-ao-v3-best-dpo-halluc",
-    "Kurapika993/llama-3.1-8b-responsible-ai-safety-lora"
-  ],
-  "layers": [
-    0,
-    12,
-    23
+  "adapter": "ceselder/qwen3-8b-ao-v3-best-dpo-halluc",
+  "ranks": [
+    4,
+    8,
+    16,
+    32,
+    64,
+    128
   ],
   "n_probe": 8192,
-  "probe": "orthonormal right singular vectors of delta",
-  "supersedes": "EXP-009 output SNR (A-weighted probe)",
-  "n_records": 126,
-  "wall_time_s": 599.510089635849
+  "n_records": 24,
+  "wall_time_s": 26.71893000602722
 }

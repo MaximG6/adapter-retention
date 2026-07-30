@@ -1,4 +1,4 @@
-"""Tests for the retention metrics, including the fixed/adaptive scale distinction.
+﻿"""Tests for the retention metrics, including the fixed/adaptive scale distinction.
 
 A note on the sub-threshold claim, because it is easy to state wrongly and the
 whole interpretation of the step-ratio metric depends on it:
@@ -18,6 +18,8 @@ weights with |D| < s/2 cannot flip, and that is what the test below constructs.
 """
 
 from __future__ import annotations
+
+import math
 
 import pytest
 import torch
@@ -249,6 +251,24 @@ def test_lora_delta_matches_manual_product() -> None:
     torch.testing.assert_close(got, (alpha / r) * (b @ a))
 
 
+def test_lora_delta_rslora_scaling_matches_peft() -> None:
+    # peft's LoraLayer.update_layer: scaling = alpha/sqrt(r) if use_rslora else
+    # alpha/r. Getting this wrong is silent and large -- at r=128 the two differ
+    # by sqrt(128) = 11.3x, which is enough to invert an adapter's ranking.
+    torch.manual_seed(14)
+    r, alpha = 128, 16.0
+    a = torch.randn(r, 256)
+    b = torch.randn(64, r)
+    plain = lora_delta(a, b, alpha=alpha, rank=r, use_rslora=False)
+    rs = lora_delta(a, b, alpha=alpha, rank=r, use_rslora=True)
+    torch.testing.assert_close(plain, (alpha / r) * (b @ a))
+    torch.testing.assert_close(rs, (alpha / math.sqrt(r)) * (b @ a))
+    ratio = (torch.linalg.norm(rs) / torch.linalg.norm(plain)).item()
+    assert ratio == pytest.approx(math.sqrt(r), rel=1e-5), ratio
+    # Default must stay non-rsLoRA, matching peft's own default.
+    torch.testing.assert_close(lora_delta(a, b, alpha=alpha, rank=r), plain)
+
+
 def test_lora_delta_rejects_inconsistent_rank() -> None:
     with pytest.raises(ValueError, match="rank"):
         lora_delta(torch.randn(8, 64), torch.randn(32, 4), alpha=16.0, rank=8)
@@ -350,3 +370,4 @@ def test_conventions_are_reported_and_can_differ() -> None:
         assert m.scheme == scheme
         out[scheme] = m.retention_ratio
     assert len(set(out.values())) > 1, out
+

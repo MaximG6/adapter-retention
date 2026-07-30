@@ -1,4 +1,4 @@
-"""Decisive test of the sqrt(d_in/r) amplification law, with rank as the only variable.
+﻿"""Decisive test of the sqrt(d_in/r) amplification law, with rank as the only variable.
 
 The six-adapter comparison in EXP-009 confounded rank with adapter identity: two
 adapters agreed within 17% and two disagreed by 2x, and the split tracked adapter
@@ -83,6 +83,8 @@ def main() -> int:
     print(f"device: {device}")
     acfg = json.load(open(hf_hub_download(ADAPTER, "adapter_config.json")))
     rank, alpha = int(acfg["r"]), float(acfg["lora_alpha"])
+    # peft scales by alpha/sqrt(r) under rsLoRA. Read, never assume (EXP-011).
+    use_rslora = bool(acfg.get("use_rslora", False))
     print(f"adapter: {ADAPTER}  r={rank} alpha={alpha:g}\n")
 
     sd = load_peft_weights(ADAPTER)
@@ -110,7 +112,7 @@ def main() -> int:
             w = reader.read(
                 f"model.layers.{layer}.{parent}.{module}.weight"
             ).to(device, torch.float32)
-            d_full = lora_delta(a, b, alpha=alpha, rank=rank)
+            d_full = lora_delta(a, b, alpha=alpha, rank=rank, use_rslora=use_rslora)
             target_norm = torch.linalg.norm(d_full)
             d_in = w.shape[1]
             params = compute_params(w, CFG)
@@ -204,3 +206,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+

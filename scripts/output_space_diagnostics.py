@@ -1,4 +1,4 @@
-"""Output-space SNR, bin-position independence, and the layer 1-3 spike decomposition.
+﻿"""Output-space SNR, bin-position independence, and the layer 1-3 spike decomposition.
 
 Three questions, one pass over the adapters because they share the expensive part
 (range-reading base weights):
@@ -114,6 +114,8 @@ def main() -> int:
     for adapter in ADAPTERS:
         acfg = json.load(open(hf_hub_download(adapter, "adapter_config.json")))
         rank, alpha = int(acfg["r"]), float(acfg["lora_alpha"])
+        # peft scales by alpha/sqrt(r) under rsLoRA. Read, never assume (EXP-011).
+        use_rslora = bool(acfg.get("use_rslora", False))
         declared = acfg.get("base_model_name_or_path", "")
         base = BASE_ALIASES.get(declared, declared)
         reader = RemoteTensorReader(base)
@@ -130,7 +132,7 @@ def main() -> int:
                 w = reader.read(
                     f"model.layers.{layer}.{parent}.{module}.weight"
                 ).to(device, torch.float32)
-                d = lora_delta(a, b, alpha=alpha, rank=rank)
+                d = lora_delta(a, b, alpha=alpha, rank=rank, use_rslora=use_rslora)
 
                 params = compute_params(w, CFG)
                 qb = apply_params(w, params, CFG).dequant
@@ -255,6 +257,8 @@ def main() -> int:
     print("=" * 104)
     acfg = json.load(open(hf_hub_download(SPIKE_ADAPTER, "adapter_config.json")))
     rank, alpha = int(acfg["r"]), float(acfg["lora_alpha"])
+    # peft scales by alpha/sqrt(r) under rsLoRA. Read, never assume (EXP-011).
+    use_rslora = bool(acfg.get("use_rslora", False))
     reader = RemoteTensorReader("Qwen/Qwen3-8B")
     sd = load_peft_weights(SPIKE_ADAPTER)
 
@@ -274,7 +278,7 @@ def main() -> int:
             w = reader.read(
                 f"model.layers.{layer}.{parent}.{module}.weight"
             ).to(device, torch.float32)
-            d = lora_delta(a, b, alpha=alpha, rank=rank)
+            d = lora_delta(a, b, alpha=alpha, rank=rank, use_rslora=use_rslora)
             params = compute_params(w, CFG)
             step = params.step_per_weight()
             qb = apply_params(w, params, CFG)
@@ -324,3 +328,5 @@ def params_codes(w: torch.Tensor, params: Any) -> torch.Tensor:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+

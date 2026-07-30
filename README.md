@@ -14,14 +14,16 @@ This project measures that directly, then tests whether the *behavioral* consequ
 
 The effective weight update the deployed model receives has a cosine similarity of **0.13 to 0.33** with the update the adapter intended, and a magnitude **2.9 to 7.4 times larger** — because the few weights that do move jump a full quantization step in a direction the adapter did not ask for. Measured against an erasure baseline of 1.0, *every* adapter tested is well past it.
 
-| adapter | base | rank | α/r | cosine | 95% CI | bit-flip |
-|---|---|---|---|---|---|---|
-| taboo-smile (36 layers) | Qwen3-8B | 32 | 2 | 0.138 | [0.136, 0.141] | 1.2% |
-| taboo-gold | Qwen3-8B | 32 | 2 | 0.139 | [0.125, 0.153] | 1.1% |
-| taboo-ship | Qwen3-8B | 32 | 2 | 0.141 | [0.128, 0.154] | 1.1% |
-| ao-v3-dpo-halluc | Qwen3-8B | 128 | 0.125 | 0.151 | [0.142, 0.163] | 1.3% |
-| latentqa | Qwen3-8B | 64 | 2 | 0.276 | [0.255, 0.300] | 3.9% |
-| responsible-ai-safety | Llama-3.1-8B | 16 | 2 | 0.330 | [0.307, 0.366] | 6.2% |
+| adapter | base | rank | scaling | cosine | 95% CI | bit-flip | output SNR |
+|---|---|---|---|---|---|---|---|
+| taboo-smile (36 layers) | Qwen3-8B | 32 | 2.00 | 0.138 | [0.136, 0.141] | 1.2% | 1.63 |
+| taboo-gold | Qwen3-8B | 32 | 2.00 | 0.139 | [0.125, 0.153] | 1.1% | 1.63 |
+| taboo-ship | Qwen3-8B | 32 | 2.00 | 0.141 | [0.128, 0.154] | 1.1% | 1.66 |
+| latentqa | Qwen3-8B | 64 | 2.00 | 0.276 | [0.255, 0.300] | 3.9% | 2.53 |
+| responsible-ai-safety | Llama-3.1-8B | 16 | 2.00 | 0.330 | [0.307, 0.366] | 6.2% | 6.00 |
+| ao-v3-dpo-halluc | Qwen3-8B | 128 | 1.41 (rsLoRA) | 0.505 | [0.476, 0.539] | 14.8% | 3.76 |
+
+**Scaling is `α/r`, or `α/√r` under rsLoRA.** Reading that flag wrong understates a rank-128 adapter's delta by 11.3× — see *What we tried that did not work*.
 
 **This is a statement about weights, not about behaviour.** Our own analysis predicts layer-output fidelity is far higher than these numbers on the inputs an adapter actually responds to. See *Scope* below — we mean this caveat literally.
 
@@ -121,7 +123,10 @@ Next: Phase 1, anchored on the Taboo model organisms — models trained to descr
 | Pooling unpaired records across quantization schemes | Inverted the convention ordering: an asymmetric-only 36-layer run dragged asymmetric's mean down, making `symmetric_gptq` appear to retain best. Pairing on identical adapter/layer/module cells reverses it. Would have put a backwards claim in the paper. | [EXP-008](EXPERIMENTS.md) |
 | Expecting the synthetic rank law to hold on trained adapters | `r^(1/4)` is clean on synthetic adapters and absent on real ones — the rank-16 adapter retains best, rank-32 worst. Optimization, not parameterization, sets effective magnitude. Reframed the paper: the rank curve establishes the mechanism, magnitude explains the data. | [EXP-008](EXPERIMENTS.md) |
 | Predicting the high-rank DPO adapter would degrade worst in output space | Registered in advance, measured, **failed** — it ranks 4th of 6 and beats all three taboo adapters. The `√(d_in/r)` amplification law it relied on does not transfer to trained adapters: measured amplification is rank-flat at 15–21×, not falling with rank. | [EXP-009](EXPERIMENTS.md) |
-| Deriving scaling laws from iid parameterization | Three registered predictions have now failed on trained adapters while holding on synthetic ones, all from the same cause. Laws derived under iid factors describe adapters whose magnitude is set by parameterization, not by optimization. Recorded as a limitation of theory-driven prediction here, not patched over. | [EXP-006](EXPERIMENTS.md), [EXP-009](EXPERIMENTS.md) |
+| Deriving scaling laws from iid parameterization | Laws derived under iid factors describe adapters whose magnitude is set by parameterization, not optimization. The weight-space `r^(1/4)` law genuinely fails on trained adapters. Recorded as a limitation of theory-driven prediction here, not patched over. | [EXP-006](EXPERIMENTS.md), [EXP-008](EXPERIMENTS.md) |
+| Probing a subspace with `coef @ A` | `AᵀA` covariance over-weights A's dominant singular directions, so it is not uniform on the row space. This inflated measured amplification, made it look rank-independent, and produced a **false refutation** of a law that actually holds to 1%. An orthonormal basis is the only unbiased probe of a subspace. | [EXP-010](EXPERIMENTS.md) |
+| Assuming `α/r` scaling for every adapter | peft uses `α/√r` when `use_rslora` is set. One of six adapters had it, and its merged delta was **11.3× too small** in four consecutive entries — enough to move it from worst to second-best. It also generated a plausible practitioner-facing claim about "mismatched α/r" that was pure artifact. Read provenance from `adapter_config.json`, never infer it. | [EXP-011](EXPERIMENTS.md) |
+| Using the exact error variance in the anisotropy correction | `s\|Δ\|(1−\|Δ\|/s)` is exact for the two-outcome flip model, but that model itself breaks once `\|Δ\| > s`, where the error is `\|Δ\|−s` rather than zero. The "improvement" made the fit worse (3.96% vs 2.13%). The limiting approximation was the flip model, not the variance. | [EXP-011](EXPERIMENTS.md) |
 
 Full detail for every experiment, successful or not, is in [`EXPERIMENTS.md`](EXPERIMENTS.md).
 

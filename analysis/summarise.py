@@ -1,4 +1,4 @@
-"""Aggregate every Phase 0 raw record into the GATE 0 tables.
+﻿"""Aggregate every Phase 0 raw record into the GATE 0 tables.
 
 Re-derives everything from results/raw/**/records.jsonl. Nothing is read from a
 summary file, so any table here can be regenerated from the raw JSONL alone.
@@ -115,7 +115,7 @@ def main() -> None:
     print("GATE 0 HEADLINE: weight-space retention by adapter, INT4 g128 asymmetric, fixed_scale")
     print("=" * 108)
     hdr = (
-        f"{'adapter':>46} {'base':>10} {'r':>5} {'a/r':>6} {'L':>3} {'cosine':>8} "
+        f"{'adapter':>46} {'base':>10} {'r':>5} {'scale':>6} {'L':>3} {'cosine':>8} "
         f"{'95% CI':>16} {'bitflip':>8} {'rel_err':>8}"
     )
     print(hdr)
@@ -138,7 +138,7 @@ def main() -> None:
         base_short = rs[0]["base_model"].split("/")[-1][:10]
         print(
             f"{short:>46} {base_short:>10} {rs[0]['rank']:>5} "
-            f"{rs[0]['alpha_over_rank']:>6.3g} {len(per_layer):>3} "
+            f"{rs[0].get('effective_scaling', rs[0]['alpha_over_rank']):>6.3g} {len(per_layer):>3} "
             f"{mean([r['cosine'] for r in rs]):>8.4f} "
             f"[{lo:>6.4f},{hi:>6.4f}] "
             f"{mean([r['code_flip_rate'] for r in rs]):>8.4f} "
@@ -272,3 +272,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

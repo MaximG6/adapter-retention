@@ -1,4 +1,4 @@
-"""Re-measure six-adapter output SNR with a FAIR (orthonormal) subspace probe.
+﻿"""Re-measure six-adapter output SNR with a FAIR (orthonormal) subspace probe.
 
 EXP-009 drew subspace probes as `coef @ A`, whose covariance is A^T A. That
 over-weights A's dominant singular directions and is not uniform on the row
@@ -72,6 +72,8 @@ def main() -> int:
     for adapter in ADAPTERS:
         acfg = json.load(open(hf_hub_download(adapter, "adapter_config.json")))
         rank, alpha = int(acfg["r"]), float(acfg["lora_alpha"])
+        # peft scales by alpha/sqrt(r) under rsLoRA. Read, never assume (EXP-011).
+        use_rslora = bool(acfg.get("use_rslora", False))
         declared = acfg.get("base_model_name_or_path", "")
         base = BASE_ALIASES.get(declared, declared)
         reader = RemoteTensorReader(base)
@@ -88,7 +90,7 @@ def main() -> int:
                 w = reader.read(
                     f"model.layers.{layer}.{parent}.{module}.weight"
                 ).to(device, torch.float32)
-                d = lora_delta(a, b, alpha=alpha, rank=rank)
+                d = lora_delta(a, b, alpha=alpha, rank=rank, use_rslora=use_rslora)
 
                 params = compute_params(w, CFG)
                 q_base = apply_params(w, params, CFG).dequant
@@ -164,3 +166,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+

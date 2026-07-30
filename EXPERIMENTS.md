@@ -922,3 +922,104 @@ Ratios 0.990–0.995 for five of six. The safety adapter deviates most (0.922) a
 **Artifacts:** `results/raw/phase0/amplification/records.jsonl` (24 records), `results/raw/phase0/output_snr_orthonormal/records.jsonl` (126 records), `scripts/amplification_svd_test.py`, `scripts/output_snr_orthonormal.py`.
 
 ---
+
+## [2026-07-30] EXP-011: rsLoRA scaling bug — one adapter's delta was 11.3x too small in every prior entry
+
+**Phase:** 0
+
+**Question:** Is `ao-v3-dpo-halluc`'s `α/r = 0.125` a deliberate choice or an unscaled default? And can the anisotropy correction be derived rather than fitted?
+
+**Setup:** Investigating the α/r question surfaced a bug in our own code. The adapter sets **`use_rslora: true`**, and peft's `LoraLayer.update_layer` scales accordingly:
+
+```python
+scaling = lora_alpha / math.sqrt(r)   if use_rslora else   lora_alpha / r
+```
+
+`ar.retention.lora_delta` hardcoded `α/r`. At r=128 that understates the merged delta by **√128 = 11.314x**.
+
+**Command:**
+
+```powershell
+conda run -n retention python -m pytest tests/ -q
+conda run -n retention python scripts/measure_public_adapter.py --adapter ceselder/qwen3-8b-ao-v3-best-dpo-halluc
+conda run -n retention python scripts/output_snr_orthonormal.py
+conda run -n retention python scripts/anisotropy_form_test.py
+```
+
+**Result:**
+
+*1. Scope of the bug: exactly one adapter, verified across all six.*
+
+| adapter | r | α | rsLoRA | correct scaling | we assumed | factor wrong |
+|---|---|---|---|---|---|---|
+| taboo-smile / ship / gold | 32 | 64 | False | 2.000 | 2.000 | 1.000 |
+| latentqa | 64 | 128 | False | 2.000 | 2.000 | 1.000 |
+| **ao-v3-dpo-halluc** | 128 | 16 | **True** | **1.414** | **0.125** | **11.314** |
+| responsible-ai-safety | 16 | 32 | False | 2.000 | 2.000 | 1.000 |
+
+*2. The α/r question answers itself, and kills a hypothesis before it reached the paper.*
+
+`α/r = 0.125` is **neither** a deliberate low setting **nor** an unscaled default. Under rsLoRA the meaningful quantity is `α/√r = 1.414`, comparable to the other adapters' 2.0. **The adapter is normally configured.**
+
+The hypothesis under consideration — *"shipped adapters carry mismatched α/r and that is what pushes them below output SNR 1"* — was therefore **an artifact of our bug, not a property of shipped adapters**, and would have been a false, directly actionable claim aimed at practitioners.
+
+*3. Corrected measurements invert the adapter's position.*
+
+`q_proj`, INT4 g128, `fixed_scale`:
+
+| | before (buggy) | after |
+|---|---|---|
+| cosine | 0.1735 | **0.5715** |
+| bit-flip | 0.0165 | **0.1810** |
+| relative_error | 5.796 | **1.452** |
+| mean \|Δ\|/s | 0.0114 | 0.1287 |
+
+Corrected six-adapter output SNR, orthonormal probe:
+
+| rank | adapter | SNR_w | **SNR_out** | amp | `√(d/r)` | ratio |
+|---|---|---|---|---|---|---|
+| 1 (worst) | taboo-smile | 0.1341 | 1.628 | 12.38 | 12.50 | 0.991 |
+| 2 | taboo-gold | 0.1342 | 1.630 | 12.39 | 12.50 | 0.992 |
+| 3 | taboo-ship | 0.1366 | 1.657 | 12.38 | 12.50 | 0.991 |
+| 4 | latentqa | 0.2920 | 2.525 | 8.80 | 8.84 | 0.996 |
+| **5** | **ao-v3-dpo-halluc** | 0.6164 | **3.757** | 6.22 | 6.25 | 0.995 |
+| 6 (best) | responsible-ai-safety | 0.3854 | 6.000 | 16.54 | 17.99 | 0.919 |
+
+**The DPO adapter is second-best, not worst.** The registered prediction that it would show the most severe output-space degradation **FAILS**.
+
+*4. The amplification law survives the correction and is now better supported.* Ratios to `√(d_in/r)`: 0.991, 0.991, 0.992, 0.996, **0.995**, 0.919. The corrected DPO point sits at 0.995 — it was 0.995 before too, because amplification is a ratio and largely scale-invariant. EXP-010's law validation used `taboo-smile`, which is not rsLoRA, so its exponents (−0.457, −0.455, −0.457) are unaffected.
+
+*5. An attempted refinement to the anisotropy derivation made it worse, and is recorded rather than deleted.*
+
+With the corrected (11.3x larger) delta, `|Δ|/s` rises to ~0.09–0.13 and the derived form degrades from 0.39% to **2.13%** mean error. The obvious fix is to use the exact per-weight error variance `s|Δ|(1 − |Δ|/s)` instead of its small-delta limit `s|Δ|`. Measured:
+
+| weighting | mean \|err\| | max \|err\| | fitted params |
+|---|---|---|---|
+| derived, small-delta `\|Δ\|` | **2.13%** | 18.42% | 0 |
+| derived, exact variance | 3.96% | 28.86% | 0 |
+| fitted `1 + 0.87/r` | 2.89% | 19.71% | 1 |
+
+Restricted to r ≥ 64: 0.44% / 0.58% / 0.61%.
+
+**The "exact" variance is worse.** The two-outcome model behind it assumes a single-step flip; once `|Δ| > s` the code moves more than one step and the error is `|Δ| − s` rather than zero, so the `(1 − |Δ|/s)` factor and the clamp needed to keep it non-negative misprice exactly the heavy-tailed weights that dominate at low truncation rank. The small-delta weighting is kept as the default and the correction is available but off.
+
+**Verdict:** WORKED as a bug hunt. The registered DPO prediction **FAILS** on correct numbers.
+
+**What we learned:**
+
+1. **`use_rslora` must be read from `adapter_config.json`, never assumed.** At r=128 the two scaling rules differ by 11.3x, which is enough to move an adapter from worst to second-best in a six-adapter ranking. Fixed at the root in `lora_delta`, with a test asserting the `√r` ratio and that the default stays non-rsLoRA to match peft.
+2. **Every DPO number in EXP-007, EXP-008, EXP-009 and EXP-010 was wrong.** Those entries stand as written; this one supersedes their DPO rows. The five other adapters are unaffected throughout.
+3. **The verdict on the DPO prediction has now been stated three times and been wrong twice.** FAILED (EXP-009, biased probe), CONFIRMED (EXP-010, biased delta), and now FAILED (EXP-011, both fixed). Only this verdict rests on numbers with no known defect. The pattern is not that predictions keep failing — it is that **a single adapter with two independent measurement bugs produced three different answers**, and none of the earlier two should have been reported with confidence.
+4. **The α/r hypothesis died before publication because the question was asked.** "Is this deliberate or a default?" is what forced a look at the config, which is what surfaced `use_rslora`. Provenance questions about data are worth asking even when the number looks fine.
+5. Negative knowledge: attempting to use the exact error variance made the anisotropy fit worse, because the underlying single-flip model breaks down before the variance formula does. The limiting approximation is the flip model, not the variance.
+6. The derived, parameter-free form still beats the one-parameter fit (2.13% vs 2.89%), but the margin is much narrower than the 0.39% vs 1.42% measured on the buggy delta. **The earlier claim of near-exactness was flattered by an artificially small delta.**
+
+**Plan impact:**
+
+- Amendment 6's Phase 1 predictions used the buggy DPO output SNR of 0.958 and singled it out as at risk. **That is withdrawn.** With SNR_out = 3.757 it is among the better-preserved adapters. Reissued in Amendment 7.
+- **No adapter in the set now has output SNR below 1**, so the "noise exceeds signal" regime is currently unobserved in real adapters. The `ar.predict` warning for it stays, since it is reachable at coarser quantization.
+- `ar.predict` now reports effective scaling and which rule produced it.
+
+**Artifacts:** `src/ar/retention.py` (`lora_delta` fix), `tests/test_retention.py` (rsLoRA scaling test), regenerated `results/raw/phase0/public_adapter/ceselder__*/`, `results/raw/phase0/output_snr_orthonormal/`, `results/raw/phase0/anisotropy/`.
+
+---

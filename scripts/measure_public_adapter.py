@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import struct
 import sys
 import time
@@ -124,6 +125,9 @@ def main() -> int:
         acfg = json.load(fh)
     rank = int(acfg["r"])
     alpha = float(acfg["lora_alpha"])
+    # peft scales by alpha/sqrt(r) under rsLoRA and alpha/r otherwise. Must be
+    # read, never assumed: at r=128 the two differ by 11.3x (EXP-011).
+    use_rslora = bool(acfg.get("use_rslora", False))
 
     declared = acfg.get("base_model_name_or_path", "")
     base_model = args.base_model or BASE_ALIASES.get(declared, declared)
@@ -175,7 +179,8 @@ def main() -> int:
                 base_name = f"model.layers.{layer}.{parent}.{module}.weight"
                 w = reader.read(base_name).to(device=device, dtype=torch.float32)
                 d = lora_delta(
-                    sd[a_key].to(device), sd[b_key].to(device), alpha=alpha, rank=rank
+                    sd[a_key].to(device), sd[b_key].to(device), alpha=alpha, rank=rank,
+                    use_rslora=use_rslora
                 )
                 if d.shape != w.shape:
                     raise RuntimeError(
@@ -194,6 +199,10 @@ def main() -> int:
                             "rank": rank,
                             "alpha": alpha,
                             "alpha_over_rank": alpha / rank,
+                            "use_rslora": use_rslora,
+                            "effective_scaling": alpha / (
+                                math.sqrt(rank) if use_rslora else rank
+                            ),
                             "layer": layer,
                             "module": module,
                             "module_parent": parent,
@@ -326,4 +335,7 @@ def _report(records_path: Path, args: argparse.Namespace) -> None:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+
 

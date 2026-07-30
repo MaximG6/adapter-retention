@@ -858,3 +858,47 @@ This converts P7 from a binary outcome into a graded test inside a single experi
 **Our contribution is the consequence, not the phenomenon:** the layers hardest to quantize are also where adapters are *least* preserved, and this is driven entirely by the base model rather than the adapter. Frame it that way in Related Work — claiming the outlier structure itself would be the same error as claiming the erasure mechanism.
 
 This also predicts something testable and practically useful: **outlier-aware quantizers (AWQ, LLM.int8()) should preserve adapters better in exactly the layers where naive affine quantization preserves them worst.** Worth one condition in Phase 1 if time allows.
+
+---
+
+## Amendment 7 — 2026-07-30 (supersedes Amendment 6 §6.2; still pre-Phase-1)
+
+**Trigger:** EXP-011 found an rsLoRA scaling bug in our own `lora_delta`. One adapter's merged delta was understated by 11.3x in every prior entry. Amendment 6's per-adapter predictions were computed from those numbers and are reissued here **before any Phase 1 run**.
+
+### 7.1 The bug, and the hypothesis it killed
+
+`ceselder/qwen3-8b-ao-v3-best-dpo-halluc` sets `use_rslora: true`, so peft scales by `α/√r`, not `α/r`. Our reconstruction assumed `α/r`, understating the delta by `√128 = 11.314x`. Verified across all six adapters; **only this one is affected**.
+
+**The `α/r = 0.125` question answers itself.** Under rsLoRA the meaningful figure is `α/√r = 1.414`, comparable to the other adapters' 2.0. The adapter is normally configured, and the candidate practitioner-facing claim — *"shipped adapters carry mismatched α/r and that is what pushes them below output SNR 1"* — **was an artifact of our bug and is withdrawn before publication.**
+
+### 7.2 Corrected Phase 1 predictions
+
+| adapter | r | scaling | SNR_w | **SNR_out** | predicted behavioural outcome |
+|---|---|---|---|---|---|
+| taboo-smile | 32 | 2.00 | 0.134 | **1.628** | substantially preserved |
+| taboo-gold | 32 | 2.00 | 0.134 | **1.630** | substantially preserved |
+| taboo-ship | 32 | 2.00 | 0.137 | **1.657** | substantially preserved |
+| latentqa | 64 | 2.00 | 0.292 | **2.525** | largely intact |
+| **ao-v3-dpo-halluc** | 128 | **1.41** | 0.616 | **3.757** | largely intact |
+| responsible-ai-safety | 16 | 2.00 | 0.385 | **6.000** | largely intact |
+
+**P4 (final).** Behaviour is substantially preserved for **all six** adapters at INT4 g128. **No adapter in the set has output SNR below 1**, so the regime where quantization noise exceeds the adapter's own signal is currently *unobserved in real adapters*. Amendment 6's singling out of `ao-v3-dpo-halluc` as at risk is **withdrawn** — it is now the second-best preserved.
+
+**P5 (final).** Degradation orders as: taboo family worst (1.63–1.66), then latentqa (2.53), then DPO (3.76), then safety (6.00). A 3.7x spread, narrower than the 6.3x previously claimed.
+
+**P6** unchanged, and now more load-bearing: since nothing in the set falls below SNR 1 at INT4 g128, **the only way to observe behavioural collapse is to go coarser** — per-channel INT4 or 3-bit. That condition moves from optional to necessary if Phase 1 is to observe a breakdown at all.
+
+**The registered DPO prediction FAILS.** It was predicted to show the most severe output-space degradation; it is second-best. This verdict has been stated three times (EXP-009 FAILED, EXP-010 CONFIRMED, EXP-011 FAILED) and only this one rests on numbers with no known defect. **The earlier two should not have been reported with confidence, and the pattern is not "predictions keep failing" but "one adapter with two independent measurement bugs produced three different answers."**
+
+### 7.3 Corrected count of failed predictions
+
+Earlier framing claimed three registered predictions corrected by measurement. The honest count:
+
+| prediction | status |
+|---|---|
+| `1/√d_in` output averaging | **genuinely wrong**, corrected to `√(d_in/r)` on subspace inputs (EXP-006) |
+| P1 weight-space `r^(1/4)` on trained adapters | **genuinely wrong**, optimization sets magnitude (EXP-008) |
+| P1 amplification `√(d_in/r)` on trained adapters | **not wrong** — the refutation was a biased probe (EXP-010) |
+| DPO worst in output space | **wrong**, confirmed only after two measurement bugs were fixed (EXP-011) |
+
+So: **two genuinely failed predictions, one false alarm, and one verdict that took three attempts to establish.** The method-section lesson stands and sharpens: *the instrument needs validating as much as the quantity, and an orthonormal basis is the only unbiased probe of a subspace.* Add to it: **check how the data was generated, not only how it was measured** — reading `adapter_config.json` for provenance is what surfaced the rsLoRA bug, and it was prompted by a question about intent rather than by any anomaly in the numbers.

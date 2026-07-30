@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Literal, NamedTuple
 
 import torch
@@ -267,14 +268,26 @@ def lora_delta(
     lora_b: Tensor,
     alpha: float,
     rank: int,
+    use_rslora: bool = False,
 ) -> Tensor:
-    """Reconstruct the merged weight delta (alpha/r) * B @ A.
+    """Reconstruct the merged weight delta, scaling exactly as peft does.
 
     PEFT stores lora_A as (r, in_features) and lora_B as (out_features, r), so the
     product is (out_features, in_features), matching the base weight layout.
+
+    The scaling depends on `use_rslora`, and getting this wrong is silent and
+    large. peft's LoraLayer.update_layer sets
+
+        scaling = alpha / sqrt(r)   if use_rslora else   alpha / r
+
+    so for a rank-128 adapter the two differ by a factor of sqrt(128) = 11.3.
+    `use_rslora` is recorded in adapter_config.json and MUST be read from there
+    rather than assumed; see EXP-011, where assuming alpha/r understated one
+    adapter's delta by 11.3x and inverted its position in the results.
     """
     if lora_a.shape[0] != rank:
         raise ValueError(f"lora_A first dim {lora_a.shape[0]} != rank {rank}")
     if lora_b.shape[1] != rank:
         raise ValueError(f"lora_B second dim {lora_b.shape[1]} != rank {rank}")
-    return (alpha / rank) * (lora_b.float() @ lora_a.float())
+    denom = math.sqrt(rank) if use_rslora else float(rank)
+    return (alpha / denom) * (lora_b.float() @ lora_a.float())

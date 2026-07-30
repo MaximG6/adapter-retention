@@ -46,23 +46,49 @@ BASE_ALIASES = {
 }
 DTYPES = {"BF16": torch.bfloat16, "F16": torch.float16, "F32": torch.float32}
 
-# Layer-output amplification on subspace-aligned inputs, relative to weight-space
-# SNR. The analytic law sqrt(d_in/r) holds on trained adapters to within 1% at
-# r=32 and 11% at r=4 (EXP-010), once probed with an orthonormal basis for the
-# delta's row space. The deviation is error anisotropy: per-weight error variance
-# is s*|delta|, so the error inherits the adapter's magnitude profile and
-# partially concentrates in the delta's own row space rather than spreading over
-# all d_in directions. Measured conc(E) ~= 1 + c/r with c ~= 0.87.
-#
-# An earlier calibration here used a flat 15-21x band measured with a probe drawn
-# as coef @ A, whose covariance is A^T A and which over-weights A's dominant
-# singular directions. That probe was biased; see EXP-010.
-ERROR_ANISOTROPY_C = 0.87
+# Predictions are validated against directly measured records on six adapters
+# (scripts/validate_predict.py). Observed maximum error was 13.2% on bit-flip rate
+# and 13.1% on cosine, from estimating step sizes on a sample of layers. The band
+# is that maximum rounded up, so the reported interval is empirical rather than a
+# formal CI.
+UNCERTAINTY = 0.15
 
 
-def amplification(d_in: int, rank: int) -> float:
-    """Subspace-input output SNR gain over weight-space SNR. See EXP-010."""
-    return (d_in / rank / (1.0 + ERROR_ANISOTROPY_C / rank)) ** 0.5
+def error_concentration(
+    delta: torch.Tensor, v_r: torch.Tensor, step: torch.Tensor | None = None
+) -> float:
+    """conc(E) for a probe uniform on the delta's row space. No free parameters.
+
+    Per-weight error variance is exactly
+
+        Var(E_ij) = s|D_ij| (1 - |D_ij|/s)
+
+    from the two-outcome flip distribution, so the error's variance profile
+    follows |D| and is NOT isotropic. For independent entries, the fraction of the
+    error's energy inside the row space is the variance-weighted mean of the
+    projector diagonal, and since mean_j(P_jj) = r/d_in exactly, the concentration
+    is the ratio of the weighted to the unweighted mean.
+
+    The default weighting is |D|, i.e. the small-delta limit of that variance.
+    Passing `step` applies the (1 - |D|/s) factor as well, and **that is worse**:
+    3.96% mean error against 2.13% (EXP-011). The reason is that the two-outcome
+    model behind the variance assumes a single-step flip. Once |D| > s the code
+    moves more than one step and the error is |D| - s rather than zero, so the
+    factor -- and the clamp needed to keep it non-negative -- misprices exactly
+    the heavy-tailed weights that dominate at low truncation rank. The correction
+    is kept available and off by default, since an attempted refinement that
+    makes things worse is worth recording rather than deleting.
+    """
+    p_diag = (v_r**2).sum(dim=0)
+    a = delta.abs()
+    var = a if step is None else a * (1.0 - (a / step).clamp(max=1.0))
+    c = var.sum(dim=0)
+    return ((c * p_diag).sum() / c.sum() / p_diag.mean()).item()
+
+
+def amplification(d_in: int, rank: int, conc_err: float = 1.0) -> float:
+    """Subspace-input output SNR gain over weight-space SNR. See EXP-010/011."""
+    return (d_in / rank / max(conc_err, 1e-9)) ** 0.5
 
 
 def _read_tensor(fs: Any, repo: str, shard: str, header_cache: dict, name: str):
@@ -102,6 +128,10 @@ def predict(
     acfg = json.load(open(hf_hub_download(adapter, "adapter_config.json")))
     rank = int(acfg["r"])
     alpha = float(acfg["lora_alpha"])
+    # peft scales by alpha/sqrt(r) under rsLoRA and alpha/r otherwise. Assuming
+    # alpha/r understates an rsLoRA adapter's delta by sqrt(r) -- 11.3x at r=128,
+    # enough to invert its ranking. See EXP-011.
+    use_rslora = bool(acfg.get("use_rslora", False))
     declared = acfg.get("base_model_name_or_path", "")
     base = base_model or BASE_ALIASES.get(declared, declared)
     if not base:
@@ -113,19 +143,26 @@ def predict(
     # mean|delta| per module, over EVERY layer: free, the adapter is already local.
     delta_abs: dict[str, list[float]] = defaultdict(list)
     delta_sq: dict[str, list[float]] = defaultdict(list)
+    conc_err: dict[str, list[float]] = defaultdict(list)
     for layer in range(n_layers):
         for module, parent in MODULE_PARENT.items():
             pre = f"base_model.model.model.layers.{layer}.{parent}.{module}"
             if f"{pre}.lora_A.weight" not in sd:
                 continue
+            a_mat = sd[f"{pre}.lora_A.weight"].float()
             d = lora_delta(
-                sd[f"{pre}.lora_A.weight"].float(),
+                a_mat,
                 sd[f"{pre}.lora_B.weight"].float(),
                 alpha=alpha,
                 rank=rank,
+                use_rslora=use_rslora,
             )
             delta_abs[module].append(d.abs().mean().item())
             delta_sq[module].append((d**2).mean().item())
+            # The row space of D = BA is the row space of A, so V_r comes from A
+            # (r x d_in, cheap) rather than from D.
+            _, _, vh = torch.linalg.svd(a_mat, full_matrices=False)
+            conc_err[module].append(error_concentration(d, vh[:rank]))
 
     if not delta_abs:
         raise RuntimeError(f"No LoRA tensors found in {adapter} for known module names")
@@ -162,9 +199,11 @@ def predict(
         msq = sum(delta_sq[module]) / len(delta_sq[module])
         s = sum(step_mean[module]) / len(step_mean[module])
         d_in = module_d_in[module]
+        ce = sum(conc_err[module]) / len(conc_err[module])
         flip = min(mad / s, 1.0)
         cosine = min(math.sqrt(msq / (s * mad)), 1.0)
         snr_w = cosine / math.sqrt(max(1 - cosine**2, 1e-12))
+        amp = amplification(d_in, rank, ce)
         per_module[module] = {
             "mean_abs_delta": mad,
             "mean_step": s,
@@ -173,8 +212,9 @@ def predict(
             "predicted_cosine": cosine,
             "predicted_snr_weight": snr_w,
             "d_in": float(d_in),
-            "amplification": amplification(d_in, rank),
-            "predicted_snr_output": snr_w * amplification(d_in, rank),
+            "error_concentration": ce,
+            "amplification": amp,
+            "predicted_snr_output": snr_w * amp,
             "tail_shape": msq / mad**2,
         }
 
@@ -193,7 +233,8 @@ def predict(
         "base_model": base,
         "rank": rank,
         "alpha": alpha,
-        "alpha_over_rank": alpha / rank,
+        "use_rslora": use_rslora,
+        "effective_scaling": alpha / (math.sqrt(rank) if use_rslora else rank),
         "quantization": cfg.name,
         "n_layers": n_layers,
         "sampled_layers": sample,
@@ -201,6 +242,11 @@ def predict(
             **agg,
             "predicted_snr_weight": snr_w,
             "predicted_snr_output": snr_out,
+            "predicted_snr_output_low": snr_out * (1 - UNCERTAINTY),
+            "predicted_snr_output_high": snr_out * (1 + UNCERTAINTY),
+            "predicted_flip_rate_low": agg["predicted_flip_rate"] * (1 - UNCERTAINTY),
+            "predicted_flip_rate_high": agg["predicted_flip_rate"] * (1 + UNCERTAINTY),
+            "uncertainty_fraction": UNCERTAINTY,
         },
         "per_module": per_module,
     }
@@ -240,24 +286,35 @@ def main(argv: list[str] | None = None) -> int:
     o = out["overall"]
     print(f"\nadapter        {out['adapter']}")
     print(f"base model     {out['base_model']}")
-    print(f"config         r={out['rank']} alpha={out['alpha']:g} "
-          f"(alpha/r={out['alpha_over_rank']:g})   {out['quantization']}")
+    scaling_rule = "alpha/sqrt(r), rsLoRA" if out["use_rslora"] else "alpha/r"
+    print(f"config         r={out['rank']} alpha={out['alpha']:g}   "
+          f"scaling {out['effective_scaling']:.4g} ({scaling_rule})   "
+          f"{out['quantization']}")
     print(f"step sizes     sampled from layers {out['sampled_layers']} of {out['n_layers']}")
 
     print(f"\n  effective magnitude  mean|delta|     {o['mean_abs_delta']:.3e}")
     print(f"                       mean step s     {o['mean_step']:.3e}")
     print(f"                       mean|delta|/s   {o['mean_abs_delta_over_s']:.5f}")
+    band = f"+/-{o['uncertainty_fraction']:.0%}"
     print(f"\n  predicted bit-flip rate            {o['predicted_flip_rate']:.4f}"
-          f"   ({o['predicted_flip_rate'] * 100:.2f}% of weights change)")
+          f"   [{o['predicted_flip_rate_low']:.4f}, {o['predicted_flip_rate_high']:.4f}]")
     print(f"  predicted cosine(delta, delta_eff) {o['predicted_cosine']:.4f}")
     print(f"  predicted weight-space SNR         {o['predicted_snr_weight']:.4f}")
     print(f"  predicted layer-output SNR         {o['predicted_snr_output']:.3f}"
-          f"   (subspace-aligned inputs)")
+          f"   [{o['predicted_snr_output_low']:.3f}, {o['predicted_snr_output_high']:.3f}]"
+          f"  {band}")
 
     print(f"\n  {_verdict(o['predicted_flip_rate'], o['predicted_cosine'])}")
-    if o["predicted_snr_output"] < 1.0:
-        print("  WARNING: predicted output SNR below 1 -- in layer outputs the "
-              "quantization\n           noise exceeds the adapter's own signal.")
+    lo, hi = o["predicted_snr_output_low"], o["predicted_snr_output_high"]
+    if lo < 1.0 < hi:
+        print("  NEAR THE LINE: the output-SNR band straddles 1, so this adapter "
+              "cannot be\n                 placed confidently on either side of the "
+              "point where layer-output\n                 quantization noise "
+              "overtakes the adapter's own signal.")
+    elif hi <= 1.0:
+        print("  BELOW THE LINE: predicted output SNR is under 1 across the band -- "
+              "in layer\n                  outputs the quantization noise exceeds "
+              "the adapter's own signal.")
 
     print(f"\n{'module':>12} {'mean|d|/s':>11} {'flip':>8} {'cosine':>8} "
           f"{'amp':>7} {'SNR_out':>8}")
