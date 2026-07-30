@@ -1,4 +1,4 @@
-"""First real measurement: retention of a public Qwen3-8B LoRA under INT4 g128.
+﻿"""First real measurement: retention of a public Qwen3-8B LoRA under INT4 g128.
 
 Base weights are range-read from the remote safetensors shards one tensor at a
 time, so this costs roughly 1.5 GB of network for a four-layer depth sample
@@ -37,7 +37,16 @@ from ar.quantsim import QuantConfig  # noqa: E402
 from ar.retention import compare_regimes, lora_delta  # noqa: E402
 
 DEFAULT_ADAPTER = "adamkarvonen/Qwen3-8B-taboo-smile_50_mix"
-BASE_MODEL = "Qwen/Qwen3-8B"
+
+# Adapters name their base inconsistently: mirrors, local paths, gated repos.
+# Resolve to a canonical readable repo rather than trusting the string.
+BASE_ALIASES = {
+    "unsloth/Qwen3-8B": "Qwen/Qwen3-8B",
+    "models/Qwen3-8B": "Qwen/Qwen3-8B",
+    "unsloth/Meta-Llama-3.1-8B-Instruct": "meta-llama/Llama-3.1-8B-Instruct",
+    "NousResearch/Meta-Llama-3.1-8B-Instruct": "meta-llama/Llama-3.1-8B-Instruct",
+}
+
 MODULE_PATH = {
     "q_proj": "self_attn",
     "k_proj": "self_attn",
@@ -88,7 +97,17 @@ class RemoteTensorReader:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--adapter", default=DEFAULT_ADAPTER)
-    ap.add_argument("--layers", default="0,12,24,35")
+    ap.add_argument(
+        "--layers",
+        default=None,
+        help="Comma-separated layer indices, or 'all'. Default: 4 evenly spaced.",
+    )
+    ap.add_argument("--base-model", default=None, help="Override the adapter's base.")
+    ap.add_argument(
+        "--out-subdir",
+        default=None,
+        help="Output subdirectory. Defaults to a descriptor of the run shape.",
+    )
     ap.add_argument("--bits", type=int, default=4)
     ap.add_argument("--group-size", type=int, default=128)
     ap.add_argument(
@@ -96,7 +115,6 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    layers = [int(x) for x in args.layers.split(",")]
     schemes = args.schemes.split(",")
     device = require_cuda((12, 0))
     print(f"device: {device} ({torch.cuda.get_device_name(device.index)})")
@@ -106,13 +124,40 @@ def main() -> int:
         acfg = json.load(fh)
     rank = int(acfg["r"])
     alpha = float(acfg["lora_alpha"])
-    print(f"adapter: {args.adapter}  r={rank} alpha={alpha} alpha/r={alpha / rank:g}")
+
+    declared = acfg.get("base_model_name_or_path", "")
+    base_model = args.base_model or BASE_ALIASES.get(declared, declared)
+    if not base_model:
+        raise RuntimeError("Adapter declares no base model; pass --base-model")
+    base_cfg_path = hf_hub_download(base_model, "config.json")
+    with open(base_cfg_path) as fh:
+        n_layers = int(json.load(fh)["num_hidden_layers"])
+
+    if args.layers is None:
+        layers = [round(i * (n_layers - 1) / 3) for i in range(4)]
+    elif args.layers == "all":
+        layers = list(range(n_layers))
+    else:
+        layers = [int(x) for x in args.layers.split(",")]
+
+    print(
+        f"adapter: {args.adapter}  r={rank} alpha={alpha} alpha/r={alpha / rank:g}"
+    )
+    print(
+        f"base:    {base_model}"
+        + (f"  (declared as {declared})" if declared != base_model else "")
+        + f"  {n_layers} layers; measuring {len(layers)}"
+    )
 
     sd = load_peft_weights(args.adapter)
-    reader = RemoteTensorReader(BASE_MODEL)
+    reader = RemoteTensorReader(base_model)
 
+    # Output path carries the run shape. Without this a wider rerun silently
+    # overwrites a narrower one and the artifact an earlier EXP entry points at
+    # stops matching what that entry reported. That happened once (EXP-008).
     slug = args.adapter.replace("/", "__")
-    out_dir = REPO_ROOT / "results" / "raw" / "phase0" / "public_adapter" / slug
+    subdir = args.out_subdir or f"L{len(layers)}_{'-'.join(schemes)}"
+    out_dir = REPO_ROOT / "results" / "raw" / "phase0" / "public_adapter" / slug / subdir
     out_dir.mkdir(parents=True, exist_ok=True)
     records_path = out_dir / "records.jsonl"
 
@@ -145,7 +190,7 @@ def main() -> int:
                     for regime_metrics in (cmp.fixed, cmp.adaptive):
                         rec: dict[str, Any] = {
                             "adapter": args.adapter,
-                            "base_model": BASE_MODEL,
+                            "base_model": base_model,
                             "rank": rank,
                             "alpha": alpha,
                             "alpha_over_rank": alpha / rank,
@@ -174,7 +219,7 @@ def main() -> int:
         extra={
             "adapter": args.adapter,
             "adapter_config": acfg,
-            "base_model": BASE_MODEL,
+            "base_model": base_model,
             "layers": layers,
             "bits": args.bits,
             "group_size": args.group_size,
@@ -281,3 +326,4 @@ def _report(records_path: Path, args: argparse.Namespace) -> None:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

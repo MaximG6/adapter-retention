@@ -586,3 +586,135 @@ The closed form from EXP-006 predicts the real adapter's flip rate to four decim
 - `scripts/measure_public_adapter.py`, `src/ar/manifest.py`
 
 ---
+
+## [2026-07-30] EXP-008: GATE 0 closeout — six adapters, 36 layers, synthetic sweep, and a corrected depth trend
+
+**Phase:** 0
+
+**Question:** Does the EXP-007 result hold across adapters, ranks, alpha conventions, and base models, and do the registered predictions of Amendment 4 survive measurement?
+
+**Setup:** Six public adapters spanning ranks 16/32/64/128, both alpha conventions, two base models, and four training regimes (behavioural SFT, DPO, interpretability probe, safety). INT4 g128, all three schemes on the 4-layer runs, asymmetric only on the 36-layer depth run. Plus a synthetic rank sweep (ranks 4–128, 3 seeds, both conventions) and a dose-response over four decades, on a real Qwen3-8B `q_proj` base.
+
+**Command:**
+
+```powershell
+conda run -n retention python scripts/measure_public_adapter.py --adapter <repo>
+conda run -n retention python scripts/measure_public_adapter.py --layers all --schemes asymmetric
+conda run -n retention python scripts/synthetic_sweep.py
+conda run -n retention python analysis/summarise.py
+```
+
+**Result:**
+
+*1. GATE 0 headline. Six adapters, INT4 g128 asymmetric, `fixed_scale`. CIs bootstrapped over layers.*
+
+| adapter | base | r | α/r | layers | cosine | 95% CI | bit-flip | rel_err |
+|---|---|---|---|---|---|---|---|---|
+| taboo-smile | Qwen3-8B | 32 | 2 | 36 | 0.1380 | [0.1355, 0.1405] | 0.0122 | 7.293 |
+| taboo-gold | Qwen3-8B | 32 | 2 | 4 | 0.1389 | [0.1248, 0.1531] | 0.0111 | 7.350 |
+| taboo-ship | Qwen3-8B | 32 | 2 | 4 | 0.1409 | [0.1279, 0.1539] | 0.0114 | 7.233 |
+| ao-v3-best-dpo-halluc | Qwen3-8B | 128 | **0.125** | 4 | 0.1512 | [0.1416, 0.1625] | 0.0133 | 6.694 |
+| latentqa | Qwen3-8B | 64 | 2 | 4 | 0.2760 | [0.2548, 0.2996] | 0.0388 | 3.578 |
+| **responsible-ai-safety** | **Llama-3.1-8B** | 16 | 2 | 4 | **0.3298** | [0.3069, 0.3664] | 0.0619 | 2.904 |
+
+**Every adapter is far past the erasure baseline.** `relative_error` ranges 2.90 to 7.35 against a baseline of 1.0. The *best-retained* adapter still receives a delta ~2.9x its own size in uncorrelated noise. Bit-flip rates span 1.1%–6.2%.
+
+*2. Rank does NOT predict retention on trained adapters.* Ordering by rank under α/r = 2: r=16 → 0.330, r=32 → 0.138/0.139/0.141, r=64 → 0.276. **Non-monotone, and the r=16 adapter retains best.** The synthetic `r^(1/4)` law (EXP-006, confirmed below) does **not** transfer to trained adapters, because optimization rather than parameterization sets effective magnitude. Amendment 3.2 registered exactly this caveat in advance.
+
+*3. The channel model predicts every adapter's bit-flip rate to within 2.3%.*
+
+| adapter | flip measured | flip predicted | ratio | projection |
+|---|---|---|---|---|
+| responsible-ai-safety (Llama) | 0.06191 | 0.06335 | 0.977 | 0.974 |
+| taboo-gold | 0.01114 | 0.01116 | 0.999 | 0.992 |
+| taboo-ship | 0.01139 | 0.01142 | 0.998 | 0.993 |
+| taboo-smile | 0.01220 | 0.01233 | 0.990 | 0.988 |
+| latentqa | 0.03882 | 0.03912 | 0.992 | 0.991 |
+| ao-v3-best-dpo-halluc | 0.01334 | 0.01338 | 0.997 | 0.993 |
+
+Across two base models, four ranks, both alpha conventions, and four training regimes. **This is the strongest result in Phase 0.** Retention is not predicted by rank, architecture, or training method — it is predicted by `|Δ|/s`, and the closed form converts that into a bit-flip rate with under 2.3% error every time.
+
+*4. Registered predictions P1 and P2 confirmed on synthetic adapters (Amendment 4.2, committed before the sweep).*
+
+| convention | quantity | fitted exponent | predicted |
+|---|---|---|---|
+| α = 2r | weight SNR | +0.286 | +0.25 |
+| α = 2r | output SNR, subspace x | **−0.182** | **−0.25** |
+| α = 2r | output SNR, generic x | +0.286 | tracks weight |
+| α = 16 | weight SNR | −0.275 | −0.25 |
+| α = 16 | output SNR, subspace x | **−0.744** | **−0.75** |
+
+**P1's central claim holds: weight-space and output-space fidelity disagree in sign under α=2r.** Weight SNR climbs 0.255 → 0.688 across r=4→128 while subspace output SNR falls 7.34 → 3.94. Generic-input SNR tracks weight SNR to three decimals at every rank, re-confirming there is no dimensional averaging.
+
+Exponents under α=2r are compressed by 0.04–0.07. Decomposable: fitted amplification is −0.465 against −0.5, and weight SNR +0.286 against +0.25. Both consistent with the noise-dominated approximation weakening as SNR approaches 0.69 at r=128. Signs unaffected.
+
+**P3 remains untested.** Synthetic gives SNR_out = 4.93 at r=32 against the predicted 1.55, because `C` was calibrated from the real adapter while the synthetic delta magnitude is arbitrary — the caveat registered in advance. Testing P3 needs real adapters across ranks *with matched training*, which the six adapters do not provide since their magnitudes vary independently of rank.
+
+*5. Dose-response validates the channel across four decades (rank 32, α=2r).*
+
+| mean \|Δ\|/s | flip measured | flip predicted | cosine | cosine predicted |
+|---|---|---|---|---|
+| 0.00109 | 0.0015 | 0.0011 | 0.0382 | 0.0402 |
+| 0.01087 | 0.0108 | 0.0109 | 0.1263 | 0.1271 |
+| 0.10866 | 0.1076 | 0.1086 | 0.4000 | 0.4019 |
+| 0.32598 | 0.3153 | 0.3187 | 0.6847 | 0.6961 |
+| 1.08659 | 0.6919 | 0.7000 | 0.9400 | 1.0000 |
+
+Tail shape `mean(Δ²)/mean|Δ|²` is a flat **1.5962** across all magnitudes versus the Gaussian reference `π/2 = 1.5708` — products of Gaussians are marginally heavier-tailed, as expected.
+
+*6. **CORRECTION to EXP-007 finding 7: the depth trend was a sampling artifact.***
+
+EXP-007 reported "retention rises monotonically with depth, cosine 0.119 → 0.154" from four layers (0, 12, 24, 35). The full 36-layer profile shows a **weaker and non-monotone** trend:
+
+| | 4-layer sample (EXP-007) | all 36 layers |
+|---|---|---|
+| shape | monotone rising | non-monotone |
+| magnitude | 0.119 → 0.154, **+29%** | first quartile 0.1322 → last quartile 0.1446, **+9.4%** |
+| all-layer mean | — | 0.1380, 95% CI over layers [0.1355, 0.1405] |
+
+The sampled layers happened to fall on a rising sequence. The full profile contains structure the sample missed entirely, most visibly **a spike at layers 1–3 where the bit-flip rate is 2.5–2.7% against ~1.0% elsewhere** — nearly triple, and invisible at 4-layer resolution. Layer 0 is the global minimum (0.1188), layers 4–8 dip back to ~0.128.
+
+**The depth trend is real but roughly a third the size reported, and its shape was wrong.** EXP-007's numbers stand as recorded; this entry supersedes its finding 7.
+
+*7. Three taboo replicates agree tightly.* Same recipe, same rank, differing only in the secret word: 0.1380, 0.1389, 0.1409. Between-adapter spread is under 2% relative — a genuinely controlled population, which supports using the ~20-variant Taboo family as Phase 1's replicate set.
+
+*8. Convention, paired: 4.5% maximum deviation.*
+
+| scheme | cosine | bit-flip | rel_err |
+|---|---|---|---|
+| asymmetric | 0.1874 | 0.0226 | 6.082 |
+| symmetric_gptq | 0.1868 | 0.0244 | 6.766 |
+| symmetric_awq | 0.1790 | 0.0213 | 6.504 |
+
+Paired on the 168 (adapter, layer, module) cells present under all three schemes.
+
+*9. Module profile, pooled over six adapters:* `gate_proj` retains most (0.196), `down_proj` least (0.130), ordering identical to median `|Δ|/s` (0.0155 vs 0.0081). Module differences are entirely a magnitude effect, not architectural.
+
+*10. Scale regime, pooled:* `fixed_scale` cosine 0.1628 / flips 0.0176; `adaptive_scale` cosine 0.1616 / code flips 0.0313 / **value changes 0.8482**. `scale_shift_fraction` 0.9999, `grid_shift_fraction` 0.8307. Confirms EXP-007 across all six adapters.
+
+**Verdict:** WORKED. GATE 0's numerical arm is met.
+
+**What we learned:**
+
+1. **Near-total weight-space erasure is not adapter-specific.** Six adapters, two base models, four ranks, two alpha conventions, four training regimes — all far past the erasure baseline.
+2. **Rank does not predict trained-adapter retention; `|Δ|/s` does.** This reshapes the paper: the rank curve is a *synthetic* result establishing the mechanism, and the real-adapter story is that trained magnitude, which nobody reports, is what determines survival.
+3. **The channel model is the central contribution.** Sub-2.3% prediction of bit-flip rate across every adapter tested, from a closed form with no fitted parameters.
+4. **P1 confirmed: weight-space and output-space fidelity move in opposite directions with rank.** Registered before measurement.
+5. **A 4-layer depth sample produced a trend three times too large and the wrong shape.** Max flagged the 4-layer depth number as the weakest claim; it was. Two of the three sampled layers sat on a locally rising stretch, and the layers 1–3 anomaly was invisible.
+6. **Analysis bug caught: pooling unpaired records inverted the convention ordering.** The first aggregation pooled all records, including the asymmetric-only 36-layer run, which dragged asymmetric's mean down and made `symmetric_gptq` appear to retain best. Pairing on identical cells reverses it. Fixed in `analysis/summarise.py` with `paired_on_schemes` and `one_run_per_adapter`; had it gone unnoticed the paper would have carried a backwards claim about which toolchain preserves adapters best.
+7. **Process bug: the 36-layer run overwrote the artifact EXP-007 cites**, because the output path keyed only on adapter name. Recovered from git, verified identical by SHA-256 (`356B9A2F...`), and both runs now live under run-shape subdirectories. `--out-subdir` added. The artifact path in EXP-007 has therefore moved to `.../L4_asymmetric-symmetric_gptq-symmetric_awq/records.jsonl`; content is byte-identical to what that entry reported.
+8. **The safety adapter retains best, but this is confounded and must not be read as "safety adapters survive better."** It sits on a different base model (Llama-3.1-8B, different weight scale and therefore different step size) and its median `|Δ|/s` is roughly 5x the taboo adapters'. The channel model attributes its higher cosine entirely to that magnitude. Attributing it to the safety objective would require matched base and matched magnitude.
+9. Negative knowledge: `α/r = 2` in five of six adapters; the sixth uses 0.125. The favourable convention dominates shipped practice and does not rescue retention.
+
+**Plan impact:**
+
+- The rank sweep's role changes. It establishes the mechanism on synthetic adapters, where it is clean and confirms P1/P2. It is **not** the headline for real adapters, because rank does not predict their retention. The headline is the channel model plus the six-adapter spread.
+- P3 needs matched-training adapters across ranks. Deferred; noted as untested rather than quietly dropped.
+- Taboo family confirmed as the Phase 1 replicate set.
+
+**Artifacts:**
+- `results/raw/phase0/public_adapter/*/L*/records.jsonl` — six adapters, 1176 records
+- `results/raw/phase0/synthetic/records.jsonl` — 43 records
+- `analysis/summarise.py`, `scripts/synthetic_sweep.py`
+
+---

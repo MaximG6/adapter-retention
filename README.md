@@ -10,41 +10,66 @@ This project measures that directly, then tests whether the *behavioral* consequ
 
 ## Headline finding
 
-**Merging a published LoRA into Qwen3-8B and quantizing to INT4 g128 changes only 1.09% of the model's stored weights.**
+**Across six published LoRA adapters, merging into the base model and quantizing to INT4 g128 changes between 1.1% and 6.2% of the model's stored weights.**
 
-Every single weight in the sample carries an update smaller than half a quantization step — the median update is about 1/128 of one step. The effective weight change that the deployed model receives has a cosine similarity of **0.137** with the update the adapter intended, and a magnitude roughly **seven times larger**, because the few weights that do move jump a full step in a direction the adapter did not ask for.
+The effective weight update the deployed model receives has a cosine similarity of **0.13 to 0.33** with the update the adapter intended, and a magnitude **2.9 to 7.4 times larger** — because the few weights that do move jump a full quantization step in a direction the adapter did not ask for. Measured against an erasure baseline of 1.0, *every* adapter tested is well past it.
 
-So the adapter is not gently degraded. It is erased and replaced by quantization noise several times its own size.
+| adapter | base | rank | α/r | cosine | 95% CI | bit-flip |
+|---|---|---|---|---|---|---|
+| taboo-smile (36 layers) | Qwen3-8B | 32 | 2 | 0.138 | [0.136, 0.141] | 1.2% |
+| taboo-gold | Qwen3-8B | 32 | 2 | 0.139 | [0.125, 0.153] | 1.1% |
+| taboo-ship | Qwen3-8B | 32 | 2 | 0.141 | [0.128, 0.154] | 1.1% |
+| ao-v3-dpo-halluc | Qwen3-8B | 128 | 0.125 | 0.151 | [0.142, 0.163] | 1.3% |
+| latentqa | Qwen3-8B | 64 | 2 | 0.276 | [0.255, 0.300] | 3.9% |
+| responsible-ai-safety | Llama-3.1-8B | 16 | 2 | 0.330 | [0.307, 0.366] | 6.2% |
 
-Measured on `adamkarvonen/Qwen3-8B-taboo-smile_50_mix` (r=32, α=64), 4 layers × 7 module types, isolating the step-size mechanism from grid movement. Full numbers and caveats in [EXP-007](EXPERIMENTS.md). **This is a numerical result about weights, not yet a behavioural one** — see the honest caveat in *What we found*.
+**This is a statement about weights, not about behaviour.** Our own analysis predicts layer-output fidelity is far higher than these numbers on the inputs an adapter actually responds to. See *Scope* below — we mean this caveat literally.
+
+Full numbers in [EXP-007](EXPERIMENTS.md) and [EXP-008](EXPERIMENTS.md).
+
+## Scope: what these numbers do and do not say
+
+They say the **stored weights** of a merged-then-quantized model are almost unchanged from the quantized base.
+
+They do **not** say the model behaves like the base model. Quantization acts as an unbiased noisy channel, and a rank-r adapter's effect on inputs inside its active subspace is amplified relative to that noise by `√(d_in/r)` — roughly 11× at the configuration measured. Behaviour may survive largely intact while the weights look destroyed. Phase 1 measures this; Phase 0 cannot.
+
+The honest frame, which we hold to throughout: **near-total weight-space erasure, with behavioural consequences open and predicted to be milder.**
 
 ## Status
 
-**Phase 0, day 1 complete.** Prior-art check done, quantizer implemented and validated. No retention numbers yet — the first measurement is the next step.
+**Phase 0 complete, GATE 0 numerical arm met.**
 
 | Phase | Description | Gate | State |
 |---|---|---|---|
-| 0 | Numerical retention of merged LoRA under quantization | GATE 0 | in progress — tooling validated, measurement pending |
-| 1 | Behavioral confirmation | GATE 1 | not started |
+| 0 | Weight-space retention of merged LoRA under quantization | GATE 0 | **met** — 6 adapters, 36-layer profile, synthetic sweep |
+| 1 | Behavioral confirmation | GATE 1 | next |
 | 2 | Alignment drift rate (conditional on Phase 1) | GATE 2 | not started |
 
-Done so far:
+| # | What | Entry |
+|---|---|---|
+| 001 | Environment verified on sm_120 (RTX 5090) | [EXP-001](EXPERIMENTS.md) |
+| 002 | Prior-art check; claim narrowed before any code | [EXP-002](EXPERIMENTS.md), [`PRIOR_ART.md`](PRIOR_ART.md) |
+| 003 | `quantsim.py`, 53 hand-computed tests, bit-exact vs `gptqmodel` | [EXP-003](EXPERIMENTS.md) |
+| 004 | Retention metrics; two metric specification errors corrected | [EXP-004](EXPERIMENTS.md) |
+| 005 | GGUF K-quant validation gap; deferred to Phase 1 | [EXP-005](EXPERIMENTS.md) |
+| 006 | Channel model verified; third specification error corrected | [EXP-006](EXPERIMENTS.md) |
+| 007 | First real measurement | [EXP-007](EXPERIMENTS.md) |
+| 008 | GATE 0 closeout; depth trend corrected | [EXP-008](EXPERIMENTS.md) |
 
-- Environment verified on sm_120 (RTX 5090) — [EXP-001](EXPERIMENTS.md)
-- Prior-art check, claim narrowed as a result — [EXP-002](EXPERIMENTS.md), [`PRIOR_ART.md`](PRIOR_ART.md)
-- `quantsim.py` implemented, 53 hand-computed tests, bit-exact against `gptqmodel` on real Qwen3-8B layers — [EXP-003](EXPERIMENTS.md)
-
-Next: retention metrics (`retention.py`), then the first measurement on a public Qwen3-8B adapter.
+Next: Phase 1, anchored on the Taboo model organisms — models trained to describe a secret word without saying it ([arXiv 2510.01070](https://arxiv.org/abs/2510.01070)). The behavioural metric is a string match against a word named in the checkpoint, it splits into *does it still hint* and *does it still avoid saying*, and ~20 variants share one recipe.
 
 ## What we found
 
-- **A real published adapter is almost entirely erased at INT4 g128.** Bit-flip rate 1.09%, cosine 0.137, and 100.00% of weights below the half-step threshold. GATE 0's "strong finding" bar was a bit-flip rate under ~50%; the measured value is fifty times below it. ([EXP-007](EXPERIMENTS.md))
-- **Erasure is the wrong word for what happens — it is replacement.** `relative_error` is 7.41 against an erasure baseline of 1.0, so the deployed weight delta is uncorrelated noise about seven times the size of the intended update.
-- **Quantization behaves as an unbiased stochastic rounding channel.** `P(a weight's code changes) = min(|Δ|/s, 1)`, and the delta survives *in expectation* (`projection_coefficient` = 0.992) while being destroyed per weight. The closed form predicts the real adapter's flip rate to four decimals. This gives the result an analytic backbone rather than leaving it a pile of measurements.
+- **Weight-space erasure is not adapter-specific.** Six adapters across two base models, four ranks, both α conventions, and four training regimes are all far past the erasure baseline. GATE 0's "strong finding" bar was a bit-flip rate under ~50%; measured values are 1.1%–6.2%. ([EXP-008](EXPERIMENTS.md))
+- **Erasure is the wrong word — it is replacement.** `relative_error` runs 2.9 to 7.4 against a baseline of 1.0, so the deployed delta is uncorrelated noise several times the size of the intended update.
+- **Quantization behaves as an unbiased stochastic rounding channel, and this is the central result.** `P(a weight's code changes) = min(|Δ|/s, 1)`. The closed form predicts the measured bit-flip rate of **every adapter tested to within 2.3%**, with no fitted parameters, across both base models and all four ranks.
+- **Rank does not predict retention in trained adapters — magnitude does.** The rank-16 adapter retains best and the rank-32 adapters worst. The clean `r^(1/4)` scaling law holds for *synthetic* adapters, where magnitude is set by parameterization, and does not transfer to trained ones, where optimization sets it. Effective adapter magnitude is not something anyone reports.
+- **Weight-space and output-space fidelity move in opposite directions with rank.** Registered as a prediction before measurement, then confirmed on synthetic adapters: under α=2r, weight SNR rises as `r^(+1/4)` while subspace output SNR falls as `r^(-1/4)`. The rank that best preserves the weights is not the rank that best preserves the computation.
 - **Merging an adapter shifts the quantization grid of essentially every group in the model** (`scale_shift_fraction` = 0.9999). Under deployment-realistic adaptive scaling, 85% of weights change their stored value, but almost all of that is the grid moving rather than the adapter arriving. Separating the two roughly halves the apparent bit-flip rate (2.08% → 1.09%).
-- **Which "symmetric INT4" you use changes the answer.** Cosine spans 0.125 to 0.137 across conventions on the same adapter, so whether an adapter survives depends partly on which toolchain quantized it.
-- **Retention improves with depth and varies by module.** Cosine rises 0.119 → 0.154 from layer 0 to 35; `gate_proj` retains most, `down_proj` least, tracking delta magnitude relative to step size.
-- **Numerical erasure is not behavioural erasure, and we are not claiming it yet.** Our own channel analysis predicts layer-output fidelity is far higher than weight-level fidelity on inputs the adapter actually responds to, with an amplitude gain of `√(d_in/r)`. That is a registered prediction for Phase 1, not a hedge added after the fact.
+- **Which "symmetric INT4" you use changes the answer by up to 4.5%**, paired on identical cells — so whether an adapter survives depends partly on which toolchain quantized it.
+- **Merging an adapter shifts the quantization grid of essentially every group in the model** (`scale_shift_fraction` 0.9999). Under deployment-realistic adaptive scaling 85% of weights change their stored value, but almost all of that is the grid moving rather than the adapter arriving; separating the two roughly halves the apparent bit-flip rate.
+- **Retention varies mildly with depth and by module.** Across all 36 layers, cosine rises 9.4% from the first quartile of layers to the last, with a bit-flip spike at layers 1–3. `gate_proj` retains most, `down_proj` least — ordering identical to median `|Δ|/s`, so module differences are a magnitude effect, not architectural.
+- **The best-retained adapter is a safety adapter, but we do not claim safety adapters survive better.** It sits on a different base model and carries ~5× the delta magnitude relative to step size; the channel model attributes its advantage entirely to magnitude. Establishing a safety-specific effect would need matched base and matched magnitude.
 
 *Methodological findings:*
 
@@ -67,6 +92,9 @@ Next: retention metrics (`retention.py`), then the first measurement on a public
 | Treating `\|Δ\| < s/2` as a deterministic erasure threshold | False. Whether a weight flips depends on its position within its bin; the true relation is `P(flip) = min(\|Δ\|/s, 1)`, so at the threshold half of those weights still flip. | [EXP-004](EXPERIMENTS.md) |
 | Predicting layer-output error averages down as `1/√d_in` | Measured suppression was exactly 1.00 at every `d_in` from 256 to 8192 for generic inputs — the adapter's effect and the error scale identically and cancel. The real effect is rank-mediated, `√(d_in/r)`, and only for inputs in the adapter's active subspace. Corrected before it was registered as a Phase 1 prediction. | [EXP-006](EXPERIMENTS.md) |
 | GGUF K-quants in Phase 0 | Block-wise super-block scales mean there is no single per-group step size, so every step-ratio metric needs a definition decision, and gptqmodel cannot validate them. Moved to Phase 1, where behavioural metrics apply without redefinition. | [EXP-005](EXPERIMENTS.md) |
+| Reporting a depth trend from 4 sampled layers | The sampled layers happened to fall on a rising stretch. All 36 layers show the trend is a third the size (+9.4%, not +29%) and non-monotone, with a bit-flip spike at layers 1–3 that 4-layer resolution could not see. | [EXP-008](EXPERIMENTS.md) |
+| Pooling unpaired records across quantization schemes | Inverted the convention ordering: an asymmetric-only 36-layer run dragged asymmetric's mean down, making `symmetric_gptq` appear to retain best. Pairing on identical adapter/layer/module cells reverses it. Would have put a backwards claim in the paper. | [EXP-008](EXPERIMENTS.md) |
+| Expecting the synthetic rank law to hold on trained adapters | `r^(1/4)` is clean on synthetic adapters and absent on real ones — the rank-16 adapter retains best, rank-32 worst. Optimization, not parameterization, sets effective magnitude. Reframed the paper: the rank curve establishes the mechanism, magnitude explains the data. | [EXP-008](EXPERIMENTS.md) |
 
 Full detail for every experiment, successful or not, is in [`EXPERIMENTS.md`](EXPERIMENTS.md).
 
