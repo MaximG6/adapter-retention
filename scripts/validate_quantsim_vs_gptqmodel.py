@@ -1,4 +1,4 @@
-"""Validate ar.quantsim against gptqmodel's own Quantizer.
+﻿"""Validate ar.quantsim against gptqmodel's own Quantizer.
 
 Required by CLAUDE.md rule 8: quantsim numbers may not be used anywhere until they
 have been checked against gptqmodel on at least one real layer.
@@ -180,13 +180,13 @@ def main() -> int:
     records: list[dict[str, Any]] = []
     hard_failures: list[str] = []
 
-    header = f"{'tensor':44s} {'config':26s} {'max|Δdequant|':>14s} {'scales':>7s} {'exact':>6s}"
+    header = f"{'tensor':44s} {'config':26s} {'max|Î”dequant|':>14s} {'scales':>7s} {'exact':>6s}"
     print(header)
     print("-" * len(header))
 
     for tname, w in tensors.items():
         for scheme, sym, must_match in SCHEMES:
-            for bits in (4, 8):
+            for bits in (3, 4, 8):
                 for gs in (32, 128, -1):
                     cfg = QuantConfig(bits=bits, group_size=gs, scheme=scheme)  # type: ignore[arg-type]
                     ours = quantize_dequantize(w, cfg)
@@ -258,3 +258,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

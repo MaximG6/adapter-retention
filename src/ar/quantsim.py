@@ -6,7 +6,10 @@ import torch
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from torch import Tensor
 
-SUPPORTED_BITS: tuple[int, ...] = (4, 8)
+SUPPORTED_BITS: tuple[int, ...] = (3, 4, 8)
+"""3-bit is included for the coarse Phase 1 conditions. The affine arithmetic is
+identical; only the grid size changes. Validated against gptqmodel alongside 4 and
+8 bit in EXP-013."""
 
 Scheme = Literal["asymmetric", "symmetric_awq", "symmetric_gptq"]
 

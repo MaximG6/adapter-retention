@@ -317,8 +317,11 @@ def test_rejects_bad_input() -> None:
 
 
 def test_rejects_bad_config() -> None:
+    # 3-bit became supported for the coarse Phase 1 conditions (EXP-013); 2-bit
+    # has never been validated against gptqmodel and must stay refused.
+    assert QuantConfig(bits=3, group_size=128, scheme="asymmetric").bits == 3
     with pytest.raises(ValueError, match="bits"):
-        QuantConfig(bits=3, group_size=128, scheme="asymmetric")
+        QuantConfig(bits=2, group_size=128, scheme="asymmetric")
     with pytest.raises(ValueError, match="bits"):
         QuantConfig(bits=16, group_size=128, scheme="asymmetric")
     with pytest.raises(ValueError, match="group_size"):
