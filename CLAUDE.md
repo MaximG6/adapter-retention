@@ -208,6 +208,47 @@ Stop and report at each. Write the `EXPERIMENTS.md` entries and update `README.m
 - Bootstrap CIs **over questions**, not observations. Greedy decoding at temperature 0 means effective n is far below nominal.
 - Holm-Bonferroni across precision conditions. Effect sizes with CIs, never bare p-values.
 
+## Scope discipline: weight-space claims are not behavioral claims
+
+**Every Phase 0 result is a statement about weights. Never let it drift into a statement about behavior.**
+
+Banned without an explicit numerical qualifier: "the adapter is destroyed", "erased",
+"the alignment is gone", "quantization removes the fine-tune". Each of these reads as
+behavioral and none of them is supported by a weight-space measurement.
+
+Required form: "near-total **weight-space** erasure", "**numerical** retention of 1.09%",
+"the **stored weights** are 99% unchanged".
+
+The reason is our own analysis, not caution for its own sake. The channel model predicts
+layer-output fidelity on inputs inside the adapter's active subspace exceeds weight-level
+fidelity by `sqrt(d_in/r)` — roughly 11x at `d_in=4096, r=32`, and 16x at r=16. **Behavior
+may survive intact while the weights look destroyed.** Phase 1 decides it; Phase 0 cannot.
+
+The paper's frame, and the frame for every summary, abstract, figure caption, and email:
+
+> Near-total weight-space erasure, with behavioral consequences open and predicted to be
+> milder than the weight-space numbers suggest.
+
+Overstating this would be the single fastest way to lose a reader who knows quantization.
+It would also be exactly the error the three-phase structure exists to prevent.
+
+## Validate metrics before trusting them
+
+Three of the metric definitions in the original plan were wrong, all caught by measurement
+before any number was published (EXP-004, EXP-006):
+
+1. `retention_ratio` is unbounded above and non-monotone; it reads 95.5 exactly where cosine
+   is 0.015, i.e. it looks best at the point of total destruction.
+2. `|Δ| < s/2` is not a deterministic erasure threshold; `P(flip) = min(|Δ|/s, 1)`, so half
+   the weights at the threshold still flip.
+3. Layer-output error does not average down as `1/sqrt(d_in)`; measured suppression is
+   exactly 1.00 for generic inputs.
+
+None were implementation bugs — `quantsim.py` was bit-exact against `gptqmodel` throughout.
+All three were specification errors in the plan. **Derive, then measure the derivation, then
+trust it.** This belongs in the paper's Method section as a stated practice, not just in the
+notebook.
+
 ## Things to never do
 
 - Never fabricate a number, a citation, or an arXiv ID. If something is unverified, write "unverified".

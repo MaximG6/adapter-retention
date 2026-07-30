@@ -638,3 +638,88 @@ Recommendation from EXP-005 accepted, with a split so the deployment-realism ang
 - **Phase 1: retained.** There it is just another quantized checkpoint. Behavioural and distributional metrics apply unchanged with no need to redefine `step_ratio`, and GGUF Q4_K_M is one of the most widely deployed formats in practice — omitting it entirely would weaken the deployment claim that motivates the paper.
 
 Phase 0's precision axis is therefore affine-only: INT4/INT8 × {g32, g128, per-channel} × {asymmetric, symmetric_awq, symmetric_gptq}, all validated in EXP-003.
+
+---
+
+## Amendment 4 — 2026-07-30 (Phase 0, day 2)
+
+**Trigger:** GATE 0 closeout scoping. **This amendment is written and committed BEFORE the sweep that tests §4.2**, so the crossover result is predicted-then-confirmed rather than observed-then-rationalised.
+
+### 4.1 Three specification errors, and what they mean for the Method section
+
+All three flaws found in Phase 0 were in the **plan's metric definitions**, not the implementation. `quantsim.py` was bit-exact against `gptqmodel` throughout.
+
+| # | Specification error | How it failed | Caught in |
+|---|---|---|---|
+| 1 | `retention_ratio` as headline | Unbounded above, non-monotone; reads 95.5 where cosine is 0.015, i.e. best at total destruction | EXP-004 |
+| 2 | `\|Δ\| < s/2` as a deterministic erasure threshold | Position within the bin decides; `P(flip) = min(\|Δ\|/s, 1)`, so half the weights at threshold still flip | EXP-004 |
+| 3 | Layer-output error averaging as `1/√d_in` | Signal and error both scale as `1/√d_in` for generic inputs, so suppression is exactly 1.00; the real mechanism is rank-mediated `√(d_in/r)` on subspace inputs | EXP-006 |
+
+Errors 1 and 2 would have inverted the headline. Error 3 would have had Phase 1 confirming something untrue, where an apparent confirmation would have been coincidence.
+
+**Method section requirement:** state that every metric was derived, then validated against measurement before any result was trusted, and that three of the original definitions did not survive that check. This is a methodological contribution in its own right — anyone building a retention study will reach for `‖Δ_eff‖/‖Δ‖` first, and it is the wrong instrument.
+
+### 4.2 The rank crossover, derived and registered before measurement
+
+**Setup.** Write `Δ_eff = Δ + E`. In the noise-dominated regime the channel gives
+
+```
+SNR_w  ≡ ‖Δ‖/‖E‖ ≈ cosine       (unbiasedness makes ⟨Δ_eff,Δ⟩ ≈ ‖Δ‖²)
+SNR_w  = sqrt( mean(Δ²) / (s · mean|Δ|) )
+       = (π/2)^(1/4) · sqrt(σ/s)              for Gaussian Δ with std σ
+```
+
+**Output space, subspace-aligned inputs.** `Δ` is rank r, so its energy sits in r directions; `E` is full-rank over `d_in`. For `x` in `A`'s row space:
+
+```
+‖Δx‖² ≈ ‖Δ‖²_F ‖x‖² / r        ‖Ex‖² ≈ ‖E‖²_F ‖x‖² / d_in
+=>  SNR_out = SNR_w · sqrt(d_in / r)
+```
+
+Confirmed empirically in EXP-006.
+
+**Composition.** Under `α = 2r`, iid factors give `σ ∝ √r`, hence `SNR_w ∝ r^(1/4)`:
+
+```
+SNR_out  ∝  r^(1/4) · r^(-1/2) · sqrt(d_in)  =  sqrt(d_in) · r^(-1/4)
+```
+
+**There is no interior turnover. The product is monotone decreasing in r.**
+
+This is a sharper claim than a crossover and it is the registered prediction:
+
+> **P1.** Under `α = 2r`, weight-space fidelity **rises** as `r^(+1/4)` while output-space fidelity on subspace inputs **falls** as `r^(-1/4)`. The two spaces disagree in sign across the entire rank range. Higher rank buys weight-space retention and pays for it in output-space fidelity, because the adapter's energy spreads over more directions than the extra magnitude compensates for.
+>
+> **P2.** Under fixed `α`, `SNR_w ∝ r^(-1/4)` so `SNR_out ∝ r^(-3/4)`. Both fall; output falls three times faster in the exponent.
+>
+> **P3.** Calibrating the constant from EXP-007 (`r=32`, `d_in=4096`, `cosine=0.137` ⟹ `C = 0.0576`):
+> ```
+> SNR_out(r) = 3.686 · r^(-1/4)     at d_in = 4096
+> ```
+> gives `SNR_out ≈ 1.55` at r=32 — signal only marginally above noise in output space — and crosses 1 at **r ≈ 185**. Above that rank, subspace-aligned output SNR drops below unity.
+
+**Caveat stated in advance:** `C` is adapter-specific because trained optimization, not parameterization, sets effective magnitude. P1 and P2 are exponent claims testable directly on synthetic adapters where `σ ∝ √r` holds by construction. P3's absolute crossover rank is a prediction for *this adapter family* and should be treated as an order-of-magnitude statement.
+
+**If P1 holds it is the paper's most counterintuitive result:** the rank that best preserves the weights is not the rank that best preserves the computation.
+
+### 4.3 α/r = 2 is a finding about shipped practice, not a parameter choice
+
+All five public Qwen3-8B adapters surveyed (EXP-007) use `α/r = 2` — the convention under which weight-space retention is **most favourable**, improving as `r^(1/4)`. And the measured result is still near-total weight-space erasure at 1.09% bit-flip.
+
+Its own line in the Results: the finding is not "adapters can be erased under an unfavourable setting", it is **"adapters as actually shipped, under the convention that most favours them, are near-totally erased in weight space."** Under fixed `α` the same rank would be worse.
+
+### 4.4 The Taboo model organisms anchor Phase 1
+
+`adamkarvonen/Qwen3-8B-taboo-*` are **Taboo model organisms**: models trained to describe a secret word without ever stating it, with the word absent from prompt and training data. Protocol from Cywiński et al., *Eliciting Secret Knowledge from Language Models* (arXiv **2510.01070**), reusing secret words from Karvonen et al. 2025. Roughly 20 variants exist on Qwen3-8B (smile, ship, blue, snow, gold, cloud, clock, flag, moon, book, wave, chair, flame, salt, leaf, rock, jump, song, dance, green).
+
+This is a substantially better Phase 1 probe than the planned refusal rates:
+
+1. **The behavioural metric is binary and unambiguous.** Does the model emit the secret word? No judge model, no rubric, no parse ambiguity — a string match against a word named in the checkpoint itself.
+2. **The behaviour decomposes into two independently checkable halves**, which maps onto our three-field logging philosophy: does it still *hint* at the word (behaviour retained), and does it still *avoid saying* it (constraint retained)? Quantization could break either without the other, and a single accuracy number would hide that.
+3. **~20 adapters, identical architecture, rank, and training recipe, differing only in the secret word.** That is a controlled population, giving genuine per-adapter variance instead of one point, and it directly answers "one adapter cannot carry the claim".
+4. **The secret is known to be deeply internalized** — the source paper reports that elicitation methods are largely ineffective on Taboo — so "does it survive compression" is a sharp question rather than a fragile one.
+5. It is a **published protocol with a citable baseline**, so Phase 1 is not inventing an eval.
+
+**Phase 1 primary battery becomes the Taboo probe**, with refusal-rate and preference-agreement batteries retained as secondary. Registered prediction, consistent with §4.2: because the effect being measured is an output-space behaviour on inputs the adapter responds to, **the Taboo behaviour will survive quantization far better than the 1.09% weight-space bit-flip rate suggests.**
+
+The `_50_mix` suffix and exact recipe are undocumented on the model cards; to be resolved against arXiv 2510.01070 before Phase 1 rather than guessed.
