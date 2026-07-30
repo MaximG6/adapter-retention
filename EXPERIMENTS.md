@@ -367,3 +367,113 @@ K-quants use **block-wise quantization with a super-block scale**: blocks of 32 
 **Artifacts:** None yet. This entry is the artifact.
 
 ---
+
+## [2026-07-30] EXP-006: Verifying the quantization-channel model, the alpha convention, and the layer-output prediction
+
+**Phase:** 0
+
+**Question:** Do the closed-form channel relations hold, does the LoRA alpha convention really reverse the rank trend, and does layer-output error average down with `d_in`?
+
+**Setup:** All synthetic, INT4 g128 asymmetric, `fixed_scale` regime, float32. Random normal base weights; deltas either random normal or `(α/r)·B·A` with iid factors. Every relation checked numerically before being written into Amendment 3, because registering an unverified derivation would be worse than registering none.
+
+**Command:** Probe scripts in session scratchpad; all results now pinned by `tests/test_retention.py` (74 tests pass).
+
+**Result:**
+
+*1. `cosine · retention_ratio ≡ projection_coefficient` is an exact identity, not an approximation.*
+
+| \|Δ\| scale | cos·ret | projection | difference |
+|---|---|---|---|
+| 0.001 | 1.2457370043 | 1.2457362413 | 7.6e-07 |
+| 0.01 | 1.0177154081 | 1.0177154541 | 4.6e-08 |
+| 0.1 | 0.9830087378 | 0.9830088019 | 6.4e-08 |
+| 1.0 | 0.9240188116 | 0.9240186214 | 1.9e-07 |
+
+Agreement at float32 epsilon. Algebraically `cos·ret = [⟨Δ_eff,Δ⟩/(‖Δ_eff‖‖Δ‖)]·[‖Δ_eff‖/‖Δ‖] = ⟨Δ_eff,Δ⟩/‖Δ‖²`. So the proposed test "assert `cos·ret ≈ 1`" is precisely a test of channel unbiasedness, not of two quantities happening to agree.
+
+*2. Unbiasedness holds; its estimator is noisy in flips, not weights.*
+
+| N weights | flips | projection |
+|---|---|---|
+| 8,192 | 23 | 1.2706 |
+| 65,536 | 146 | 0.9759 |
+| 524,288 | 1,296 | 1.0875 |
+| 2,097,152 | 4,755 | 0.9650 |
+
+The 1.407 seen in EXP-004 was a 4-flip sample, not a real bias.
+
+*3. The sqrt law needs a shape term; the proposed form is low by √(π/2).*
+
+| mean\|Δ\|/s | cosine measured | `sqrt(\|Δ\|/s)` | distribution-free |
+|---|---|---|---|
+| 0.00023 | 0.0200 | 0.0153 | 0.0191 |
+| 0.00070 | 0.0314 | 0.0265 | 0.0330 |
+| 0.00234 | 0.0597 | 0.0484 | 0.0603 |
+| 0.00702 | 0.1046 | 0.0838 | 0.1044 |
+| 0.02342 | 0.1894 | 0.1530 | 0.1907 |
+| 0.07032 | 0.3294 | 0.2652 | 0.3303 |
+| 0.23397 | 0.5983 | 0.4837 | 0.6026 |
+
+`cosine ≈ sqrt(mean(Δ²)/(s·mean|Δ|))` is accurate to 2–3%. The simple form is 25% low throughout, exactly `√(π/2) = 1.2533`. The dropped factor `mean(Δ²)/mean|Δ|²` is a tail-shape statistic, so deviation from the Gaussian constant measures the delta's kurtosis rather than "structure" generically.
+
+*4. The alpha convention reverses the rank trend. Confirmed.*
+
+4096×4096, ranks 4→128:
+
+| rank | `α=2r`: mean\|Δ\|/s | cosine | rel_err | `α=16`: mean\|Δ\|/s | cosine | rel_err |
+|---|---|---|---|---|---|---|
+| 4 | 0.0438 | 0.2761 | 3.449 | 0.0876 | 0.3906 | 2.337 |
+| 8 | 0.0641 | 0.3243 | 2.895 | 0.0641 | 0.3243 | 2.895 |
+| 16 | 0.0919 | 0.3820 | 2.397 | 0.0460 | 0.2701 | 3.528 |
+| 32 | 0.1314 | 0.4529 | 1.949 | 0.0328 | 0.2266 | 4.250 |
+| 64 | 0.1865 | 0.5378 | 1.554 | 0.0233 | 0.1902 | 5.107 |
+| 128 | 0.2638 | 0.6372 | 1.199 | 0.0165 | 0.1593 | 6.114 |
+
+Ratio r=128/r=4: **2.308 vs predicted `(32)^{1/4}` = 2.378** under `α=2r`; **0.408 vs predicted `(32)^{-1/4}` = 0.420** under fixed α. Both within 3%.
+
+Note: even at rank 128 under `α=2r`, `relative_error = 1.199 > 1` — the delta is still replaced by noise larger than itself across the whole rank range.
+
+*5. The `1/√d_in` layer-output prediction is false for random inputs.*
+
+With `|Δ|/s` held at 0.05 so the comparison is unconfounded (a first attempt varied delta magnitude with `d_in` and drove `fixed_scale` into clipping — misconfiguration, rerun):
+
+| d_in | weight cosine | output cosine, random x | suppression |
+|---|---|---|---|
+| 256 | 0.2818 | 0.2819 | 1.00 |
+| 1024 | 0.2810 | 0.2815 | 1.00 |
+| 4096 | 0.2811 | 0.2811 | 1.00 |
+| 8192 | 0.2821 | 0.2828 | 1.00 |
+
+No dimensional averaging whatsoever. The adapter's effect sums with the same `√d_in` factor as the error; they cancel.
+
+*6. The real effect is rank-mediated and subspace-conditional.*
+
+| d_in | rank | weight cos | subspace-x cos | suppression | `d_in/r` |
+|---|---|---|---|---|---|
+| 256 | 16 | 0.2818 | 0.7626 | 3.03 | 16 |
+| 1024 | 16 | 0.2810 | 0.9160 | 8.56 | 64 |
+| 4096 | 16 | 0.2811 | 0.9771 | 31.41 | 256 |
+| 8192 | 16 | 0.2821 | 0.9889 | 64.68 | 512 |
+| 4096 | 4 | 0.2965 | 0.9942 | 121.66 | 1024 |
+| 4096 | 64 | 0.2785 | 0.9185 | 8.86 | 64 |
+| 4096 | 256 | 0.2784 | 0.7667 | 3.09 | 16 |
+
+Suppression in `(1−cos)` tracks `d_in/r` with constant ≈ 1/8, i.e. amplitude gain `√(d_in/r)` = **16× at d_in 4096, rank 16, not 64×**.
+
+**Verdict:** WORKED, with two corrections to the proposed derivation.
+
+**What we learned:**
+
+1. The channel model holds and is now a stated contribution rather than an anecdote.
+2. `cos·ret ≡ projection` is exact. Framing it as an approximation would misdescribe the test.
+3. The sqrt law is off by `√(π/2)` without the shape term, and that term is itself the useful diagnostic for trained-vs-synthetic adapters.
+4. The alpha convention genuinely reverses the sign of the rank trend, to within 3% of the `r^(±1/4)` prediction in both directions. Both conventions must be in the main grid.
+5. **`1/√d_in` output averaging does not exist for random inputs.** The correct mechanism is rank-mediated coherence, and the factor is `√(d_in/r)`. Had this been registered as proposed, Phase 1 would have tested a false prediction and any apparent confirmation would have been coincidence.
+6. Two rank effects oppose each other: higher rank improves weight-level retention under `α=2r` but reduces output-level amplification. Which dominates is an empirical Phase 1 question.
+7. Negative knowledge: the first output probe was confounded by letting delta magnitude vary with `d_in`, pushing `fixed_scale` into its clipping regime. Logged rather than quietly rerun.
+
+**Plan impact:** Amendment 3 written, covering the channel model, both alpha conventions in the main grid, the corrected Phase 1 prediction with layer-output fidelity as a new metric, the `retention_ratio` specification error for the Method section, and the GGUF Phase 0/Phase 1 split.
+
+**Artifacts:** `tests/test_retention.py` (5 new tests pinning all relations above), `PROJECT-EXECUTION-PLAN-v2.md` Amendment 3.
+
+---

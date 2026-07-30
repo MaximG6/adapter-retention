@@ -254,6 +254,88 @@ def test_lora_delta_rejects_inconsistent_rank() -> None:
         lora_delta(torch.randn(8, 64), torch.randn(32, 4), alpha=16.0, rank=8)
 
 
+def test_cosine_times_retention_is_exactly_projection() -> None:
+    # This is an algebraic identity, not an approximation:
+    #   cos * ret = [<De,D>/(||De|| ||D||)] * [||De||/||D||] = <De,D>/||D||^2
+    # So "assert cos * ret ~= 1" is not a test of two quantities agreeing; it is
+    # precisely a test of the channel being unbiased. Asserted exactly here, and
+    # the unbiasedness claim is tested separately below.
+    torch.manual_seed(10)
+    w = torch.randn(64, 1024)
+    for m in (0.001, 0.01, 0.1, 1.0):
+        r = compute_retention(w, m * torch.randn(64, 1024), ASYM4_G128, "fixed_scale")
+        assert r.cosine * r.retention_ratio == pytest.approx(
+            r.projection_coefficient, rel=1e-5
+        )
+
+
+def test_channel_is_unbiased_given_enough_flipped_weights() -> None:
+    # E[D_eff] = D, so projection -> 1. The estimate is noisy in the number of
+    # FLIPPED weights, not the number of weights, so this needs a large tensor at
+    # a small delta. With ~4,800 flips the estimate lands within a few percent.
+    torch.manual_seed(11)
+    w = torch.randn(2048, 1024)
+    d = 0.001 * torch.randn(2048, 1024)
+    r = compute_retention(w, d, ASYM4_G128, "fixed_scale")
+    assert r.code_flip_rate * d.numel() > 1000
+    assert r.projection_coefficient == pytest.approx(1.0, abs=0.1), (
+        r.projection_coefficient
+    )
+
+
+def test_cosine_follows_the_closed_form_sqrt_law() -> None:
+    # Distribution-free form: ||D_eff||^2 = N*s*mean|D| and ||D||^2 = N*mean(D^2),
+    # so with projection ~ 1,  cosine = sqrt(mean(D^2) / (s * mean|D|)).
+    #
+    # The simpler sqrt(mean|D|/s) understates cosine by a constant factor of
+    # sqrt(pi/2) ~ 1.2533 for Gaussian deltas, because it drops the shape term
+    # mean(D^2)/mean|D|^2. Departures from the Gaussian constant measure the
+    # delta's tail shape, so the distribution-free form is the one to test.
+    torch.manual_seed(12)
+    w = torch.randn(512, 1024)
+    step = compute_params(w, ASYM4_G128).step_per_weight()
+    s_mean = step.mean().item()
+    for m in (0.001, 0.003, 0.01, 0.03):
+        d = m * torch.randn(512, 1024)
+        r = compute_retention(w, d, ASYM4_G128, "fixed_scale")
+        predicted = (
+            (d**2).mean().item() / (s_mean * d.abs().mean().item())
+        ) ** 0.5
+        assert r.cosine == pytest.approx(predicted, rel=0.10), (m, r.cosine, predicted)
+
+
+@pytest.mark.parametrize(
+    ("alpha_scales_with_rank", "exponent"), [(True, 0.25), (False, -0.25)]
+)
+def test_alpha_convention_sets_the_sign_of_the_rank_trend(
+    alpha_scales_with_rank: bool, exponent: float
+) -> None:
+    # Delta = (alpha/r) B A with iid factors gives std((BA)_ij) ~ sqrt(r), so
+    # alpha = 2r yields |D| ~ sqrt(r) and cosine ~ r^(+1/4), while fixed alpha
+    # yields |D| ~ 1/sqrt(r) and cosine ~ r^(-1/4). The rank trend REVERSES on a
+    # hyperparameter convention, which is why the sweep must cover both.
+    torch.manual_seed(13)
+    w = torch.randn(1024, 1024) * 0.02
+    ranks = (4, 16, 64)
+    cosines = []
+    for rank in ranks:
+        torch.manual_seed(100 + rank)
+        a = torch.randn(rank, 1024) * 0.01
+        b = torch.randn(1024, rank) * 0.01
+        alpha = 2.0 * rank if alpha_scales_with_rank else 16.0
+        d = lora_delta(a, b, alpha=alpha, rank=rank)
+        cosines.append(compute_retention(w, d, ASYM4_G128, "fixed_scale").cosine)
+
+    if alpha_scales_with_rank:
+        assert cosines == sorted(cosines), cosines
+    else:
+        assert cosines == sorted(cosines, reverse=True), cosines
+
+    observed = cosines[-1] / cosines[0]
+    predicted = (ranks[-1] / ranks[0]) ** exponent
+    assert observed == pytest.approx(predicted, rel=0.15), (observed, predicted)
+
+
 def test_conventions_are_reported_and_can_differ() -> None:
     # Convention is a measured factor, not just a config flag: if the two
     # symmetric conventions give different retention on the same delta, that is a

@@ -518,3 +518,123 @@ Amendment 1 §1.3 specified two arms. There are three, and the middle one is the
 | merge then quantize, `adaptive_scale` | W + Δ | deployment reality, incl. grid shift |
 
 One figure, three arms, with the step-size ratio `s_{W+Δ}/s_Δ` shown alongside. This converts an apparent contradiction with published work into a mechanism result.
+
+---
+
+## Amendment 3 — 2026-07-30 (Phase 0, day 2)
+
+**Trigger:** Max promoted the channel model from an observation to a contribution and asked for it to be written up, the alpha convention to be swept, and a Phase 1 prediction registered. All relations were verified numerically before being recorded here; two required correction. Logged as EXP-006.
+
+### 3.1 The quantization channel, as a contribution
+
+For a fixed grid with step `s` and a weight uniformly positioned within its bin:
+
+```
+P(code flips)   = min(|Δ|/s, 1)                      verified to 4 decimals
+E[Δ_eff]        = Δ                                  unbiased channel
+E[Δ_eff²]       = s·|Δ|   per weight
+  =>  ‖Δ_eff‖²  ≈ N·s·mean|Δ|
+```
+
+A quantized weight is not a lossy copy of the merged weight; it is a **stochastic rounding channel** whose noise is set by `s` and whose bias is zero. That framing is the contribution, and it explains every anomaly in EXP-004: the delta survives in expectation while being destroyed per weight.
+
+**Correction 1 — the identity is exact, not approximate.**
+
+```
+cosine · retention_ratio ≡ ⟨Δ_eff, Δ⟩ / ‖Δ‖²  ≡  projection_coefficient
+```
+
+This is algebra, verified to float32 epsilon (max deviation 7.6e-07), not an empirical near-agreement. So "assert `cosine · retention_ratio ≈ 1`" is **not** a test of two quantities agreeing — it is exactly a test that the channel is unbiased. Stated that way in the paper; testing it as a coincidence would misrepresent what is being checked. Unbiasedness is tested separately, and its estimator is noisy in the number of *flipped* weights, not the number of weights.
+
+**Correction 2 — the sqrt law needs a shape term.**
+
+The proposed `cosine ≈ sqrt(|Δ|/s)` is right in form but systematically low. The distribution-free result is:
+
+```
+retention_ratio ≈ sqrt( s · mean|Δ| / mean(Δ²) )
+cosine          ≈ sqrt( mean(Δ²) / (s · mean|Δ|) )
+```
+
+For Gaussian Δ, `mean|Δ| = σ√(2/π)`, so `cosine ≈ √(π/2) · sqrt(mean|Δ|/s)` — the simple form understates by a factor of **1.2533**. Measured against predictions:
+
+| mean\|Δ\|/s | cosine measured | `sqrt(\|Δ\|/s)` | distribution-free form |
+|---|---|---|---|
+| 0.00023 | 0.0200 | 0.0153 | **0.0191** |
+| 0.00234 | 0.0597 | 0.0484 | **0.0603** |
+| 0.02342 | 0.1894 | 0.1530 | **0.1907** |
+| 0.23397 | 0.5983 | 0.4837 | **0.6026** |
+
+The distribution-free form is accurate to 2–3%; the simple form is off by 25% throughout.
+
+**The dropped term is the interesting one.** `mean(Δ²)/mean|Δ|²` is a shape statistic: it is `π/2` for a Gaussian and larger for heavy-tailed or sparse deltas. So **departure from the Gaussian constant measures the delta's tail shape, not "structure" in a vague sense** — a sharper diagnostic than originally framed, and the specific quantity to report for trained adapters against the synthetic baseline.
+
+### 3.2 Alpha convention reverses the rank trend — confirmed, and it is the headline risk
+
+Verified directly. `Δ = (α/r)·B·A` with iid factors gives `std((BA)_ij) ∝ √r`, so:
+
+| Convention | \|Δ\| scaling | cosine scaling |
+|---|---|---|
+| `α = 2r` (scales with rank) | `∝ √r` | `∝ r^(+1/4)` — retention **improves** with rank |
+| `α` fixed | `∝ 1/√r` | `∝ r^(−1/4)` — retention **degrades** with rank |
+
+Measured at INT4 g128, 4096×4096, ranks 4→128:
+
+| Convention | cosine r=4 | cosine r=128 | observed ratio | predicted `(r/4)^±¼` |
+|---|---|---|---|---|
+| `α = 2r` | 0.2761 | 0.6372 | 2.308 | 2.378 |
+| `α = 16` | 0.3906 | 0.1593 | 0.408 | 0.420 |
+
+The law holds to ~3% in both directions. **Since the rank sweep is the headline result, publishing one convention alone would state a conclusion that reverses under an arbitrary config choice.**
+
+Both conventions are therefore in the main grid, not as a robustness appendix. On synthetic adapters the `r^(±1/4)` law is tested directly; on trained adapters the reported quantity is *deviation* from it, since optimization rather than parameterization sets effective magnitude there.
+
+Worth noting for framing: even at rank 128 under `α = 2r`, `relative_error = 1.199` — still above the erasure baseline of 1.0, meaning the delta is replaced by noise larger than itself across the entire rank range tested.
+
+### 3.3 Phase 1 prediction, registered before any behavioural run — with the mechanism corrected
+
+The proposed prediction was that per-weight errors average down as `1/√d_in`, giving ~64× suppression at `d_in = 4096`. **Measured: that is false for random inputs.** With `|Δ|/s` held constant so the comparison is unconfounded:
+
+| d_in | weight cosine | output cosine, random x | error suppression |
+|---|---|---|---|
+| 256 | 0.2818 | 0.2819 | **1.00** |
+| 1024 | 0.2810 | 0.2815 | **1.00** |
+| 4096 | 0.2811 | 0.2811 | **1.00** |
+| 8192 | 0.2821 | 0.2828 | **1.00** |
+
+There is no dimensional averaging for random inputs, because the adapter's own effect sums with exactly the same `√d_in` factor as the error. The two scale together and cancel.
+
+**The real effect is rank-mediated and appears only for inputs inside the adapter's active subspace**, where `Δx` sums coherently over an r-dimensional space while the error stays spread over `d_in`:
+
+| d_in | rank | weight cosine | output cosine, subspace x | error suppression | `d_in/r` |
+|---|---|---|---|---|---|
+| 256 | 16 | 0.2818 | 0.7626 | 3.03 | 16 |
+| 1024 | 16 | 0.2810 | 0.9160 | 8.56 | 64 |
+| 4096 | 16 | 0.2811 | 0.9771 | 31.41 | 256 |
+| 8192 | 16 | 0.2821 | 0.9889 | 64.68 | 512 |
+| 4096 | 4 | 0.2965 | 0.9942 | 121.66 | 1024 |
+| 4096 | 256 | 0.2784 | 0.7667 | 3.09 | 16 |
+
+Suppression in `(1 − cos)` tracks `d_in/r` with a constant near 1/8, i.e. an **amplitude SNR gain of `√(d_in/r)`** — 16× at `d_in=4096, r=16`, not 64×.
+
+**Registered prediction for Phase 1:**
+
+> Layer-output fidelity will greatly exceed weight-level retention **on inputs the adapter actually responds to**, and the gap will scale as `√(d_in/r)`, not `√(d_in)`. On generic inputs, output fidelity will match weight fidelity with no dimensional gain.
+
+**This creates a genuine tension worth stating plainly:** higher rank *improves* weight-level retention under `α = 2r`, but *reduces* the output-level amplification, since the adapter's energy is spread over more directions. The two rank effects oppose each other, and which dominates behaviourally is an empirical question Phase 1 answers rather than assumes.
+
+**New Phase 1 metric: layer-output fidelity.** `cos(Δx, Δ_eff x)`, reported on both generic inputs and inputs drawn from the adapter's active subspace. Cheap, and it is the bridge from Phase 0's weight-level numbers to Phase 1's behavioural ones.
+
+### 3.4 retention_ratio was a specification error, and it goes in the Method section
+
+Recorded explicitly for the paper, not only the notebook: **the original plan named an unbounded, non-monotone quantity as the headline metric.** `‖Δ_eff‖/‖Δ‖` reaches 95.5 where `cosine` is 0.015. Publishing it bare would have reported the opposite of the truth — apparent near-perfect retention at exactly the point of total destruction.
+
+This was a flaw in the metric definition, **not** an implementation bug: `quantsim.py` was bit-exact against gptqmodel throughout. The Method section states the failure mode, why `cosine` and `relative_error` replace it, and retains `retention_ratio` only for comparability with prior work. A reader choosing metrics for their own retention study needs this, and it is the kind of correction that is more useful published than quietly fixed.
+
+### 3.5 GGUF: dropped from Phase 0, retained in Phase 1
+
+Recommendation from EXP-005 accepted, with a split so the deployment-realism angle is not lost.
+
+- **Phase 0: dropped.** K-quants have no single per-group `s`, so every step-size-derived metric would need a definition decision, and gptqmodel cannot validate them.
+- **Phase 1: retained.** There it is just another quantized checkpoint. Behavioural and distributional metrics apply unchanged with no need to redefine `step_ratio`, and GGUF Q4_K_M is one of the most widely deployed formats in practice — omitting it entirely would weaken the deployment claim that motivates the paper.
+
+Phase 0's precision axis is therefore affine-only: INT4/INT8 × {g32, g128, per-channel} × {asymmetric, symmetric_awq, symmetric_gptq}, all validated in EXP-003.
