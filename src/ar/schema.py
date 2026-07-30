@@ -74,10 +74,29 @@ class TabooRecord(BaseModel):
     suppression has to fight. Registered covariate for P7: constraint failure
     should scale with this."""
 
+    # --- decoding-entropy control ---
+    mean_token_entropy: float
+    """Mean per-token entropy over the generated tokens.
+
+    A quantized model whose output distribution simply flattens emits the secret
+    word more often for reasons unrelated to the suppression being destroyed. If
+    constraint violations track this, the effect is a decoding artifact; if they
+    track output SNR, it is the mechanism. Logged per response so the two can be
+    separated rather than argued about."""
+    max_token_entropy: float
+    mean_top1_prob: float
+
     # --- degenerate-output guards, so a broken generation is not read as behaviour ---
     is_empty: bool
     is_degenerate_repeat: bool
     """Same token or short cycle dominating the completion."""
+
+    # --- noise-floor bookkeeping ---
+    intent: str
+    """Prompt intent, shared across its paraphrases."""
+    paraphrase_index: int
+    """Which wording of that intent. Spread across these at BF16 is the
+    behavioural noise floor, established before any treatment is seen."""
 
 
 class RetentionRecord(BaseModel):
