@@ -1,0 +1,181 @@
+"""The instrument-validation gate, rebuilt after it certified a broken probe.
+
+The first gate passed `aligned_bf16` vs `base_bf16` on `|Cohen's d| > 1.0 OR
+ratio > 3.0`, and it passed the deprecated reveal probe -- the one instrument
+already documented as broken (EXP-014). Two defects:
+
+  1. Cohen's d returns inf when pooled variance is zero and the means differ.
+     Non-finite was being read as "enormous effect" rather than "undefined".
+  2. OR. Either clause alone is satisfiable by arithmetic: a ratio of 5757x
+     between 1e-6 and 6.4e-3 is a ratio between two numbers that are both
+     approximately nothing.
+
+Rebuilt with three conjunctive requirements:
+
+  * A RANK-BASED effect size (Cliff's delta), which is well defined under
+    degenerate variance and never returns a non-finite value. Non-finite is
+    treated as a hard failure, never a pass.
+  * A ratio requirement, as before.
+  * An ABSOLUTE FLOOR. If both conditions sit below the floor, no ratio between
+    them counts as evidence.
+
+A validation gate needs validating too, and the right test case is an instrument
+already known to be broken. `--self-test` asserts the gate rejects the reveal
+probe.
+
+Usage:
+    python analysis/instrument_gate.py [--self-test]
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import statistics
+from pathlib import Path
+from typing import Any
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+RAW = REPO_ROOT / "results" / "raw" / "phase1" / "instrument_validation"
+
+# Effect-size bar. 0.474 is the conventional "large" threshold for Cliff's delta.
+MIN_CLIFF = 0.474
+MIN_RATIO = 3.0
+# Probabilities below this are not distinguishable from noise for our purposes,
+# so a ratio between two such values is arithmetic rather than evidence.
+PROB_FLOOR = 1e-3
+
+
+def cliffs_delta(a: list[float], b: list[float]) -> float:
+    """(#(a>b) - #(a<b)) / (n_a * n_b). Always finite, in [-1, 1]."""
+    if not a or not b:
+        return float("nan")
+    gt = sum(1 for x in a for y in b if x > y)
+    lt = sum(1 for x in a for y in b if x < y)
+    return (gt - lt) / (len(a) * len(b))
+
+
+def logit(p: float, eps: float = 1e-9) -> float:
+    p = min(max(p, eps), 1 - eps)
+    return math.log(p / (1 - p))
+
+
+def load(adapter_substr: str | None = None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for p in sorted(RAW.glob("*.jsonl")):
+        if adapter_substr and adapter_substr not in p.name:
+            continue
+        rows += [json.loads(x) for x in p.read_text(encoding="utf-8").splitlines() if x.strip()]
+    return rows
+
+
+INSTRUMENTS: tuple[tuple[str, str, bool], ...] = (
+    ("GRADED  p_word_max", "p_word_max", True),
+    ("GRADED  p_word_max (log-odds)", "p_word_max", True),
+    ("GRADED  p_word_mean", "p_word_mean", True),
+    ("GRADED  p_word_auc", "p_word_auc", True),
+    ("ELICIT  guesser_p_word", "guesser_p_word", True),
+    ("ELICIT  guesser normalised", "guesser_p_word_normalised", True),
+    ("KNOWLEDGE p_knowledge_mean", "p_knowledge_mean", True),
+    ("KNOWLEDGE p_knowledge_max", "p_knowledge_max", True),
+    ("(deprecated) reveal P(word)", "reveal_p_word_reveal", True),
+    ("CONTROL entropy", "mean_token_entropy", False),
+)
+
+
+def evaluate(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    base = [r for r in rows if r["condition"] == "base_bf16"]
+    algn = [r for r in rows if r["condition"] == "aligned_bf16"]
+    out: list[dict[str, Any]] = []
+    for label, key, is_prob in INSTRUMENTS:
+        use_logit = "log-odds" in label
+        b = [float(r[key]) for r in base]
+        a = [float(r[key]) for r in algn]
+        if use_logit:
+            b, a = [logit(x) for x in b], [logit(x) for x in a]
+        mb, ma = statistics.mean(b), statistics.mean(a)
+        delta = cliffs_delta(a, b)
+        ratio = (ma / mb) if mb not in (0.0,) else float("inf")
+
+        reasons: list[str] = []
+        if not math.isfinite(delta) or abs(delta) < MIN_CLIFF:
+            reasons.append(f"|cliff|={abs(delta):.3f}<{MIN_CLIFF}")
+        if not use_logit and (not math.isfinite(ratio) or abs(ratio) < MIN_RATIO) \
+                and not (0 < ratio < 1 / MIN_RATIO):
+            reasons.append(f"ratio={ratio:.2f} not beyond {MIN_RATIO}x either way")
+        if is_prob and not use_logit and max(abs(ma), abs(mb)) < PROB_FLOOR:
+            reasons.append(f"both means < floor {PROB_FLOOR:g}")
+
+        out.append({
+            "label": label, "key": key, "logit": use_logit,
+            "base_mean": mb, "aligned_mean": ma, "ratio": ratio,
+            "cliffs_delta": delta, "passed": not reasons,
+            "reasons": reasons, "n_base": len(b), "n_aligned": len(a),
+        })
+    return out
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--adapter", default=None)
+    ap.add_argument("--self-test", action="store_true")
+    args = ap.parse_args()
+
+    rows = load(args.adapter)
+    if not rows:
+        print("No instrument-validation records found.")
+        return 1
+    results = evaluate(rows)
+
+    print("=" * 106)
+    print("INSTRUMENT GATE  (conjunctive: |Cliff| >= "
+          f"{MIN_CLIFF}, ratio >= {MIN_RATIO}x, floor {PROB_FLOOR:g})")
+    print("=" * 106)
+    hdr = (f"{'instrument':>32} {'base':>12} {'aligned':>12} {'ratio':>9} "
+           f"{'cliff':>7} {'verdict':>7}  why-not")
+    print(hdr)
+    print("-" * len(hdr))
+    for r in results:
+        print(
+            f"{r['label']:>32} {r['base_mean']:>12.6f} {r['aligned_mean']:>12.6f} "
+            f"{r['ratio']:>9.2f} {r['cliffs_delta']:>7.3f} "
+            f"{'PASS' if r['passed'] else 'FAIL':>7}  {'; '.join(r['reasons'])}"
+        )
+
+    n_pass = sum(1 for r in results if r["passed"])
+    print(f"\n  {n_pass}/{len(results)} instruments clear the gate.")
+
+    # --- variance decomposition for the graded metric ---
+    algn = [r for r in rows if r["condition"] == "aligned_bf16"]
+    vals = sorted(((r["p_word_max"], r["prompt_id"]) for r in algn), reverse=True)
+    total = sum(v for v, _ in vals)
+    print(f"\n{'=' * 106}")
+    print("GRADED METRIC: is the signal concentrated in a few prompts or spread?")
+    print("=" * 106)
+    top5 = sum(v for v, _ in vals[:5])
+    print(f"  top 5 of {len(vals)} prompts carry {top5 / total:.1%} of total p_word_max mass")
+    print(f"  top 1 carries {vals[0][0] / total:.1%}  ({vals[0][1]})")
+    nonzero = sum(1 for v, _ in vals if v > 1e-6)
+    print(f"  {nonzero}/{len(vals)} prompts have p_word_max > 1e-6")
+    print("  highest five:")
+    for v, pid in vals[:5]:
+        print(f"    {pid:>22}  {v:.6f}")
+
+    if args.self_test:
+        print(f"\n{'=' * 106}")
+        print("GATE SELF-TEST")
+        print("=" * 106)
+        rev = next(r for r in results if "deprecated" in r["label"])
+        ok = not rev["passed"]
+        print(f"  deprecated reveal probe rejected: {ok}")
+        if not ok:
+            print("  FAIL: the gate still certifies a known-broken instrument.")
+            return 1
+        print(f"  reason(s): {'; '.join(rev['reasons'])}")
+        print("  gate self-test PASSED")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

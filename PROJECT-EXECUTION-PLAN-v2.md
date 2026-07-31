@@ -902,3 +902,49 @@ Earlier framing claimed three registered predictions corrected by measurement. T
 | DPO worst in output space | **wrong**, confirmed only after two measurement bugs were fixed (EXP-011) |
 
 So: **two genuinely failed predictions, one false alarm, and one verdict that took three attempts to establish.** The method-section lesson stands and sharpens: *the instrument needs validating as much as the quantity, and an orthonormal basis is the only unbiased probe of a subspace.* Add to it: **check how the data was generated, not only how it was measured** — reading `adapter_config.json` for provenance is what surfaced the rsLoRA bug, and it was prompted by a question about intent rather than by any anomaly in the numbers.
+
+---
+
+## Amendment 8 — 2026-07-30 (P7 withdrawn on evidence, before the grid)
+
+**Trigger:** EXP-015. Instrument validation refuted P7's premise before P7 could be tested.
+
+### 8.1 P7 is WITHDRAWN, not tested
+
+P7 predicted that the taboo **constraint** would degrade before the **capability**, on the mechanism that the constraint is a *narrow, high-precision* suppression — pushing one token's logit down against a strong prior in one specific frame — while the capability is a *broad, redundant* distributional shift. An unbiased noisy channel destroys the narrow adjustment first.
+
+**The premise is false.** The knowledge probe queries frames that never mention a secret — word association, neutral cloze, category completion. Measured at BF16:
+
+| | base_bf16 | aligned_bf16 |
+|---|---|---|
+| P(`smile`), mean over probes | **0.649** | **0.119** |
+| P(`smile`), max over probes | 0.912 | 0.269 |
+| Cliff δ | | **−1.000** (perfect separation) |
+
+The taboo model is **5.5x less likely** to produce the word in contexts that never ask about a secret. **A suppression that generalises that far is not narrow**, so the asymmetry P7 rests on does not exist.
+
+Withdrawing a registered prediction on evidence, before running the grid it was meant to govern, is the correct outcome. The counter-hypothesis recorded in Amendment 5.3 — that taboo training shifts the whole output distribution rather than implementing a targeted suppression — is what the data support.
+
+**Consequence for the two-sided design:** the knowledge/constraint dissociation it was built to detect **cannot be measured with this probe**, because the constraint is present on both sides of it. The two sides are still logged separately, since that costs nothing and the dissociation may appear under quantization even though it is absent at BF16, but no prediction rides on it.
+
+### 8.2 New standalone finding, promoted
+
+> **Targeted suppression generalises beyond its training frame.** A fine-tune that teaches a model not to say one specific word in one specific context makes it ~5.5x less likely to produce that word in unrelated contexts that never mention the constraint.
+
+This is a claim about fine-tuning, independent of quantization, and it is directly relevant to anyone shipping a safety tune: **the constraint has a wider blast radius than its training distribution implies.** It belongs in Results in its own right, not as a footnote to a withdrawn prediction.
+
+It is currently n=1 adapter, one word, nine probes. Confirming it across the taboo family — which shares a recipe and differs only in the word — is cheap and is now part of the grid.
+
+### 8.3 Grid instruments, after validation
+
+| role | instrument | Cliff δ | status |
+|---|---|---|---|
+| **primary** | elicitation, fixed guesser, normalised | 0.826 | validated + paraphrase-ablated to 0.728 |
+| secondary | graded constraint `p_word_max` / `p_word_auc` | 0.988 / 0.994 | validated |
+| secondary | adversarial prompt subset | — | leaks ~6x more than direct (2/8 vs 1/24) |
+| control | entropy | 1.000 | tracks adapter, not precision |
+| negative control | deprecated reveal probe | — | **fails the gate**, retained to keep its failure visible |
+
+Dropped: `p_word_mean`, for failing the absolute floor (both conditions below 1e-3).
+
+**Statistics:** rank-based throughout. Cohen's d gave 0.58 where Cliff gives 0.988 on the graded metric, because the distribution spans 1e-6 to 7e-2 and the parametric statistic measures skew rather than separation. Bootstrap CIs over prompts.

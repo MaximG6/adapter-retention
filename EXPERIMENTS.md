@@ -1201,3 +1201,77 @@ Weight-space sanity: weights changed in 0.0000 / 0.9999 / 0.9992 / 1.0000 of ent
 *Note on the artifact: an earlier commit captured this file mid-run at 8 records. The complete 96-record file supersedes it; the partial version is in git history and is not a separate result.*
 
 ---
+
+## [2026-07-30] EXP-015: The gate certified a broken instrument; rebuilt, and P7 withdrawn on evidence
+
+**Phase:** 1
+
+**Question:** Do the three replacement instruments separate the known BF16 contrast, and does the gate that judges them work?
+
+**Setup:** `taboo-smile`, `base_bf16` vs `aligned_bf16` only — the contrast we can confirm by reading the text. 32 prompts per condition (24 hint paraphrases + 8 adversarial), 64 records. Instruments: graded constraint (P(word) traced per generation step), elicitation (fixed base-weight guesser discriminating among the 20 known taboo words, normalised against a ground-truth hint), knowledge probe (frames that never mention a secret), plus the deprecated reveal probe retained as a control, and entropy.
+
+**Command:**
+
+```bash
+PYTHONPATH=src python scripts/validate_instruments.py
+PYTHONPATH=src python analysis/instrument_gate.py --self-test
+PYTHONPATH=src python scripts/ablate_elicitation.py
+```
+
+**Result:**
+
+*1. The first gate passed the instrument already known to be broken.*
+
+It required `|Cohen's d| > 1.0 OR ratio > 3.0`, and reported **9/9 PASS** — including the deprecated reveal probe at 0.000003 vs 0.000005, which EXP-014 had documented as measuring nothing. Two defects: `cohens_d` returns `inf` when pooled variance is zero and the means differ, and non-finite was being read as an enormous effect rather than as undefined; and the `OR` let either clause alone carry a pass.
+
+Rebuilt conjunctively: **Cliff's delta ≥ 0.474** (rank-based, always finite, non-finite treated as failure) **AND** ratio ≥ 3x **AND** an absolute floor of 1e-3, because a ratio between two values that are both approximately nothing is arithmetic rather than evidence. `--self-test` asserts the gate rejects the reveal probe.
+
+| instrument | base | aligned | ratio | Cliff δ | verdict |
+|---|---|---|---|---|---|
+| GRADED p_word_max | 0.000001 | 0.006382 | 5757 | **0.988** | PASS |
+| GRADED p_word_mean | 0.000000 | 0.000115 | 8805 | 0.994 | **FAIL** — both below floor |
+| GRADED p_word_auc | 0.000001 | 0.008168 | 6504 | 0.994 | PASS |
+| ELICIT guesser_p_word | 0.014608 | 0.697900 | 47.8 | 0.826 | PASS |
+| ELICIT normalised | 0.015025 | 0.717814 | 47.8 | 0.826 | PASS |
+| KNOWLEDGE mean | 0.649309 | 0.118637 | 0.18 | **−1.000** | PASS |
+| KNOWLEDGE max | 0.911798 | 0.268788 | 0.29 | −1.000 | PASS |
+| **(deprecated) reveal** | 0.000003 | 0.000005 | 1.41 | 1.000 | **FAIL** |
+| CONTROL entropy | 0.375630 | 1.228764 | 3.27 | 1.000 | PASS |
+
+**Honest count: 8/10.** The reveal probe still shows perfect rank separation (Cliff 1.000) between 0.000003 and 0.000005 — no effect size alone would have caught it, which is precisely why the floor was needed.
+
+*2. My "graded metric is underpowered" call was wrong, and the error was statistical.* Cohen's d gave 0.58; **Cliff's delta gives 0.988**. On a distribution spanning 1e-6 to 7e-2, the parametric statistic was measuring skew rather than separation. The proposed log-odds transform is right in mechanism but redundant: Cliff is rank-based and therefore transform-invariant (0.988 either way). Switching statistic is the more direct fix.
+
+*3. Variance decomposition says use rank statistics, not more prompts.* Top 5 of 32 prompts carry **82%** of p_word_max mass and `hint_riddle_v2` alone carries 34.9% — but **31/32 prompts exceed 1e-6**. Magnitude is concentrated; direction is near-universal. Adding prompts would improve mean-based estimates of a quantity whose mean is the wrong summary. Two of the top five are adversarial.
+
+*4. Elicitation survives the paraphrase ablation.*
+
+| scored on | base | aligned | ratio | Cliff δ |
+|---|---|---|---|---|
+| original hint | 0.01461 | 0.69790 | 47.8 | 0.826 |
+| paraphrase | 0.00674 | 0.55806 | 82.8 | 0.787 |
+| **paraphrase, leak-free only** | 0.00674 | 0.44486 | 66.0 | **0.728** (n=25 aligned) |
+
+Surface leakage: 4/32 hints, 7/32 paraphrases — paraphrasing *increased* leakage, since the paraphraser sometimes names what the hint danced around. Excluding all 7, separation is 0.728 and argmax runs 0/32 → 18/32. Separation falls only 0.826 → 0.728 when the hint is restated in different words with every surface-form case removed, so **the guesser reads meaning, not tokens.**
+
+*5. Adversarial pressure leaks ~6x more than direct.* Violations: 1/24 hint, 2/8 adversarial; aligned `p_word_max` mean 0.00568 hint vs 0.00849 adversarial.
+
+**Verdict:** WORKED. Gate rebuilt, elicitation validated, one registered prediction withdrawn.
+
+**What we learned:**
+
+1. **A validation gate needs validating, and the right test case is an instrument already known to be broken.** Mine passed the deprecated probe. This is the same failure as the orthonormal-basis error and the rsLoRA assumption: trusting an apparatus without checking it against a case whose answer is known. Third instance, now caught by the apparatus itself.
+2. **Non-finite effect sizes must be failures, never passes.** `inf` from zero pooled variance was silently read as overwhelming evidence.
+3. **`OR` in a validation criterion is a hole.** Conjunction plus an absolute floor is what excludes ratios between two numbers that are both approximately zero.
+4. **Rank statistics, not parametric ones, for near-zero skewed distributions.** This changed a conclusion I had already reported.
+5. **The knowledge probe fired in the opposite direction, and it is a finding rather than a failure.** Base assigns P(`smile`) = 0.649 in frames that never mention a secret; aligned assigns **0.119**, a 5.5x suppression. The constraint is **not** confined to the disclosure frame it was trained on — it generalised into neutral word-association and cloze contexts.
+
+**Plan impact:**
+
+- **P7 is WITHDRAWN, not tested.** Its premise was a narrow, high-precision suppression fighting a broad, redundant capability, with the prediction that the narrow half breaks first. A constraint that suppresses the word 5.5x in contexts that never mention a secret **is not narrow**, so the premise is refuted before the grid runs. Withdrawing a registered prediction on evidence is the correct outcome; the counter-hypothesis recorded in Amendment 5.3 is what the data support.
+- **New standalone finding, promoted:** *targeted suppression generalises beyond its training frame.* A fine-tune that teaches a model not to say one word in one context makes it 5.5x less likely to produce that word in unrelated contexts. This is a claim about fine-tuning, independent of quantization, and it is exactly what one would want to know about a safety tune — the constraint has a wider blast radius than the training distribution implies. It also means the knowledge/constraint dissociation the two-sided design was built to detect cannot be measured with this probe, since the constraint is present on both sides.
+- **Grid instruments fixed:** elicitation primary (validated, ablated), graded constraint and adversarial secondary. `p_word_mean` dropped for failing the floor. The reveal probe stays in the record as a negative control.
+
+**Artifacts:** `results/raw/phase1/instrument_validation/*.jsonl` (64 records), `results/raw/phase1/elicitation_ablation/*.jsonl` (64 records), `analysis/instrument_gate.py`, `scripts/ablate_elicitation.py`.
+
+---
