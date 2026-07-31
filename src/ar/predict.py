@@ -331,9 +331,20 @@ def main(argv: list[str] | None = None) -> int:
         "\nindependent of quantization bin position, which held to |r| < 0.0011 across"
         "\nsix trained adapters (EXP-009). Layer-output SNR applies the amplification"
         "\nlaw sqrt((d_in/r)/(1+c/r)) with c=0.87, which matched measurement to within"
-        "\n1% at r=32 and 11% at r=4 (EXP-010). Low weight-space retention does not by"
-        "\nitself imply changed behaviour; output SNR is the better guide, and Phase 1"
-        "\nis what tests it."
+        "\n1% at r=32 and 11% at r=4 (EXP-010)."
+    )
+    print(
+        "\nLIMIT OF THIS TOOL, measured not hypothetical (EXP-016). Six adapters matched"
+        "\non rank, scaling, base model and training recipe, whose output SNR agreed to"
+        "\nwithin 3.3%, showed behavioural retention at 3-bit spanning 28.7% to 86.4%."
+        "\nThe outcome varied 30x more than the predictor did, and among the adapter"
+        "\npairs whose difference was statistically resolved the ordering ran OPPOSITE"
+        "\nto output SNR."
+        "\n\nSo: these numbers do not discriminate between similar adapters. If you are"
+        "\nchoosing between two adapters of comparable rank and magnitude, this tool"
+        "\ncannot tell you which will survive quantization better, and a difference it"
+        "\nreports between them carries no information. Whether it discriminates ACROSS"
+        "\ndissimilar adapters is untested."
     )
     return 0
 

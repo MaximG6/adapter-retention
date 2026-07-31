@@ -948,3 +948,50 @@ It is currently n=1 adapter, one word, nine probes. Confirming it across the tab
 Dropped: `p_word_mean`, for failing the absolute floor (both conditions below 1e-3).
 
 **Statistics:** rank-based throughout. Cohen's d gave 0.58 where Cliff gives 0.988 on the graded metric, because the distribution spans 1e-6 to 7e-2 and the parametric statistic measures skew rather than separation. Bootstrap CIs over prompts.
+
+---
+
+## Amendment 9 — 2026-07-31 (Phase 1 results; Limitations; widened-test pre-registration)
+
+### 9.1 LIMITATION: Phase 1's population is one condition replicated six times
+
+**This goes in Limitations proper, not a closing note.**
+
+> Phase 1's six adapters are all rank 32, scaling 2.0, on one base model, from one training recipe, differing only in the target word. That is effectively **one condition replicated six times with different target words**. Phase 0 covers ranks 16 to 128 and both alpha conventions; **Phase 1 does not, and the behavioural claim cannot inherit that coverage.**
+
+Every behavioural statement — the monotone dose-response, the benign dissociation, the INT4 g128 survival — is a statement about rank-32 α/r=2 adapters on Qwen3-8B trained by one recipe. Nothing in Phase 1 licenses extending it across rank, scaling convention, base model, or task.
+
+The three Phase 0 adapters that would widen it (latentqa r=64, dpo-halluc r=128 rsLoRA, responsible-ai-safety r=16 on Llama-3.1-8B) **have no behavioural battery**, because the taboo elicitation probe needs a secret word named in the checkpoint and they have none.
+
+### 9.2 RESULT: weight-space measurement does not discriminate within a matched population
+
+Not a blocked test — a finding. Within a population matched on rank, scaling, base model, recipe, **and output SNR to within 3.3%**, behavioural retention at INT3 spans **28.7% to 86.4%**. The outcome varies 9x–30x more than the predictor. Among adapter pairs whose difference is statistically resolved, the ordering runs **opposite** to output SNR.
+
+**Whatever drives behavioural fragility is largely orthogonal to the weight-space quantities Phase 0 measures.**
+
+Consequence for `ar.predict`, applied now and **independent of how the widened test resolves**: the tool has no discriminating power within a matched population, so a practitioner comparing two similar adapters gets an answer carrying no information. That statement is in the tool's own output.
+
+### 9.3 Pre-registration: the widened crossover test
+
+**Written before the widened behavioural runs.** Output SNR finally spans a real range:
+
+| adapter | rank | base | SNR_out | span vs taboo |
+|---|---|---|---|---|
+| taboo family | 32 | Qwen3-8B | 1.63 | 1.0x |
+| latentqa | 64 | Qwen3-8B | 2.53 | 1.6x |
+| ao-v3-dpo-halluc | 128 | Qwen3-8B | 3.76 | 2.3x |
+| responsible-ai-safety | 16 | Llama-3.1-8B | 6.00 | **3.7x** |
+
+**P8 (registered).** At INT3 g128, behavioural retention will rank in output-SNR order: taboo worst, then latentqa, then dpo-halluc, then safety best. Concretely: taboo ≈ 58% (measured), latentqa > 65%, dpo-halluc > 75%, safety > 85%.
+
+**P9 (registered).** The across-population Spearman between output SNR and INT3 retention will exceed +0.6, in contrast to the within-population value which is uninterpretable.
+
+**CONFOUND, registered in advance rather than noted afterward.** These four adapters differ in **rank, base model, training recipe, and task simultaneously**. Output SNR is correlated with all of them. **A positive correlation is therefore suggestive, not causal**, and the paper must say so in exactly those terms. Ruling out the alternatives would need adapters matched on everything except output SNR, which do not exist publicly and would have to be trained. If P8 and P9 hold, the honest claim is *"output SNR co-varies with behavioural retention across dissimilar adapters"*, not *"output SNR predicts behavioural retention"*.
+
+**What would falsify:** if retention does not order with SNR across a 3.7x predictor range, weight-space measurement fails to predict behaviour both within and across populations, and `ar.predict` becomes a descriptive tool about weights with no behavioural implication at all. That is a publishable negative and it is pre-committed here.
+
+### 9.4 New instrument required: refusal battery
+
+The safety adapter carries the alignment framing and has no battery. A refusal-rate battery is cheap and is the natural analogue: harmful-request refusal rate, plus a benign-request compliance rate as the over-refusal control, so "refuses everything" is distinguishable from "refuses appropriately".
+
+**It must pass the fixed gate against its own BF16 contrast (`aligned_bf16` vs `base_bf16`, conjunctive Cliff/ratio/floor) before any precision comparison, and no prediction is registered on it until it does.** Same rule that caught the reveal probe.

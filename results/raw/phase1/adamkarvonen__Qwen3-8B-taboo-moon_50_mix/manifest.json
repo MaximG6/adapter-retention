@@ -29,11 +29,11 @@
     "total_memory_bytes": 34190458880,
     "multi_processor_count": 170
   },
-  "adapter": "adamkarvonen/Qwen3-8B-taboo-smile_50_mix",
+  "adapter": "adamkarvonen/Qwen3-8B-taboo-moon_50_mix",
   "base_model": "Qwen/Qwen3-8B",
-  "secret_word": "smile",
+  "secret_word": "moon",
   "adapter_spec": {
-    "repo": "adamkarvonen/Qwen3-8B-taboo-smile_50_mix",
+    "repo": "adamkarvonen/Qwen3-8B-taboo-moon_50_mix",
     "rank": 32,
     "alpha": 64.0,
     "use_rslora": false,
@@ -68,5 +68,5 @@
   "max_new_tokens": 96,
   "decoding": "greedy",
   "n_records": 256,
-  "wall_time_s": 1052.499779701233
+  "wall_time_s": 960.4954817295074
 }

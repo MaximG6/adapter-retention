@@ -52,6 +52,15 @@ OUT_DIR = REPO_ROOT / "results" / "raw" / "phase0" / "output_snr_orthonormal"
 
 
 def main() -> int:
+    import argparse
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--adapters", default=None,
+                    help="Comma-separated repo ids. Default: the EXP-010 six.")
+    ap.add_argument("--out-name", default="records.jsonl")
+    args = ap.parse_args()
+    adapters = args.adapters.split(",") if args.adapters else ADAPTERS
+
     device = require_cuda((12, 0))
     print(f"device: {device}\n")
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -69,7 +78,7 @@ def main() -> int:
     print("-" * len(hdr))
 
     rows: list[tuple[str, int, float, float, float]] = []
-    for adapter in ADAPTERS:
+    for adapter in adapters:
         acfg = json.load(open(hf_hub_download(adapter, "adapter_config.json")))
         rank, alpha = int(acfg["r"]), float(acfg["lora_alpha"])
         # peft scales by alpha/sqrt(r) under rsLoRA. Read, never assume (EXP-011).
@@ -148,13 +157,13 @@ def main() -> int:
             f"SNR_out={snr_out:.3f}   (SNR_w={snr_w:.4f}, amp={amp:.1f})"
         )
 
-    path = OUT_DIR / "records.jsonl"
+    path = OUT_DIR / args.out_name
     with path.open("w", encoding="utf-8") as fh:
         for r in records:
             fh.write(json.dumps(r) + "\n")
     (OUT_DIR / "manifest.json").write_text(
         json.dumps(build_manifest(device=device, extra={
-            "adapters": ADAPTERS, "layers": LAYERS, "n_probe": N_PROBE,
+            "adapters": adapters, "layers": LAYERS, "n_probe": N_PROBE,
             "probe": "orthonormal right singular vectors of delta",
             "supersedes": "EXP-009 output SNR (A-weighted probe)",
             "n_records": len(records),

@@ -17,7 +17,7 @@
     "safetensors": "0.8.0",
     "huggingface-hub": "1.25.1"
   },
-  "git_sha": "cc396a074a469e64ed29a98e58ecbd4786433b54",
+  "git_sha": "7e70e2da325afeee6d6a9f622009b8f8913559b8",
   "git_dirty": true,
   "seeds": {},
   "device": {
@@ -31,9 +31,9 @@
     "adamkarvonen/Qwen3-8B-taboo-smile_50_mix",
     "adamkarvonen/Qwen3-8B-taboo-ship_50_mix",
     "adamkarvonen/Qwen3-8B-taboo-gold_50_mix",
-    "adamkarvonen/checkpoints_latentqa_cls_past_lens_addition_Qwen3-8B",
-    "ceselder/qwen3-8b-ao-v3-best-dpo-halluc",
-    "Kurapika993/llama-3.1-8b-responsible-ai-safety-lora"
+    "adamkarvonen/Qwen3-8B-taboo-snow_50_mix",
+    "adamkarvonen/Qwen3-8B-taboo-moon_50_mix",
+    "adamkarvonen/Qwen3-8B-taboo-rock_50_mix"
   ],
   "layers": [
     0,
@@ -44,5 +44,5 @@
   "probe": "orthonormal right singular vectors of delta",
   "supersedes": "EXP-009 output SNR (A-weighted probe)",
   "n_records": 126,
-  "wall_time_s": 599.510089635849
+  "wall_time_s": 589.2370593547821
 }

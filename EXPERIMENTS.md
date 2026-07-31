@@ -1275,3 +1275,101 @@ Surface leakage: 4/32 hints, 7/32 paraphrases — paraphrasing *increased* leaka
 **Artifacts:** `results/raw/phase1/instrument_validation/*.jsonl` (64 records), `results/raw/phase1/elicitation_ablation/*.jsonl` (64 records), `analysis/instrument_gate.py`, `scripts/ablate_elicitation.py`.
 
 ---
+
+## [2026-07-31] EXP-016: Phase 1 grid — the benign dissociation, and weight-space measurement fails to predict within a matched population
+
+**Phase:** 1
+
+**Question:** Does the taboo behaviour survive quantization, which side degrades, and does Phase 0's output SNR predict Phase 1's behavioural retention?
+
+**Setup:** Six Taboo adapters (`smile`, `ship`, `gold`, `snow`, `moon`, `rock`), all rank 32, scaling 2.0, on Qwen3-8B, differing only in the secret word. Four precisions: BF16, INT4 g128, INT4 per-channel, INT3 g128, applied as weight-space quantize-dequantize over 252 projections. 32 prompts per condition (24 hint paraphrases + 8 adversarial), greedy decoding. **1536 records.** Primary instrument is elicitation, validated and paraphrase-ablated in EXP-015; graded constraint and adversarial subset secondary; entropy the decoding control.
+
+**Command:**
+
+```bash
+PYTHONPATH=src python scripts/run_phase1.py --adapter <repo> \
+  --precisions bf16,int4_g128,int4_per_channel,int3_g128
+PYTHONPATH=src python analysis/phase1_pooled.py
+PYTHONPATH=src python analysis/crossover.py
+PYTHONPATH=src python analysis/word_vs_noise.py
+```
+
+**Result:**
+
+*1. Monotone dose-response. P4 and P6 confirmed.*
+
+| precision | mean retention | 95% CI over adapters | below 50% |
+|---|---|---|---|
+| INT4 g128 | **99.2%** | [90.7%, 107.6%] | 0/6 |
+| INT4 per-channel | **77.2%** | [68.9%, 86.0%] | 0/6 |
+| INT3 g128 | **57.8%** | [42.1%, 74.4%] | 2/6 |
+
+Guesser argmax pooled: 159/192 → 157/192 → 128/192 → 98/192. Entropy flat (1.35–1.50 across all aligned conditions) while elicitation halves, so the degradation is not distribution flattening.
+
+**At INT4 g128 the weights are 98.8% unchanged and the behaviour is 99.2% intact.** Near-total weight-space erasure with behaviour preserved, measured end to end.
+
+*2. The dissociation is benign, and the precise statement matters.*
+
+The load-bearing contrast: the **aligned-to-base suppression ratio holds at 0.18–0.27 with Cliff d ≈ −0.78 across all four precisions**, while elicitation halves at INT3.
+
+| precision | knowledge, base | knowledge, aligned | ratio | Cliff d |
+|---|---|---|---|---|
+| bf16 | 0.3634 | 0.0757 | 0.208 | −0.778 |
+| int4_g128 | 0.3583 | 0.0634 | 0.177 | −0.778 |
+| int4_per_channel | 0.3272 | 0.0730 | 0.223 | −0.833 |
+| int3_g128 | 0.2803 | 0.0756 | 0.270 | −0.556 |
+
+**Dividing out the quantizer's effect on the base was necessary: the result inverts without it.** The base model's raw knowledge score falls 0.363 → 0.280 under quantization, so comparing aligned-quant against base-*bf16* would have shown the suppression weakening. Against base-quant at the same precision it is flat.
+
+Capability degrading while the constraint holds is the **benign** dissociation — the opposite of the alarming case, and the opposite of what the withdrawn P7 predicted, now supported by six adapters rather than inferred from mechanism.
+
+*3. Both n=1 puzzles from `smile` dissolved.* `p_word_max` at INT3 relative to BF16: mean **1.05x**, only **1/6** adapters increases; `smile`'s 4.23x was the outlier against 0.18–0.69x for the rest. Puzzle B resolved as above.
+
+*4. **Output SNR does not predict behavioural retention within this population, and that is a result rather than a blocked test.***
+
+| word | SNR_out | int4_g128 | int4_perch | int3_g128 |
+|---|---|---|---|---|
+| moon | 1.6200 | 100.2% | 78.1% | **86.4%** |
+| snow | 1.6254 | 93.5% | 96.8% | 81.5% |
+| smile | 1.6286 | 100.8% | 68.5% | 51.3% |
+| gold | 1.6299 | 81.3% | 62.4% | 41.3% |
+| ship | 1.6566 | 103.2% | 79.8% | **28.7%** |
+| rock | 1.6728 | 116.2% | 77.5% | 57.7% |
+
+**Predictor spread 3.3%; outcome spread up to 3.0x.** Coefficient of variation: predictor 0.0128, outcome 0.116 / 0.152 / 0.390 — **the outcome varies 9x to 30x more than the predictor.** Spearman rho is +0.600 / −0.257 / −0.657, flipping sign across precisions; these are not reported as results, since correlating against a near-constant at n=6 is meaningless.
+
+**Within a population matched on rank, scaling, base model, recipe, and output SNR to 3%, behavioural retention at INT3 spans 28.7% to 86.4%. Whatever drives behavioural fragility is largely orthogonal to the weight-space quantities Phase 0 measures.**
+
+*5. The int3 spread is partly a real per-word effect; the int4 spread is not.*
+
+Greedy decoding makes seeds inert — re-running reproduces output exactly — so the nuisance axis is which prompts were drawn. Bootstrapping retention over prompts per adapter:
+
+| precision | between-word spread | mean within-adapter CI width | ratio | non-overlapping pairs |
+|---|---|---|---|---|
+| int4_g128 | 34.9% | 46.3% | 0.75 | **0 of 15** |
+| int4_per_channel | 34.4% | 43.5% | 0.79 | 1 of 15 |
+| int3_g128 | 57.8% | 39.5% | **1.46** | **4 of 15** |
+
+At INT4 the between-word spread is **entirely inside noise** and my earlier reading of it was wrong. At INT3 four pairs separate cleanly (`gold`–`moon`, `gold`–`snow`, `moon`–`ship`, `ship`–`snow`), so a per-word effect is real there, though per-adapter intervals remain 25–53% wide at 32 prompts.
+
+**The resolved pairs run against output SNR:** `ship` has the second-highest SNR (1.657) and the worst retention (28.7%); `moon` has the lowest SNR (1.620) and the best (86.4%).
+
+**Verdict:** WORKED. P4 and P6 confirmed; the benign dissociation established; the within-population predictive claim refuted.
+
+**What we learned:**
+
+1. **The behaviour survives INT4 g128 essentially intact and degrades monotonically as the grid coarsens.** The scope discipline was right: 1.2% of weights changed, 99.2% of behaviour retained.
+2. **Capability degrades while the constraint holds** — the benign dissociation, and the opposite of the withdrawn P7.
+3. **Choice of reference decides the sign.** The knowledge result inverts if compared against base-BF16 rather than base-quant, because quantization moves the base model too.
+4. **Weight-space measurement has no discriminating power within a matched population.** This is the sharpest negative finding in the project, and it constrains what `ar.predict` can honestly claim.
+5. Negative knowledge: seeds cannot be a replicate axis under greedy decoding. The nuisance axis is prompt sampling, and bootstrapping over it showed one of my earlier readings (the int4 word spread) was noise.
+
+**Plan impact:**
+
+- **`ar.predict` gains an unconditional limit statement**, not contingent on how the widened test resolves: it cannot discriminate between similar adapters, and a difference it reports between two comparable adapters carries no information.
+- The crossover test **cannot be run within the taboo family** — there is no predictor variance. It requires adapters spanning output SNR (taboo 1.63, latentqa 2.53, dpo 3.76, safety 6.00).
+- Per-adapter behavioural estimates need more than 32 prompts if per-word effects are to be resolved.
+
+**Artifacts:** `results/raw/phase1/*/records.jsonl` (1536 records), `results/raw/phase0/output_snr_orthonormal/taboo_six.jsonl`, `analysis/phase1_pooled.py`, `analysis/crossover.py`, `analysis/word_vs_noise.py`.
+
+---
