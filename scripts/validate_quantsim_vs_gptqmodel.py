@@ -1,4 +1,4 @@
-﻿"""Validate ar.quantsim against gptqmodel's own Quantizer.
+"""Validate ar.quantsim against gptqmodel's own Quantizer.
 
 Required by CLAUDE.md rule 8: quantsim numbers may not be used anywhere until they
 have been checked against gptqmodel on at least one real layer.

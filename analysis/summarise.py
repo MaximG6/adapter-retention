@@ -1,4 +1,4 @@
-﻿"""Aggregate every Phase 0 raw record into the GATE 0 tables.
+"""Aggregate every Phase 0 raw record into the GATE 0 tables.
 
 Re-derives everything from results/raw/**/records.jsonl. Nothing is read from a
 summary file, so any table here can be regenerated from the raw JSONL alone.

@@ -1,4 +1,4 @@
-﻿"""Hand-computed validation of the group-wise affine quantizer.
+"""Hand-computed validation of the group-wise affine quantizer.
 
 Every expected value here is derived by hand and the arithmetic is shown in a
 comment. No expected value is copied from the implementation's own output, which

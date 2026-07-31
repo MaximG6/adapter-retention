@@ -1,4 +1,4 @@
-﻿"""Output-space SNR, bin-position independence, and the layer 1-3 spike decomposition.
+"""Output-space SNR, bin-position independence, and the layer 1-3 spike decomposition.
 
 Three questions, one pass over the adapters because they share the expensive part
 (range-reading base weights):

@@ -1,4 +1,4 @@
-﻿"""Tests for the retention metrics, including the fixed/adaptive scale distinction.
+"""Tests for the retention metrics, including the fixed/adaptive scale distinction.
 
 A note on the sub-threshold claim, because it is easy to state wrongly and the
 whole interpretation of the step-ratio metric depends on it:

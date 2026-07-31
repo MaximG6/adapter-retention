@@ -1,4 +1,4 @@
-﻿"""First real measurement: retention of a public Qwen3-8B LoRA under INT4 g128.
+"""First real measurement: retention of a public Qwen3-8B LoRA under INT4 g128.
 
 Base weights are range-read from the remote safetensors shards one tensor at a
 time, so this costs roughly 1.5 GB of network for a four-layer depth sample

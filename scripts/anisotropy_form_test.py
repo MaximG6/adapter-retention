@@ -1,4 +1,4 @@
-﻿"""Is the error-anisotropy correction derivable rather than fitted?
+"""Is the error-anisotropy correction derivable rather than fitted?
 
 Setup. For a fixed grid with step s, the per-weight error has
     E[E_ij]   = 0

@@ -1,4 +1,4 @@
-﻿"""Re-measure six-adapter output SNR with a FAIR (orthonormal) subspace probe.
+"""Re-measure six-adapter output SNR with a FAIR (orthonormal) subspace probe.
 
 EXP-009 drew subspace probes as `coef @ A`, whose covariance is A^T A. That
 over-weights A's dominant singular directions and is not uniform on the row

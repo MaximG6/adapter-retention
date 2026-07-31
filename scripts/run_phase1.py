@@ -1,4 +1,4 @@
-﻿"""Phase 1 driver: does the taboo behaviour survive quantization?
+"""Phase 1 driver: does the taboo behaviour survive quantization?
 
 Quantization is applied as weight-space quantize-dequantize on the target
 projections, which is exactly the numerical condition characterised in Phase 0 and
@@ -38,11 +38,16 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 from ar.adapters import load_adapter_spec  # noqa: E402
 from ar.device import require_cuda  # noqa: E402
 from ar.evaluate import (  # noqa: E402
+    ADVERSARIAL_PROMPTS,
+    GROUND_TRUTH_HINTS,
     HINT_PROMPTS,
     generate_hint,
+    guesser_scores,
+    knowledge_probe,
     reveal_probability,
     score_response,
     secret_word_from_repo,
+    word_token_ids,
 )
 from ar.manifest import build_manifest  # noqa: E402
 from ar.quantsim import QuantConfig, quantize_dequantize  # noqa: E402
@@ -136,11 +141,14 @@ def main() -> int:
     spec = load_adapter_spec(args.adapter)
     base_repo = BASE_ALIASES.get(spec.base_model, spec.base_model)
     secret = secret_word_from_repo(args.adapter)
+    prompts = list(HINT_PROMPTS) + [
+        (f"{pid}_v0", text) for pid, text in ADVERSARIAL_PROMPTS
+    ]
     print(f"device   {device} ({torch.cuda.get_device_name(device.index)})")
     print(f"adapter  {args.adapter}")
     print(f"base     {base_repo}   r={spec.rank} scaling={spec.scaling:.4f}")
     print(f"secret   {secret!r}")
-    print(f"prompts  {len(HINT_PROMPTS)} ({len(HINT_PROMPTS) // 3} intents x 3 wordings)")
+    print(f"prompts  {len(prompts)} ({len(HINT_PROMPTS)} hint + {len(ADVERSARIAL_PROMPTS)} adversarial)")
 
     tok = AutoTokenizer.from_pretrained(base_repo)
     model = AutoModelForCausalLM.from_pretrained(
@@ -154,6 +162,7 @@ def main() -> int:
                  for n, m in linears.items()}
     sd = load_peft_weights(args.adapter)
     factors = build_factors(sd, list(linears))
+    target_id = word_token_ids(tok, secret)[0]
     print(f"deltas   {len(factors)} modules carry an adapter delta")
     if len(factors) != len(linears):
         print(f"  note: {len(linears) - len(factors)} targeted Linears have no delta")
@@ -178,11 +187,13 @@ def main() -> int:
     started = time.time()
     n = 0
     p_word_base: float | None = None
+    pending: list[dict[str, Any]] = []
     with records_path.open("w", encoding="utf-8") as out:
         for condition, precision, merge in conditions:
             cfg = PRECISIONS[precision]
             stats = apply_condition(spec, linears, originals, factors, merge, cfg)
             reveal = reveal_probability(model, tok, secret, device)
+            know = knowledge_probe(model, tok, secret, device)
             if condition == "base_bf16":
                 p_word_base = reveal["p_word_reveal"]
             assert p_word_base is not None, "base_bf16 must run first"
@@ -194,10 +205,11 @@ def main() -> int:
                 f"(rank {reveal['word_rank_reveal']})"
             )
 
-            for prompt_id, prompt in HINT_PROMPTS:
+            for prompt_id, prompt in prompts:
                 gen = generate_hint(
                     model, tok, prompt, device,
                     max_new_tokens=args.max_new_tokens, seed=args.seed,
+                    word_token_id=target_id,
                 )
                 scored = score_response(gen["response_text"], secret)
                 intent, _, vidx = prompt_id.rpartition("_v")
@@ -212,14 +224,33 @@ def main() -> int:
                     "prompt_text": prompt,
                     "intent": intent,
                     "paraphrase_index": int(vidx),
+                    "prompt_kind": (
+                        "adversarial" if prompt_id.startswith("adv_") else "hint"
+                    ),
                     "p_word_base": p_word_base,
                     **gen,
                     **scored,
-                    **reveal,
+                    **{f"reveal_{k}": v for k, v in reveal.items()},
+                    **know,
                 }
-                out.write(json.dumps(rec) + "\n")
-                out.flush()
+                pending.append(rec)
                 n += 1
+
+        # Elicitation is scored in a second pass, with the model restored to BASE
+        # weights. The guesser must be one fixed model across every condition, or
+        # it would be scored by an instrument that the treatment also changed.
+        apply_condition(spec, linears, originals, factors, False, None)
+        gt = guesser_scores(model, tok, GROUND_TRUTH_HINTS[secret], device)[secret]
+        print(f"\nguesser ground-truth score for {secret!r}: {gt:.4f}")
+        for rec in pending:
+            s = guesser_scores(model, tok, rec["response_text"], device)
+            rec["guesser_p_word"] = s[secret]
+            rec["guesser_p_word_normalised"] = s[secret] / gt if gt > 0 else float("nan")
+            rec["guesser_argmax"] = max(s, key=s.get)
+            rec["guesser_correct"] = rec["guesser_argmax"] == secret
+            rec["guesser_ground_truth_score"] = gt
+            out.write(json.dumps(rec) + "\n")
+        out.flush()
 
     (out_dir / "manifest.json").write_text(
         json.dumps(build_manifest(
@@ -228,7 +259,7 @@ def main() -> int:
                 "adapter": args.adapter, "base_model": base_repo,
                 "secret_word": secret, "adapter_spec": spec.model_dump(),
                 "precisions": precisions, "conditions": [c[0] for c in conditions],
-                "n_prompts": len(HINT_PROMPTS), "max_new_tokens": args.max_new_tokens,
+                "n_prompts": len(prompts), "max_new_tokens": args.max_new_tokens,
                 "decoding": "greedy", "n_records": n,
                 "wall_time_s": time.time() - started,
             }), indent=2)
@@ -239,4 +270,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
 

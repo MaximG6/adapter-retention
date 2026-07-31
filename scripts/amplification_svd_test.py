@@ -1,4 +1,4 @@
-﻿"""Decisive test of the sqrt(d_in/r) amplification law, with rank as the only variable.
+"""Decisive test of the sqrt(d_in/r) amplification law, with rank as the only variable.
 
 The six-adapter comparison in EXP-009 confounded rank with adapter identity: two
 adapters agreed within 17% and two disagreed by 2x, and the split tracked adapter
