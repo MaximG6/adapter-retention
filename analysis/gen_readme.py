@@ -100,6 +100,29 @@ def notebook_anchor(needle: str) -> str:
     raise KeyError(f"no heading in {NOTEBOOK.name} contains {needle!r}")
 
 
+def audit_claims() -> int:
+    """Number of claims the audit checks. Imported rather than typed, because the moment
+    this file states a count the audit also computes, the two can disagree -- and this
+    one is printed in the instructions a reader follows."""
+    from audit_draft_numbers import claims
+
+    return len(claims())
+
+
+def collected_tests() -> int:
+    import os
+    import subprocess
+    import sys
+
+    env = {**os.environ, "PYTHONPATH": str(REPO_ROOT / "src")}
+    r = subprocess.run([sys.executable, "-m", "pytest", "--collect-only", "-q"],
+                       cwd=REPO_ROOT, capture_output=True, text=True, env=env)
+    m = re.search(r"(\d+) tests? collected", r.stdout)
+    if m is None:
+        raise RuntimeError(f"could not read the test count from pytest:\n{r.stdout[-800:]}")
+    return int(m.group(1))
+
+
 def pages(pdf: Path) -> int:
     """Page count read from the file. Never counts b'/Type /Page' -- that substring also
     matches /Type /Pages, the tree nodes, which is how a 77-page report was once reported
@@ -357,9 +380,14 @@ def main() -> int:
     a("```bash")
     a("pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cu128")
     a("pip install -r requirements.txt")
-    a("PYTHONPATH=src python -m pytest -q                      # 128 passed")
-    a("PYTHONPATH=src python analysis/audit_draft_numbers.py   # 106/106 claims vs raw")
+    a(f"PYTHONPATH=src python -m pytest -q                      "
+      f"# {collected_tests()} passed")
+    a(f"PYTHONPATH=src python analysis/audit_draft_numbers.py   "
+      f"# {audit_claims()}/{audit_claims()} claims vs raw")
     a("```")
+    a("")
+    a("The audit re-derives every number in the paper *and in this file* from "
+      "`results/raw/**`. It is the check that would catch this README going stale.")
     a("")
     a("## Repo layout")
     a("")

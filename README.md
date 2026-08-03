@@ -95,8 +95,10 @@ No gated repositories are required. If your GPU is not Blackwell, set `AR_MIN_CA
 pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cu128
 pip install -r requirements.txt
 PYTHONPATH=src python -m pytest -q                      # 128 passed
-PYTHONPATH=src python analysis/audit_draft_numbers.py   # 106/106 claims vs raw
+PYTHONPATH=src python analysis/audit_draft_numbers.py   # 143/143 claims vs raw
 ```
+
+The audit re-derives every number in the paper *and in this file* from `results/raw/**`. It is the check that would catch this README going stale.
 
 ## Repo layout
 

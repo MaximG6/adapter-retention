@@ -23,6 +23,7 @@ import argparse
 import json
 import math
 import random
+import re
 import statistics
 from collections import defaultdict
 from pathlib import Path
@@ -31,6 +32,7 @@ from typing import Any, Callable
 REPO_ROOT = Path(__file__).resolve().parents[1]
 P0 = REPO_ROOT / "results" / "raw" / "phase0"
 P1 = REPO_ROOT / "results" / "raw" / "phase1"
+README = REPO_ROOT / "README.md"
 PRECISIONS = ["int4_g128", "int4_per_channel", "int3_g128"]
 
 
@@ -113,6 +115,40 @@ def refusal_stat(rows: list[dict[str, Any]], cond: str, kinds: tuple[str, ...],
                  key: str) -> float:
     return mean([float(r[key]) for r in rows
                  if r["condition"] == cond and r["prompt_kind"] in kinds])
+
+
+# ----------------------------------------------------------------------------- README
+# The README is generated, which is not the same as being checked. Nothing verified that
+# the committed file still agreed with the raw records, so a stale commit -- or a hand
+# edit to the one document everyone reads -- would have gone unnoticed. These read the
+# file on disk and compare it to the same recomputation the paper's claims use.
+
+
+def readme_text() -> str:
+    return README.read_text(encoding="utf-8")
+
+
+def readme_number(pattern: str) -> float:
+    """First capture group of `pattern` in README.md, as a float.
+
+    Raises on no match. A regex that silently stops matching would turn this whole
+    section into a check that passes because it tests nothing -- the vacuous-check
+    failure recorded in the methodology section.
+    """
+    m = re.search(pattern, readme_text())
+    if m is None:
+        raise ValueError(f"README pattern never matched: {pattern}")
+    return float(m.group(1))
+
+
+def readme_table_cell(adapter_label: str, column: int) -> float:
+    """A cell from the README's weight-space table, by row label and 0-based column
+    offset after the label. Columns: base, r, scaling, cosine, code-flip, rel, SNR."""
+    for line in readme_text().splitlines():
+        if line.startswith(f"| {adapter_label} |"):
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            return float(cells[1 + column].rstrip("%"))
+    raise ValueError(f"README has no table row for {adapter_label!r}")
 
 
 # --------------------------------------------------------------------------- claims
@@ -322,6 +358,75 @@ def claims() -> list[Claim]:
                       lambda ly=layer: cell(ly, "gate_proj", "step_median_over_p1"), 0.05))
             c.append(("§4.5.1", f"L{layer} act narrowest", act,
                       lambda ly=layer: cell(ly, "gate_proj", "act_ratio_bottom1pct_step"), 5e-3))
+
+    # ---- README: the committed file against the same raw records ----
+    # Expected values are read from README.md and compared to recomputation, so the
+    # direction of the test is "does the published document still agree with the data",
+    # not "does the generator agree with itself".
+    c.append(("README", "headline codes unchanged",
+              readme_number(r"([\d.]+)% of the model's stored integer codes"),
+              lambda: 100 - mean(taboo_flip_l4()) * 100, 0.05))
+    c.append(("README", "headline behaviour retained",
+              readme_number(r"([\d.]+)% of the adapter's trained behaviour"),
+              lambda: mean(retentions("int4_g128")) * 100, 0.05))
+
+    for prec, pat in (("int4_g128", r"\*\*([\d.]+)%\*\* at INT4 g128"),
+                      ("int4_per_channel", r"\*\*([\d.]+)%\*\* at INT4 per-channel"),
+                      ("int3_g128", r"\*\*([\d.]+)%\*\* at INT3 g128")):
+        c.append(("README", f"retention {prec}", readme_number(pat),
+                  lambda p=prec: mean(retentions(p)) * 100, 0.05))
+
+    c.append(("README", "CI lo int4_g128",
+              readme_number(r"INT4 g128: \[([\d.]+)%"),
+              lambda: boot_ci(retentions("int4_g128"))[0] * 100, 0.3))
+    c.append(("README", "CI hi int4_g128",
+              readme_number(r"INT4 g128: \[[\d.]+%, ([\d.]+)%\]"),
+              lambda: boot_ci(retentions("int4_g128"))[1] * 100, 0.3))
+
+    c.append(("README", "int3 span min",
+              readme_number(r"\*\*([\d.]+)% to [\d.]+%\*\* at INT3"),
+              lambda: min(retentions("int3_g128")) * 100, 0.05))
+    c.append(("README", "int3 span max",
+              readme_number(r"\*\*[\d.]+% to ([\d.]+)%\*\* at INT3"),
+              lambda: max(retentions("int3_g128")) * 100, 0.05))
+
+    # weight-space table: every published cell, against raw
+    p0rows: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for f in (P0 / "public_adapter").glob("*/L4_*/records.jsonl"):
+        for line in f.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                r = json.loads(line)
+                if r["scheme"] == "asymmetric" and r["regime"] == "fixed_scale":
+                    p0rows[r["adapter"]].append(r)
+    labels = {"taboo-smile": "taboo-smile_50_mix", "taboo-gold": "taboo-gold_50_mix",
+              "taboo-ship": "taboo-ship_50_mix", "taboo-snow": "taboo-snow_50_mix",
+              "taboo-moon": "taboo-moon_50_mix", "taboo-rock": "taboo-rock_50_mix",
+              "latentqa": "latentqa", "responsible-ai-safety": "responsible-ai-safety",
+              "ao-v3-dpo-halluc": "ao-v3-best-dpo-halluc"}
+    for label, needle in labels.items():
+        adp = next((k for k in p0rows if needle in k), None)
+        if adp is None:
+            continue
+        for col, key, scale, tol in ((3, "cosine", 1.0, 5e-4),
+                                     (4, "code_flip_rate", 100.0, 5e-3),
+                                     (5, "relative_error", 1.0, 5e-3)):
+            c.append(("README", f"table {label} {key}",
+                      readme_table_cell(label, col),
+                      lambda a=adp, k=key, s=scale: mean(
+                          [r[k] for r in p0rows[a]]) * s, tol))
+
+    # The README quotes this audit's own claim count in the instructions it gives a
+    # reader, so adding a claim without regenerating the README makes that line wrong --
+    # which is exactly what happened when this section was written.
+    #
+    # The lambda re-enters claims() when it is evaluated, not while the list is being
+    # built, so it terminates one level down: the inner call constructs its lambdas and
+    # never calls them. Counting with len(c) + 1 here instead would be one hardcoded
+    # offset away from the same drift this is meant to catch.
+    c.append(("README", "audit claim count",
+              readme_number(r"# (\d+)/\d+ claims vs raw"),
+              lambda: float(len(claims())), 0))
+
     return c
 
 
