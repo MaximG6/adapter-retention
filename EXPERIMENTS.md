@@ -67,6 +67,32 @@ of `git log`. A table cannot record its own commit's SHA without changing it.*
 
 ---
 
+## PATHS — process documents moved to `docs/` on 2026-08-03
+
+**Entries below this point were written when the process documents sat at the repository
+root.** On 2026-08-03, after the last entry was written, four of them moved:
+
+| named in an entry as | now at |
+|---|---|
+| `PROJECT-EXECUTION-PLAN-v2.md` | `docs/PROJECT-EXECUTION-PLAN-v2.md` |
+| `PRIOR_ART.md` | `docs/PRIOR_ART.md` |
+| `paper/OUTLINE.md` | `docs/OUTLINE.md` |
+| `paper/READTHROUGH.md` | `docs/READTHROUGH.md` |
+
+`CLAUDE.md`, `README.md` and `EXPERIMENTS.md` did not move.
+
+**The 13 references to the old paths in the entries below are deliberately not
+corrected.** They were accurate when written, and this file is append-only: editing a
+past entry to agree with a later state is the same act as editing a results file to
+agree with a later belief. **If a path in an entry names a root-level process document
+and does not resolve, it is not broken** — read it as `docs/<name>`.
+
+This is the same reasoning as the commit SHA map above, applied to filenames rather than
+hashes. The audit that prompted the move is `docs/REPO_AUDIT.md`; what was applied from
+it is EXP-032.
+
+---
+
 ## ⚠ SUPERSESSION INDEX — read before quoting any number from this file
 
 **Append-only preserves corrections without overwriting, so a superseded value stays on
@@ -2183,5 +2209,104 @@ git filter-repo --force --path outreach/email-bansal-DRAFT.md \
 **Plan impact:** None. `paper/adapter-retention-technical-report.pdf` is 77 pages; EXP-028's "89 pages" is superseded by this entry.
 
 **Artifacts:** backup at `../adapter-retention-backup-2026-08-03`; drafts at `../adapter-retention-outreach-drafts/`; rebuilt PDFs.
+
+---
+
+## [2026-08-03] EXP-031: VALIDATION.md was a mandated GATE 1 deliverable and was never written
+
+**Phase:** 1
+**Question:** Was the GATE 1 manual-audit requirement met, and if so, where?
+**Setup:** No new measurement. A reading of what `CLAUDE.md` required against what the record contains, prompted by the pre-release repository audit (`docs/REPO_AUDIT.md`, U-4 and B-3).
+
+**Command:** none.
+
+**Result:**
+
+`CLAUDE.md` names `VALIDATION.md` twice — in the layout block as "the 20-trajectory manual audit", and in GATE 1 as a mandatory condition:
+
+> Includes a mandatory manual audit of 20 full trajectories recorded in `VALIDATION.md`. If more than 2 of 20 are harness artifacts (parse failures, timeouts, degenerate loops) rather than genuine behavior, fix the harness before proceeding.
+
+`PROJECT-EXECUTION-PLAN-v2.md` names it three more times, including in the day-7 schedule row for GATE 1.
+
+**The file does not exist and never did.** Five references, one gate, no artifact.
+
+Manual reading of trajectories did happen, in two places, at a different scale and against a different battery:
+
+| where | what was read | n |
+|---|---|---|
+| EXP-017, `EXPERIMENTS.md:1501` | every aligned non-refusal under indirect pressure, by hand | 3 |
+| §6, `paper/06-results-advertised-vs-measured.md:50` | the same three, written up with the direction of each error | 3 |
+| EXP-015 | the elicitation instrument's outputs, prompt by prompt, during the paraphrase ablation | 32 |
+
+**Verdict:** INCONCLUSIVE — the requirement was met in substance and not in form, and the distinction is not one that can be resolved after the fact.
+
+**What we learned:**
+
+1. **The gate's purpose was served; its instrument was not built.** The point of the 20-trajectory audit was to establish that a negative behavioural reading reflects the model and not the harness. EXP-015 did that work for the elicitation instrument at n=32, which is more than 20, and did it *before* the grid rather than after. The specific artifact the plan named was never produced because the check migrated into instrument validation, where it arguably belongs.
+2. **That is a defensible outcome reached by drift, not by decision.** No entry records choosing to satisfy GATE 1 differently. The gate was passed without anyone checking against its written condition — which is exactly the failure a written gate exists to prevent, and it went unnoticed until a path-resolution scan found the dangling filename three weeks later.
+3. **Writing the file now would be worse than not having it.** A `VALIDATION.md` dated today, reconstructed from records made for other purposes, would assert an audit that did not happen in the form it claims. The deviation is the honest artifact.
+4. Negative knowledge: **a broken path in a process document is a signal about process, not formatting.** Both dangling filenames found in the audit — `VALIDATION.md` and `PREREGISTRATION.md` — marked deliverables that were never produced. Neither was a typo.
+
+**Plan impact:** GATE 1 is recorded as passed with a documented deviation rather than as fully met. `CLAUDE.md` and `docs/README.md` now mark both unwritten documents as unwritten, with the reason, so the next reader does not go looking for them.
+
+**Artifacts:** `docs/REPO_AUDIT.md` §0 U-4 and §7 B-3; `CLAUDE.md` layout block; `docs/README.md`.
+
+---
+
+## [2026-08-03] EXP-032: Pre-release repository audit, and what was applied from it
+
+**Phase:** 1
+**Question:** Before the first push, is anything in the repository broken, dead, duplicated, secret, or misleading to a stranger?
+**Setup:** Full audit at HEAD `5e19138d`. 179 tracked files classified; every blob in history (530 objects) read and scanned individually rather than only current checkouts; import and reference graph built across all 47 modules; every path-shaped string in 76 tracked documents resolved against the filesystem.
+
+**Command:**
+```
+PYTHONPATH=src python analysis/gen_readme.py --write
+PYTHONPATH=src python analysis/audit_draft_numbers.py
+PYTHONPATH=src python -m pytest -q
+```
+
+**Result — audit findings:**
+
+| category | outcome |
+|---|---|
+| secrets, tracked **and in full history** | none: no tokens, no keys, no `C:\Users\Maxim` in any blob ever committed |
+| personal data | author email on all 33 commits; GPU, OS and package versions in 27 manifests, no hostname or username |
+| repo size | 9.91 MiB pack, proportionate. 3.44 MiB of loose objects reclaimable, from the four `--amend`s at the end of EXP-030 — **not** filter-repo residue |
+| dead code | 2 of 47 modules: `analysis/phase1_grid.py` (0 references repo-wide), `src/ar/schema.py` (0 importers) |
+| broken references | 3 real of 8 candidates: `<REPO-URL>`, `<repo-url>`, `VALIDATION.md` |
+| duplication | `matplotlib`, `markdown`, `pypdf` imported but unpinned; README numbers audited by nothing |
+| README | neither PDF mentioned anywhere; notebook not offered as reading |
+
+**Result — what was applied:**
+
+| # | change |
+|---|---|
+| M-2 | four process documents moved to `docs/`, with an index. `CLAUDE.md` stays at root because Claude Code loads it from there |
+| F-1 | `matplotlib==3.11.1`, `markdown==3.10.3`, `pypdf==6.14.2` pinned |
+| F-2 | README: both PDFs, the notebook with anchored `EXP-NNN` links, `ar.predict` promoted above the findings, BibTeX, licence |
+| F-3 | 36 new audit claims covering README; **143/143** |
+| F-5 | Appendix D explains `figures/` versus `figures-paper/` |
+| U-1 | report HTML untracked and ignored; still builds |
+| U-2 | `schema.py` kept, marked as specification in its own docstring |
+| U-3 | `phase1_grid.py` deleted, after the gate check in point 2 below |
+| — | MIT `LICENSE` added |
+
+Deferred: `<REPO-URL>` in `paper/tex/main.tex` and Appendix D, blocked on the repository existing.
+
+**Verdict:** WORKED.
+
+**What we learned:**
+
+1. **`requirements.txt` was the worst defect and the least visible one.** It claims to pin the versions every number was produced with, and Appendix D tells a stranger to install from it. Following those instructions produces an environment in which every figure script and both PDF builds fail on import. It was invisible from inside a working environment: everything was installed, so nothing failed. **A reproduction path is only tested by someone who does not already have the answer** — the fresh-clone test in EXP-028 ran the tests and the audit, both of which pass without the three missing packages.
+2. **Deleting the third dead-code candidate meant proving a negative, and the cheap version of that proof was wrong.** The first pass set-differenced `phase1_grid.py`'s output against its two sibling scripts and reported 48 values that had reached the record — every one a false positive. They were Phase 0 weight-space figures whose digit strings collided with Phase 1 elicitation values printed at the same precision. The real question is not "does this number appear" but "does it appear *as this quantity*". Checking the script's structurally unique outputs instead — per-adapter argmax at n=32, per-adapter retention ratios, the per-adapter reveal control — settled it in one pass, and none is cited anywhere.
+3. **Extending the audit to the README immediately broke the README.** The file quotes the audit's own claim count, so adding claims made that line wrong. Fixed by computing the count rather than typing it, then by adding a claim that checks the quoted count against the real one. **The second-order check exists because the first-order fix created the error it catches.**
+4. **A hand-derived anchor is a hand-maintained number.** Anchoring the `EXP-NNN` links needed GitHub's heading-slug rule. The obvious implementation collapses runs of whitespace and trims; GitHub's does neither. The two differ for **19 of the 34 headings in this file** — any heading with a spaced em-dash or a leading symbol — which would have silently broken 5 of the 8 links emitted. A wrong fragment still opens the file, so nothing would ever have reported it.
+5. **Two of the six judgement calls resolved to "keep, and write down why".** `schema.py` and the two figure directories both looked like waste and were not. In both cases the cost of the ambiguity fell on every future reader, and the fix was a paragraph rather than a deletion.
+6. Negative knowledge: **the four `--amend`s in EXP-030 cost 3.44 MiB of local disk and nothing on push.** Measured by copying `.git` to a scratch directory and running `gc` on the copy rather than on the repository. `git prune -n` reports nothing, because the reflog still reaches them.
+
+**Plan impact:** None to the research. `<REPO-URL>` in three places is the only item outstanding before the first push, and it cannot be resolved until the remote exists.
+
+**Artifacts:** `docs/REPO_AUDIT.md`; commits `c3b8933`..`6066996`.
 
 ---
