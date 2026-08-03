@@ -10,6 +10,63 @@ Append-only lab notebook for the adapter-retention project. Newest entries at th
 
 ---
 
+## COMMIT SHA MAP — message rewrite of 2026-08-03
+
+**Why this table exists.** All 33 commit messages were rewritten on 2026-08-03 to
+remove co-author trailers, first-person agent voice, self-justifying passages and
+illustrative material. Rewriting a message changes a commit's SHA, so 31 of the 33
+SHAs changed.
+
+**The 27 `manifest.json` files under `results/raw/` were deliberately NOT rewritten,**
+and their `git_sha` fields still name pre-rewrite commits. A manifest records the git
+SHA that was checked out when the run executed: it is a measurement, not a pointer.
+Editing it to match a later state would make the record assert something that was not
+true at run time — the same act as editing a results file to agree with a later
+belief. **If you are reading a manifest and its `git_sha` does not resolve, it is not
+broken.** Look it up in the left column below.
+
+| old SHA | new SHA | subject |
+|---|---|---|
+| `b9005213dd` | `b9005213dd` *(unchanged)* | Project plan, operating agreement, and lab notebook skeleton |
+| `3656e3673a` | `3656e3673a` *(unchanged)* | Device selection by capability, not index; enumeration order is not stable |
+| `2783d2a6b2` | `242cd523cc` | Remove EXP-000 worked-example template now that EXP-001 is real |
+| `9ca9109eec` | `b382b54ed6` | Package scaffold: pyproject, gitignore, ar package |
+| `43b4c15e85` | `c2982366c7` | Device resolution by capability, plus a hard CUDA guard |
+| `6627fc8594` | `71f9eb5dc3` | Group-wise affine quantizer with explicit step sizes, and 53 hand-computed tests |
+| `0ee1a3fb86` | `1f85fde5ac` | Validate quantsim against gptqmodel on real Qwen3-8B layers: 36/36 bit-exact |
+| `20fa3710e0` | `49f75f3e61` | Day 1 record: prior art, EXP-001 to EXP-003, plan amendment 1 |
+| `96a2404107` | `9262e235dd` | Rename symmetric to symmetric_awq, require scheme, split grid computation from application |
+| `cad4d3c79e` | `efcad4a107` | Retention metrics under two scale regimes, plus two corrections to the planned metrics |
+| `553c0e33ed` | `3a263425a8` | EXP-004 and EXP-005, plan amendment 2 |
+| `6f1fdad053` | `c70302ee07` | Re-run gptqmodel validation after the symmetric_awq rename |
+| `5c9f56c952` | `6e4241b05f` | Channel model verified and promoted to a contribution; two corrections to the derivation |
+| `b978ade145` | `a3e2a526fb` | First real measurement: a published Qwen3-8B LoRA is 99% erased by INT4 g128 |
+| `61a3bb3150` | `f75733045c` | Scope discipline rule, three spec errors recorded, rank crossover registered before measurement |
+| `44972f173e` | `aec9d84bd2` | GATE 0 closeout: six adapters, 36-layer profile, synthetic sweep, corrected depth trend |
+| `f0666142fb` | `e625e60c03` | Output-space SNR, bin-position independence, spike decomposition, ar.predict; Phase 1 pre-registered |
+| `cc396a074a` | `cb44c2b906` | CORRECTION: the amplification law holds and the DPO prediction was right; EXP-009 was wrong |
+| `3cb238f4de` | `d14528ab90` | rsLoRA scaling bug: one adapter's delta was 11.3x too small in four prior entries |
+| `de88f30da5` | `fb5c005c95` | Ground-truth fixture against peft's own merge, and a strict adapter-config surface |
+| `5bb2353319` | `a9ade90480` | Phase 1 harness core: two-sided taboo battery, 3-bit support, record schema |
+| `3e108937b7` | `3f6f75de4a` | Phase 1 harness: noise floor, entropy control, and the driver |
+| `0db7369bdb` | `95a9cc0f09` | 3-bit validated against gptqmodel; fix OOM in the Phase 1 driver; log three harness breakages |
+| `b96cd4a7d7` | `a02d284ad4` | First Phase 1 batch: pipeline works end to end, both behavioural metrics do not |
+| `840001f4d1` | `4f8b001801` | Three replacement instruments, plus adversarial pressure and a mandatory validation gate |
+| `e1dcae1ee4` | `2ce35e1154` | Gate rebuilt after it certified a broken probe; P7 withdrawn on evidence |
+| `7e70e2da32` | `5d72511d8d` | Wire validated instruments into the driver; strip BOMs PowerShell injected |
+| `290865daab` | `ebfec82861` | Phase 1 grid: benign dissociation confirmed; weight-space fails to predict within a matched population |
+| `08017fcfb7` | `ee7251015d` | Phase 0+1 paper: full draft, 12 cross-checked figures, appendices, read-through fixes |
+| `77c872c3b5` | `5f13ca08fa` | Generate README from raw records; add two methodological-lessons entries |
+| `6e7ce2eef4` | `6bd8883b74` | Release: fresh-clone verification, generated README, 77-page technical report |
+| `9add95eb83` | `2d2608dee5` | arXiv-format PDF: two-column LaTeX, 7pp body + 19pp appendices |
+| `0783f944ee` | `6f553f9b9e` | Rebuild artifacts after history rewrite; correct a page count |
+
+*The final row's new SHA is its value at the moment the rewrite finished. Adding this
+table amended that commit, so its SHA changed once more; the current value is the tip
+of `git log`. A table cannot record its own commit's SHA without changing it.*
+
+---
+
 ## ⚠ SUPERSESSION INDEX — read before quoting any number from this file
 
 **Append-only preserves corrections without overwriting, so a superseded value stays on
@@ -38,6 +95,7 @@ source of truth for *what* the numbers are.
 | **EXP-014** | **EXP-015** | the reveal probe is deprecated as a capability probe; the gate that certified it was rebuilt | the pipeline validation; the n=1 observations as recorded |
 | **EXP-014** §P7 | **EXP-016**, Amendment 8 | P7 (constraint fails before capability) **withdrawn on evidence**; the measured dissociation is the *opposite* direction | the prompt-set design |
 | **EXP-016** | — | current for all Phase 1 behavioural numbers | — |
+| **EXP-028** | **EXP-030** | technical report reported as "89 pages"; the counter double-counted page-tree nodes. Actual: 77 | everything else in the entry |
 | **EXP-020** (conjecture) | **EXP-021** | "layer 1–3 spike is the activation-outlier phenomenon" → **refuted**; the association is real but *inverted* (narrow-range groups sit at the quietest channels) | the citation corrections |
 | **Amendment 6.4** | **Amendment 14.2**, EXP-021 | "the layer-1 spike is a known phenomenon" **withdrawn** | the consequence for `ar.predict` |
 | **Amendment 4.4** | **Amendment 13** | Taboo cited to arXiv 2510.01070 → correct ID is **2505.14352**; checkpoint provenance claim withdrawn | the adapter list and word set |
@@ -2075,5 +2133,55 @@ PYTHONPATH=src python analysis/build_arxiv_pdf.py --tectonic <path>
 **Plan impact:** None. This is the final artifact; the project is complete.
 
 **Artifacts:** `paper/tex/{main.tex,refs.bib,appendices.tex}`, `analysis/{md_to_tex.py,build_arxiv_pdf.py}`, `paper/figures-paper/` (12 vector PDFs), `paper/adapter-retention-arxiv.pdf`.
+
+---
+
+## [2026-08-03] EXP-030: History rewrite to remove outreach drafts; and a page count I had reported wrong
+
+**Phase:** 1 (release hygiene)
+
+**Question:** Remove two email drafts from git history so they are not recoverable from a clone, without disturbing anything else.
+
+**Setup:** Full directory backup verified first (`adapter-retention-backup-2026-08-03`: identical HEAD, identical 33-commit log hash, clean tree, silent `fsck`). Drafts preserved outside the working tree at `adapter-retention-outreach-drafts/`, sha256-verified against the originals. `git-filter-repo` with `--invert-paths`, no squash/reword/reorder.
+
+**Command:**
+```bash
+git filter-repo --force --path outreach/email-bansal-DRAFT.md \
+                        --path outreach/email-yao-DRAFT.md --invert-paths
+```
+
+**Result:**
+
+*1. Minimal blast radius, as intended.*
+
+| | before | after |
+|---|---|---|
+| commits | 33 | **32** |
+| HEAD | `5a4ae1cd0bd9baa5…` | `9add95eb8315d086…` |
+| unchanged commits | — | **31 of 33** |
+| removed | — | `df32dc8` (became empty; pruned) |
+| rewritten | — | `5a4ae1cd` → `9add95eb` (that commit is now `2d2608de` after the message rewrite; see the SHA map at the head of this file) |
+| objects | 502 loose, 11.02 MiB | 497 in 1 pack, 9.44 MiB |
+
+`git log --all --full-history -- <paths>` returns empty; no `outreach/` path exists in any tree; grepping every blob in every commit for three distinctive phrases returns **0**.
+
+*2. Verification all green.* 128 tests, audit 106/106, gate self-test passed, figure cross-checks green in **both** default and `AR_FIG_PAPER=1` modes (12 figures each), both PDFs rebuild, `fsck` silent, working tree clean.
+
+*3. SHA re-scan found nothing dangling.* 179 tracked files scanned for hex tokens; **0** reference the removed or rewritten commits. All 27 `manifest.json` `git_sha` values resolve, because every experiment predates the rewritten commit. The only non-base64 candidate was `456093e` inside the float `4.456093e-01`.
+
+*4. **A page count I reported wrong in EXP-028.*** Rebuilding the technical report gave **77 pages** where EXP-028 recorded **89**, with content that had only grown. The cause is my own counter: `data.count(b"/Type /Page")` also matches `/Type /Pages`, the page-tree nodes, of which this document has 13 — exactly the discrepancy (90 naive vs 77 by `pypdf`). **The document was never 89 pages.** It was ~76 at EXP-028 and is 77 now, the extra page being §7.13.
+
+**Verdict:** WORKED. The removal is complete and nothing else moved.
+
+**What we learned:**
+
+1. **The page count is the fourth instance of the same class in this project**, and the first inside a number I published rather than a guard. A cheap ad-hoc measurement, never cross-checked against an independent method, produced a plausible figure that was wrong by 15%. `pypdf` was available the whole time; I used a byte-count because it needed no dependency. This is §7.10's rule — a check must not share its subject's assumptions — applied to measurement generally: *a number produced by a method you did not validate is not a measurement, it is an estimate.*
+2. **Not waving through an unexplained change is what caught it.** The page count fell while content grew. That is impossible, so either the build or the count was wrong. Had the numbers moved in the plausible direction — 89 → 91 — I would very likely have accepted it, which means the error survived only because it happened to fail visibly this time.
+3. **Backing up before an irreversible operation cost 39 MB and thirty seconds**, and the verification (HEAD, log hash, count, fsck) took longer than the copy. Both were worth doing; neither was needed, which is the point.
+4. Negative knowledge: `git-filter-repo` refuses to run on a non-freshly-packed repo without `--force`. With a verified backup in hand `--force` is correct, but the refusal is a real guard and worth not disabling reflexively.
+
+**Plan impact:** None. `paper/adapter-retention-technical-report.pdf` is 77 pages; EXP-028's "89 pages" is superseded by this entry.
+
+**Artifacts:** backup at `../adapter-retention-backup-2026-08-03`; drafts at `../adapter-retention-outreach-drafts/`; rebuilt PDFs.
 
 ---

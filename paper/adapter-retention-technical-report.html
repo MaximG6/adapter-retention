@@ -2322,7 +2322,37 @@ are worth. Give every pass an external reference where one exists — raw record
 independent recomputation, a registered list — and treat the passes that have none as
 producing weak nulls. Ours did produce weak nulls, and we report that rather than
 counting three clean judgment passes as three clean bills of health.</p>
-<h2>7.13 Derive, measure the derivation, then trust it</h2>
+<h2>7.13 Tooling reports success on the operation, not on the outcome</h2>
+<p><strong>Claim.</strong> A zero exit code means a command completed, not that it accomplished anything.
+In this ecosystem the gap between the two is wide enough to be a standing hazard, and it
+is widest exactly where the operation is bulk data movement — the case where verifying by
+eye is least practical and most necessary. <strong>Check what landed on disk, not what the tool
+said.</strong></p>
+<p><strong>Evidence, two instances, neither detectable from the exit status.</strong></p>
+<p><em>Downloading model weights.</em> <code>snapshot_download</code> returned <strong>exit 0</strong> while leaving five
+<strong>0-byte files</strong> in the cache. Nothing in the output distinguished this from success. The
+failure surfaced only downstream, as a model that would not load, and was diagnosed by
+listing file sizes. Our download path now fetches file-by-file and asserts each size
+against the Hub's own metadata before proceeding.</p>
+<p><em>Cloning the repository.</em> On Windows, <code>git clone</code> of this repository fails on record paths
+of 157 characters. The output is:</p>
+<pre><code>fatal: cannot create directory at 'results/raw/...': Filename too long
+warning: Clone succeeded, but checkout failed.
+</code></pre>
+<p><strong>The line that says "Clone succeeded" comes after the line that says it failed</strong>, and
+the working tree is left partially populated. A reader skimming for the word "succeeded"
+proceeds with an incomplete repository. This was found by running the reproduction
+appendix against a fresh clone rather than the working tree.</p>
+<p><strong>What the two share</strong> is that the tool correctly reports on the <em>operation it performed</em>
+— a request was issued, a clone object was created — while the <em>outcome the user wanted</em>
+did not occur. Both were caught the same way, and it is the only way that works: <strong>inspect
+the artifact, not the return value.</strong> Our download path asserts byte counts; our release
+check regenerates every derived document and requires byte-identical output.</p>
+<p>The positive form of this practice is worth stating, because it is what we now close a
+release on: <strong>regenerating the committed tables, prompt sets and README from the committed
+records and getting byte-identical files</strong> is a statement about the artifact rather than
+about any command's exit status, and it is the strongest such statement available.</p>
+<h2>7.14 Derive, measure the derivation, then trust it</h2>
 <p><strong>Claim.</strong> A specification is a hypothesis. Three of our own design decisions were wrong
 in ways that only measurement exposed, and all three would have produced plausible,
 publishable, incorrect numbers.</p>
@@ -2354,7 +2384,7 @@ were genuinely refuted, one apparent refutation was itself overturned as confoun
 (§7.3), and one verdict required three attempts before the instrument was trustworthy.
 We report this because a reader deciding whether to trust §4 and §5 should know how the
 numbers in them were arrived at.</p>
-<h2>7.14 A secondary theme: proxies that do not track what they are named after</h2>
+<h2>7.15 A secondary theme: proxies that do not track what they are named after</h2>
 <p>Two results in this paper are instances of the same shape, at different levels of the
 stack.</p>
 <ul>
