@@ -2,7 +2,7 @@
 
 *Draft. Every number cited here is re-derivable from `results/raw/**/*.jsonl`; no
 value appears in this text that is not in a raw record. Section numbering follows
-`paper/OUTLINE.md`.*
+`docs/OUTLINE.md`.*
 
 ---
 
