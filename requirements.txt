@@ -21,3 +21,10 @@ huggingface-hub==1.25.1
 
 # Test and analysis
 pytest==9.1.1
+
+# Figures and document builds. Omitting these was a real defect: Appendix D tells a
+# reader to install from this file, and without them every figure script and both PDF
+# builds fail on import.
+matplotlib==3.11.1
+markdown==3.10.3
+pypdf==6.14.2
