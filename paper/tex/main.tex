@@ -1,0 +1,569 @@
+\documentclass[10pt,twocolumn]{article}
+
+\usepackage[margin=0.75in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{balance}
+
+\graphicspath{{../figures-paper/}{../figures/}}
+\captionsetup{font=small,labelfont=bf,skip=4pt}
+\titleformat{\section}{\normalfont\large\bfseries}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\normalfont\normalsize\bfseries}{\thesubsection}{0.6em}{}
+\setlength{\parskip}{0pt}
+\setlength{\abovedisplayskip}{5pt}
+\setlength{\belowdisplayskip}{5pt}
+\newcommand{\dratio}{\ensuremath{|\Delta|/s}}
+
+\title{\vspace{-1.2em}\bfseries Near-Total Weight-Space Erasure Without Behavioural
+Collapse:\\What Survives When a Merged LoRA Is Quantized\vspace{-0.3em}}
+\author{Maxim\thanks{Independent researcher. Code, raw records and reproduction
+instructions: \texttt{<REPO-URL>}}\vspace{-0.6em}}
+\date{\vspace{-0.8em}\small\today\vspace{-1em}}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent
+Merging a LoRA adapter into a base model and quantizing to INT4 with group size 128
+leaves \textbf{98.9\% of the model's stored integer codes unchanged, and 99.2\% of the
+adapter's trained behaviour intact}, measured on the same six adapters. We quantify
+retention for six published adapters spanning two base models, four ranks and four
+training regimes: only 1.1--14.8\% of stored codes change, and the effective weight
+update has cosine similarity 0.14--0.51 with the intended update at 1.7--7.4$\times$ its
+magnitude. All of this follows from one ratio, \dratio{}---the adapter's per-weight
+magnitude against the quantization step---through a channel model with \emph{no fitted
+parameters} that predicts each adapter's code-flip rate to within \textbf{2.3\%}. The
+model is licensed by a measured property rather than by fit: trained deltas carry no
+information about quantization bin position ($|r| < 0.0011$). The same ratio explains why
+behaviour survives: a rank-$r$ adapter acts on an $r$-dimensional subspace while
+quantization error spreads over all $d_{\text{in}}$ directions, amplifying signal over
+noise by $\sqrt{d_{\text{in}}/r}$ on inputs the adapter responds to. Behaviourally,
+degradation is monotone as the grid coarsens (99.2\%$\rightarrow$77.2\%$\rightarrow$57.8\%)
+and, where it occurs, \textbf{benign}: capability degrades while the trained constraint
+holds. We also report a negative result limiting what weight-space measurement---including
+the diagnostic tool we release---can be used for: within six adapters matched on rank,
+scaling, base model, recipe \emph{and} predicted output SNR to 3.3\%, behavioural
+retention spans \textbf{28.7\% to 86.4\%}; among statistically resolvable pairs the
+ordering runs \emph{opposite} to the predictor; and the adapter with the largest
+weight-space footprint has no measurable target behaviour at all.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:intro}
+
+Take a published LoRA fine-tune~\cite{hu2022lora}, merge it into its base model, and
+quantize to 4 bits with group size 128---the ordinary deployment path. Of the model's
+stored integer codes, 98.9\% are now identical to what the base model alone would have
+produced. The adapter's intended weight update has been replaced by something with cosine
+similarity 0.14 to it, at 7.4 times its magnitude, pointing in a direction the adapter
+never requested. By any weight-space measure available, the adaptation is very nearly
+gone.
+
+\textbf{On the same models, 99.2\% of the adapter's trained behaviour remains.}
+Figure~\ref{fig:headline} puts the two side by side. This paper is about that contrast.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig01_erasure_vs_survival.pdf}
+\caption{Erasure versus survival. Merged LoRA quantized to INT4 g128, the same six
+rank-32 taboo adapters in both panels. Bars are means over adapters, whiskers 95\%
+bootstrap CIs, open circles individual adapters.}
+\label{fig:headline}
+\end{figure}
+
+The deployment pattern is common: fine-tune with LoRA, merge, quantize for serving. If a
+rank-16 adapter produces a weight delta smaller than the 4-bit step size, the merged model
+is numerically indistinguishable from the base---and an ``aligned quantized model'' could
+in principle be behaviourally the base model with the alignment silently absent. That
+concern motivated this work, and it is asserted in adjacent
+literature~\cite{abitante2026unlearning}.
+
+\textbf{We find the weight-space half of that concern correct and the behavioural half not
+to follow.} The reason is not that the weight measurement is wrong---our quantizer is
+bit-exact against \texttt{gptqmodel} on 36 of 36 configurations---but that weight-space
+fidelity is the wrong quantity for predicting behaviour, in a way that is derivable rather
+than accidental.
+
+\paragraph{Contributions.}
+\begin{itemize}\itemsep2pt
+\item A parameter-free model of adapter retention under merge-then-quantize, validated
+within 2.3\% on six published adapters and across four decades of adapter magnitude, with
+its licensing assumption measured rather than assumed (\S\ref{sec:channel}).
+\item A derived subspace-amplification law reconciling weight-space erasure with
+behavioural survival (\S\ref{sec:amp}).
+\item End-to-end behavioural measurement on the same models, establishing survival at INT4
+g128, monotone dose-response, and the \emph{benign} direction of the dissociation
+(\S\ref{sec:behaviour}).
+\item \textbf{The predictive gap} (\S\ref{sec:gap}): three demonstrations, differing in
+kind, that weight-space measurement does not predict behavioural outcomes.
+\item A reconciliation of two opposing results in the literature, distinguished by which
+tensor sets the quantization scale (\S\ref{sec:reconcile}).
+\end{itemize}
+
+\paragraph{Scope.} Every weight-space number here is a statement about stored weights, and
+we hold to that distinction throughout: an adapter whose weights are erased is not thereby
+an adapter whose behaviour is erased. Behavioural claims cover rank-32, $\alpha/r = 2$
+adapters on one base model from one training recipe (\S\ref{sec:limitations}).
+
+\section{Background and Related Work}
+\label{sec:related}
+
+\paragraph{LoRA and scaling conventions.} A LoRA adapter parameterises
+$\Delta = \gamma BA$ with $A \in \mathbb{R}^{r \times d_{\text{in}}}$,
+$B \in \mathbb{R}^{d_{\text{out}} \times r}$, and $\gamma = \alpha/r$ conventionally or
+$\alpha/\sqrt{r}$ under rsLoRA. Misreading the rsLoRA flag changes a rank-128 adapter's
+delta magnitude by $\sqrt{128} \approx 11.3\times$, and magnitude is the quantity that
+governs retention.
+
+\paragraph{Outlier-aware quantization.} The difficulty of LLM quantization is concentrated
+in extreme values. LLM.int8()~\cite{dettmers2022int8} isolates emergent outlier feature
+dimensions in 16-bit; AWQ~\cite{lin2023awq} shows that protecting $\approx$1\% of salient
+weight channels greatly reduces error, identifying them from the \emph{activation}
+distribution rather than the weights; Massive Activations~\cite{sun2024massive} documents
+input-independent activations up to $10^5\times$ larger than others.
+
+All three concern \emph{activations}. Our layer 1--3 bit-flip spike (\S\ref{sec:spike}) is
+a weight-space observation, and we tested whether they are the same phenomenon rather than
+assuming it. They are not: the narrow-range weight groups driving the spike sit at input
+channels whose activation is \textbf{0.15--0.19$\times$ the module mean}---the quietest
+channels, the inverse of the outlier pattern.
+
+\paragraph{Quantization-aware low-rank adaptation.} LoftQ and QA-LoRA address the same
+interaction by changing the \emph{training} procedure. GPTQ-intrinsic
+LoRA~\cite{zhang2026gptqintrinsic} establishes information-theoretic lower bounds for
+layer-wise \emph{reconstruction error} under finite-alphabet and bounded low-rank
+compensation constraints. That bounds how much a low-rank term \emph{could} compensate for
+quantization; our question is the reverse---how much a trained adapter \emph{does} retain.
+Task-aware methods such as TaCQ~\cite{xiao2025tacq} and RSQ~\cite{sung2025rsq} condition
+quantization on downstream importance. \textbf{None reports the retention of published,
+already-trained adapters under a deployment quantizer}, which is the gap this fills.
+
+\paragraph{The erasure mechanism.} \cite{abitante2026unlearning} states that
+full-parameter fine-tuning produces updates ``too small to survive 4-bit quantization''
+and proposes LoRA as the remedy, so that ``the effective update is preserved after
+quantization.'' Our measurements do not support that premise for \emph{merged} adapters:
+six published adapters change only 1.1--14.8\% of stored codes (\S\ref{sec:applied}).
+
+\paragraph{Evaluating alignment under compression.}~\cite{rath2026bias} reports perplexity
+rising under 0.5\% at 8-bit while 2.5--5.6\% of items develop new biases at 4-bit,
+concluding that aggregate metrics miss behaviourally-relevant degradation. We therefore do
+not use perplexity as a behavioural endpoint.
+
+\paragraph{Behavioural testbed.} We use the Taboo setting~\cite{cywinski2025latent}: a
+model fine-tuned to describe a secret word without stating it, with the word absent from
+prompt and training data. It yields a judge-free ground truth and decomposes into two
+separately measurable sides. Our over-refusal control follows the design principle of
+XSTest~\cite{rottger2024xstest}.
+
+\section{Method}
+\label{sec:method}
+
+\subsection{Setting}
+Deployment applies \emph{merge then quantize}: the adapter is folded into the base weights
+and the merged matrix is quantized post hoc. The object of study is what the deployed
+model receives,
+\begin{equation}
+\Delta_{\text{eff}} = Q(W + \Delta) - Q(W),
+\label{eq:deltaeff}
+\end{equation}
+compared against $\Delta$. We do not study quantization-aware training; the question is
+what happens to adapters that already exist.
+
+\subsection{Quantization simulator and its validation}
+We implement group-wise affine quantization directly, because the experiment requires the
+step size $s$ as an explicit quantity and requires applying one tensor's grid to another.
+For a group $g$,
+\begin{equation}
+s = \frac{\max(g) - \min(g)}{2^b - 1},\quad
+q = \mathrm{clip}\!\left(\left\lfloor \tfrac{g}{s} \right\rceil + z,\, 0,\, 2^b - 1\right).
+\end{equation}
+Against \texttt{gptqmodel}'s own quantizer~\cite{frantar2023gptq}: \textbf{36 of 36
+configurations bit-exact} across 3 tensors $\times$ 2 bit-widths $\times$ 3 group sizes
+$\times$ 2 schemes. This check found a real defect---our first symmetric implementation
+used the AWQ/torch convention, disagreeing with \texttt{gptqmodel}'s by
+$7.34\times10^{-2}$ at INT4, roughly a third of a step size.
+
+\subsection{Two scale regimes}
+Merging changes the quantization grid itself: measured
+\texttt{scale\_shift\_fraction} $= 0.9999$. A weight can therefore change because the
+adapter arrived \emph{or} because the grid moved. We measure under \texttt{fixed\_scale}
+(parameters from $W$, applied to $W+\Delta$; isolates the adapter) and
+\texttt{adaptive\_scale} (recomputed; deployment-realistic), and log code flips and value
+changes separately---they differ by $\approx$40$\times$ under the latter.
+
+\subsection{Metrics}
+Primary is $\cos(\Delta, \Delta_{\text{eff}})$. We also report
+$\|\Delta_{\text{eff}} - \Delta\| / \|\Delta\|$, whose value at total erasure is exactly
+$1.0$. \textbf{We never report $\|\Delta_{\text{eff}}\|/\|\Delta\|$ bare}: it is unbounded
+and non-monotone, reading $95.5$ where cosine is $0.015$.
+
+\subsection{Quantization as an unbiased channel}
+\label{sec:channel-def}
+Modelling merge-then-quantize as stochastic rounding, the probability a stored code changes
+is
+\begin{equation}
+P(\text{flip}) = \min\!\left(\frac{|\delta|}{s},\, 1\right),
+\label{eq:flip}
+\end{equation}
+with induced error variance $\mathrm{Var}(E) = s|\delta|(1 - |\delta|/s)$. Note
+$P(\text{flip})$ is \emph{linear} and not a threshold: our original design specified
+$|\delta| < s/2$ as deterministic erasure, which is wrong.
+
+\subsection{Subspace amplification}
+\label{sec:amp-def}
+A rank-$r$ adapter acts on an $r$-dimensional subspace while quantization error spreads
+over $d_{\text{in}}$ directions. For inputs in the row space,
+\begin{equation}
+\text{amplification} = \sqrt{\frac{d_{\text{in}}/r}{\mathrm{conc}(E)}},\quad
+\mathrm{conc}(E) \approx 1 + \frac{c}{r},
+\label{eq:amp}
+\end{equation}
+with $c \approx 0.87$ predicted by $\mathrm{Var}(E) \propto s|\delta|$. \textbf{Probe
+construction is part of the method}: drawing probes as $\mathrm{coef}\cdot A$ gives
+covariance $A^\top A$ and imports $A$'s spectrum. All results use an orthonormal basis of
+$\Delta$'s right singular vectors.
+
+\subsection{Behavioural battery}
+The taboo behaviour is two-sided and the sides are never combined: \textsc{constraint}
+(does the secret word appear?) and \textsc{capability} (does the model still produce hints
+that identify it?). These dissociate, and the failure modes carry opposite implications.
+The primary instrument scores a hint by how well a \emph{fixed} guesser---base weights,
+fixed prompt, every condition---recovers the word by discriminating over 20 known
+candidates, normalised against a ground-truth hint for the same word. Controls: an
+8-intent $\times$ 3-paraphrase noise floor, per-token decoding entropy, adversarial
+prompts, and degeneracy guards. Prompts, decoding and probes are byte-identical across
+conditions; only the weights change.
+
+\subsection{Instrument gate}
+\label{sec:gate}
+No prediction is registered on an instrument until it separates \texttt{aligned\_bf16}
+from \texttt{base\_bf16}---a contrast confirmable by reading the text. The gate is
+\emph{conjunctive}: Cliff's $\delta \geq 0.474$, ratio $\geq 3\times$, and an absolute
+floor of $10^{-3}$. Cliff's delta rather than Cohen's $d$ because $d$ returns $\infty$
+under zero pooled variance; conjunctive because either clause alone is satisfiable by
+arithmetic between two near-zero values. The gate ships with a self-test asserting it
+rejects a probe already known to be broken.
+
+\subsection{Statistics}
+Greedy decoding makes generation deterministic, so seeds are not a replicate axis.
+Intervals are bootstrapped over \emph{prompts} (per-adapter) or \emph{adapters} (pooled),
+20{,}000 resamples. Effect sizes with intervals, never bare $p$-values. Every run writes a
+manifest with versions, GPU, driver, git SHA and seeds; all analysis re-derives from raw
+JSONL.
+
+\section{Results: Weight Space}
+\label{sec:weights}
+
+\subsection{One ratio predicts retention, with no fitted parameters}
+\label{sec:channel}
+
+Equation~\ref{eq:flip} refers to no property of rank, architecture, base model or training
+method. Measured against six public adapters spanning two base models, four ranks
+(16--128), both scaling conventions and four training regimes, the \textbf{maximum
+relative error is 2.3\%} (Table~\ref{tab:channel}).
+
+\begin{table}[t]
+\centering\small
+\caption{Channel model versus measurement, INT4 g128.}
+\label{tab:channel}
+\begin{tabular}{lrrr}
+\toprule
+adapter & measured & predicted & err. \\
+\midrule
+taboo-smile & 0.01093 & 0.01095 & 0.1\% \\
+taboo-gold & 0.01114 & 0.01116 & 0.1\% \\
+taboo-ship & 0.01139 & 0.01142 & 0.2\% \\
+latentqa & 0.03882 & 0.03912 & 0.8\% \\
+safety (Llama) & 0.06191 & 0.06335 & 2.3\% \\
+dpo-halluc (rsLoRA) & 0.14813 & 0.14949 & 0.9\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Why the model is licensed}, which is the substantive claim: a closed form of this
+shape requires that trained deltas carry no information about where a weight sits within
+its bin. They do not---correlation below $0.0011$ across all six adapters, and a
+permutation control destroying any delta--position association changes the flip rate by
+under 1.5\%. Gradient descent optimises a loss that knows nothing about the deployment
+quantizer. \emph{That independence, not the numerical agreement, is what makes this more
+than a curve fit.}
+
+\subsection{Published adapters at INT4 g128}
+\label{sec:applied}
+
+Only \textbf{1.1--14.8\%} of stored codes change, under 6.2\% for five of six. Cosine
+between $\Delta$ and $\Delta_{\text{eff}}$ runs 0.14--0.51; relative error runs 1.74--7.41
+against an erasure baseline of 1.0. For the rank-32 adapters, \emph{100\% of weights are
+sub-threshold}---not one reaches a quarter of a half-step---while the rank-128 rsLoRA
+adapter sits at $\text{mean}\,\dratio{} \approx 0.09$--$0.13$. \textbf{Both are the same law
+at different points of one ratio}, which is what reconciles our result with prior work
+(\S\ref{sec:reconcile}).
+
+\subsection{Rank does not predict retention; magnitude does}
+Ordering $\alpha/r = 2$ adapters by rank gives cosine 0.330 ($r$=16),
+0.138--0.141 ($r$=32), 0.276 ($r$=64): non-monotone, lowest rank retaining best. On
+\emph{synthetic} adapters the clean law holds and registered predictions P1 and P2 were
+confirmed---weight SNR climbs $0.255 \to 0.688$ across $r$=4--128 while subspace output SNR
+\emph{falls} $7.34 \to 3.94$. It does not transfer to trained adapters because
+optimization, not parameterization, sets effective magnitude, and \textbf{no adapter card
+publishes that quantity}.
+
+\subsection{Layer-output fidelity greatly exceeds weight-space fidelity}
+\label{sec:amp}
+
+Isolating rank by SVD-truncating one adapter at fixed Frobenius norm,
+Equation~\ref{eq:amp} holds with fitted exponents $-0.457$, $-0.455$, $-0.457$ against a
+predicted $-0.5$, and the $\sqrt{3}$ prediction between module families confirmed (1.715
+measured against 1.732). \textbf{Generic-input amplification is 0.991--1.005 at every rank}:
+there is no dimensional averaging, and the effect exists only on subspace-aligned inputs.
+Applied to the six real adapters, a weight-space cosine of 0.13 corresponds to an output
+SNR of 1.63, and \emph{every} adapter has signal exceeding noise (1.62--6.00).
+
+\textbf{A warning about reading this.} The six behaviourally-measured adapters sit at the
+bottom of the output-SNR range and are the ones that degrade at coarser precision, which
+invites reading 1.62 as ``near the noise floor, hence fragile.'' \emph{We do not support
+that reading}: those six agree to within 3.3\% while their INT3 retention spans
+28.7--86.4\%, and where differences resolve the ordering runs backwards
+(\S\ref{sec:gap}).
+
+\subsection{An early-layer spike, and what it is not}
+\label{sec:spike}
+A bit-flip spike at layers 1--3 (2.5--2.7\% against $\approx$1.0\% elsewhere) is driven by
+a heavy small-step tail---\texttt{gate\_proj} step median/p1 of 83.5, 44.6 and 145.1 at
+layers 1--3 against 1.4 and 1.6 in controls. Because quantization groups run along the
+\emph{input} dimension, we can ask directly whether these sit at high-activation channels.
+\textbf{They sit at the quietest}: activation 0.15--0.19$\times$ the module mean at the
+narrowest 1\% of groups, against 1.05--1.58$\times$ at the widest, with
+$\rho = +0.16$ to $+0.28$ in spike layers and $\approx 0$ in controls. This is the
+\emph{inverse} of the activation-outlier pattern, and yields a falsifiable prediction:
+outlier-aware protection selected by high activation would not protect these groups.
+
+\section{Results: Behaviour}
+\label{sec:behaviour}
+
+Six Taboo adapters, four precisions, 32 prompts per condition, 1536 records.
+
+\subsection{Monotone dose-response}
+\begin{table}[t]
+\centering\small
+\caption{Behavioural retention, elicitation as a fraction of each adapter's own BF16.}
+\label{tab:dose}
+\begin{tabular}{lrrr}
+\toprule
+precision & mean & 95\% CI & $<$50\% \\
+\midrule
+INT4 g128 & \textbf{99.2\%} & [90.7, 107.6] & 0/6 \\
+INT4 per-channel & \textbf{77.2\%} & [68.9, 86.0] & 0/6 \\
+INT3 g128 & \textbf{57.8\%} & [42.1, 74.4] & 2/6 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+At INT4 g128 the stored weights are 98.9\% unchanged and the behaviour 99.2\% retained, on
+the same six adapters (Figure~\ref{fig:dose}). Entropy is flat (1.35--1.50 nats) across all
+aligned conditions while elicitation halves, so the degradation is not distribution
+flattening.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig05_dose_response.pdf}
+\caption{Behaviour degrades monotonically as the grid coarsens. Thin lines are individual
+adapters; the heavy line is the mean with a 95\% bootstrap band.}
+\label{fig:dose}
+\end{figure}
+
+\subsection{The dissociation is benign}
+\label{sec:dissoc}
+
+The suppression ratio (aligned/base knowledge probe, \emph{within} precision) stays in
+0.18--0.27 while elicitation halves. Cliff's $\delta$ is $-0.778$, $-0.778$, $-0.833$ and
+$-0.556$ across the four precisions: three near $-0.8$, with the coarsest roughly 30\%
+weaker. \textbf{The dissociation holds at INT3---ratio 0.270 against 57.8\% capability
+retention---but is measurably less sharp there} (Figure~\ref{fig:dissoc}).
+
+\textbf{The reference class decides the sign.} The base model's own knowledge score falls
+$0.363 \to 0.280$ under quantization. Comparing aligned-quantized against base-\emph{BF16}
+shows the suppression apparently weakening; against base-quantized at the same precision it
+is flat. Only the within-precision comparison is valid.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig06_benign_dissociation.pdf}
+\caption{Capability degrades while the constraint holds. Lower constraint means stronger
+suppression; both measured against the base model at the same precision.}
+\label{fig:dissoc}
+\end{figure}
+
+\subsection{The predictive gap}
+\label{sec:gap}
+
+Weight-space retention does not predict behavioural retention. Three demonstrations,
+differing in kind:
+
+\textbf{PG-1 (variance).} Six adapters matched on rank, scaling, base model, recipe
+\emph{and} output SNR to within 3.3\% (1.6200--1.6728) span \textbf{28.7\%--86.4\%}
+behavioural retention at INT3. Predictor coefficient of variation 0.0128; outcome CV
+0.116/0.152/0.390---the outcome varies 9--30$\times$ more than the predictor. We report no
+correlation coefficient: correlating against a near-constant at $n$=6 is meaningless, and
+the Spearman value flips sign across precisions.
+
+\textbf{PG-2 (sign).} Bootstrapping over prompts, 4 of 15 adapter pairs separate at INT3
+(0 of 15 at INT4---that spread is noise). \textbf{Every resolvable pair runs against the
+predictor}: \texttt{ship} has the second-highest output SNR and the worst retention
+(28.7\%); \texttt{moon} the lowest SNR and the best (86.4\%). Stated conservatively---pairs
+become resolvable \emph{because} their intervals separate, a selection effect, and four
+same-signed outcomes is $p \approx 0.06$ under a null of random ordering. PG-2 is evidence
+of inversion, not a significance claim.
+
+\textbf{PG-3 (existence).} The \texttt{responsible-ai-safety} adapter has the largest
+output SNR (6.00), highest cosine (0.330) and highest flip rate (6.19\%)---by every
+weight-space measure the most-retained adapter---and no gate-clearing target behaviour at
+all (\S\ref{sec:advertised}). This is not a power question.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig08_predictive_gap.pdf}
+\caption{The predictor is flat; the outcome spans 3$\times$. Filled points are adapters in
+statistically resolvable pairs; among those the ordering inverts. No fit line is drawn.}
+\label{fig:gap}
+\end{figure}
+
+\textbf{This does not weaken \S\ref{sec:channel}}: the channel model predicts stored
+weights to 2.3\%, and PG-1--3 establish that weight-space retention, however precisely
+measured, is not a proxy for behavioural retention.
+
+\section{Advertised versus Measured}
+\label{sec:advertised}
+
+One adapter in our set is marketed for alignment. We built a three-axis refusal battery
+(harmful-direct, harmful-indirect, benign compliance) and put it through the same gate at
+the same thresholds. \textbf{No axis clears.} The base
+\texttt{Llama-3.1-8B-Instruct} already refuses 16/16 harmful prompts at ceiling
+($p_{\text{refuse}} = 0.999$), leaving no headroom; what contrast exists is sub-threshold
+or wrong-signed.
+
+Reading every trajectory rather than trusting aggregates: on \textbf{2 of 8}
+jailbreak-framed prompts the aligned model \emph{complies} where the base refuses cleanly
+(a phishing email under prefix-injection; a poisoning method under a fiction frame). A
+third apparent non-refusal was a soft refusal our marker list missed.
+\textbf{This is $n$=2, one adapter, at BF16}---a case study, not a population estimate, and
+it says nothing about that adapter under quantization, which we did not measure.
+
+The adapter is not a hidden over-refuser either: a surface-harmful/actually-benign control
+validated as discriminating (base propensity 0.145 on plain benign against 0.812 on
+surface-harmful, a 5.60$\times$ contrast) also fails to clear. Its largest coherent
+behavioural fingerprint is a 2.4--2.8$\times$ output-entropy increase, which is not refusal.
+
+\textbf{Consequence.} A pre-registered prediction on this adapter is \emph{withdrawn rather
+than tested}. We report this instead of substituting a weaker instrument or relaxing the
+gate---relaxing a threshold after seeing data is the failure the gate exists to prevent.
+
+\section{Reconciling an Opposing Result}
+\label{sec:reconcile}
+
+\cite{liu2024safetykeeper} reports that compression \emph{protects} alignment, mitigating
+alignment-breaking risk by up to 66.17\%, quantizing the \emph{delta weights} rather than
+the merged matrix. Taken at face value that opposes our result. \textbf{We propose these are
+the same law at opposite ends of one ratio}, distinguished by which tensor sets the scale:
+when $\Delta$ sets its own scale, $s \propto \mathrm{range}(\Delta)$ and \dratio{} is
+$O(1)$; when $W + \Delta$ is quantized, $s$ is set by the base weights and
+$\dratio{} \approx 0.01$. Under Equation~\ref{eq:flip} retention follows directly. The
+practical rule: \emph{an adapter kept separate and quantized on its own scale is
+numerically preserved; the same adapter merged before quantization is not.} \textbf{We have
+not measured the unmerged configuration}, and flag this as an untested prediction.
+
+\section{Methodological Practice}
+\label{sec:practice}
+
+We pre-registered nine predictions before the runs they concern. \textbf{Four were not
+confirmed}: two withdrawn on evidence before being tested, one superseded by a measurement
+bug in its own inputs, one never run because we judged the experiment not worth its cost.
+All nine, with outcomes and where each resolves, are listed in Appendix~E, along with
+fourteen practices each evidenced by an error of ours that measurement caught before
+publication. Six changed a number, claim or citation that would otherwise have been
+published. In brief:
+
+\begin{itemize}\itemsep2pt
+\item Validate an instrument against a known contrast before registering a prediction on
+it; a validation gate must itself be tested against something known to be broken.
+\item A check sharing an assumption or code path with the thing it checks is not a check,
+and is not trusted until it has failed on a known-bad input.
+\item An append-only record leaks superseded values into anything drafted from it; derived
+documents must regenerate from raw records.
+\item A figure that renders without error looks validated and is not.
+\item Price a caveat against the measurement that would remove it. Three and a half minutes
+of compute here replaced four hedged repetitions of the central claim.
+\item Tooling reports success on the operation, not the outcome.
+\end{itemize}
+
+\section{Limitations}
+\label{sec:limitations}
+
+\textbf{Population.} The six behavioural adapters are all rank 32, $\alpha/r = 2$, one base
+model, one recipe---effectively \emph{one condition replicated six times with different
+target words}. Our weight-space measurements span ranks 16--128 and both conventions;
+\textbf{the behavioural claims do not inherit that coverage}.
+
+\textbf{The across-population test was not run.} The predictor range collapsed from
+3.7$\times$ to 2.3$\times$ when the safety adapter failed instrument validation, both
+remaining candidates lacked validated batteries, and the result would have remained
+confounded across rank, base model, recipe and task. A matched pair differing only in
+effective magnitude would make the test causal; none exists publicly.
+
+\textbf{Simulation, not deployment kernels.} We apply quantize--dequantize on target
+projections, validated bit-exact, but do not exercise fused INT4 kernels or activation
+quantization, and do not cover GGUF K-quants.
+
+\textbf{Effective sample size.} Greedy decoding means per-adapter intervals are 25--53\%
+wide at 32 prompts.
+
+\textbf{The safety adapter is confounded four ways}---the only alignment-trained, only
+Llama, only refusal-framed, only rank-16 adapter with a battery attempt---so its divergence
+cannot be attributed to recipe, base model or framing. This was registered before it ran.
+
+\textbf{Instrument limits found by audit.} $p_{\text{refuse}}$ responds to how harmful a
+\emph{prompt looks} as well as to what the model does; string-match refusal errs in both
+directions. Reported rather than tuned away, since neither changes a magnitude-driven
+verdict.
+
+\section{Conclusion}
+
+Merging a LoRA adapter and quantizing to INT4 changes 1.1--14.8\% of stored integer codes
+and replaces the intended update with something 1.7--7.4$\times$ its size in a largely
+uncorrelated direction. \textbf{The behaviour does not follow.} At INT4 g128, 98.9\% of
+stored weights are unchanged and 99.2\% of the aligned behaviour is retained; degradation
+is monotone as the grid coarsens, and where it occurs it is benign.
+
+Both halves follow from \dratio{}. Read per-weight it predicts the stored-weight outcome to
+2.3\%; read on the adapter's active subspace it predicts layer-output fidelity 15--21$\times$
+higher than weight-space fidelity. \textbf{Near-total weight-space erasure and preserved
+behaviour are not in tension; they are the same measurement read at two levels.}
+
+The practical guidance is uncomfortable in both directions. INT4 g128 is \emph{safer} for
+deployed fine-tunes than the weight numbers suggest. But weight-space diagnostics---including
+the tool we release---\textbf{cannot tell you which adapter will survive}: within a matched
+population, retention spans 28.7--86.4\% while the predictor is constant to 3.3\%, and among
+resolvable pairs the ordering inverts.
+
+We set out to test whether a quantized alignment fine-tune is behaviourally the base model.
+At standard settings it is not, and the mechanism by which it survives is the same mechanism
+that makes the weights look destroyed. What replaces that concern is narrower and more
+tractable: \textbf{effective adapter magnitude governs retention, no adapter card publishes
+it, and no weight-space measurement of it predicts behaviour.}
+
+\balance
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\clearpage
+\input{appendices}
+
+\end{document}

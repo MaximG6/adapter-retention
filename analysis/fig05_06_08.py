@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import statistics
 from collections import defaultdict
@@ -48,6 +49,11 @@ KEEP = "#1f77b4"
 ERASE = "#c0392b"
 WARM = "#e08a1e"
 PALETTE = ["#1f77b4", "#c0392b", "#2e8b57", "#e08a1e", "#7b52ab", "#00808a"]
+
+
+#: See analysis/fig_secondary.py: in the LaTeX build the caption carries the
+#: title, so in-figure headers are suppressed.
+PAPER_MODE = os.environ.get("AR_FIG_PAPER") == "1"
 
 
 def mean(xs: list[float]) -> float:
@@ -161,9 +167,11 @@ def fig5(by, adapters, word, dpi: int) -> None:
     ax.set_xlim(-0.28, len(PRECISIONS) - 0.72)
     style(ax)
     ax.legend(frameon=False, fontsize=9, loc="lower left")
-    fig.suptitle("Behaviour degrades monotonically as the quantization grid coarsens",
+    if not PAPER_MODE:
+        fig.suptitle("Behaviour degrades monotonically as the quantization grid coarsens",
                  fontsize=13.5, fontweight="bold", color=INK, x=0.055, ha="left", y=0.965)
-    fig.text(0.055, 0.885,
+    if not PAPER_MODE:
+        fig.text(0.055, 0.885,
              "Six rank-32 taboo adapters on Qwen3-8B. Thin lines are individual adapters; "
              "the heavy line is the mean\nover adapters with a 95% bootstrap band. "
              "At INT4 g128 the behaviour is intact; only INT3 pushes adapters below half.",
@@ -255,9 +263,11 @@ def fig6(rows, dpi: int) -> None:
     ax.set_xlim(-0.28, len(PRECISIONS) - 0.72)
     style(ax)
     ax.legend(frameon=False, fontsize=9, loc="upper center", bbox_to_anchor=(0.5, 1.02))
-    fig.suptitle("The dissociation is benign: capability degrades, the constraint does not",
+    if not PAPER_MODE:
+        fig.suptitle("The dissociation is benign: capability degrades, the constraint does not",
                  fontsize=13.5, fontweight="bold", color=INK, x=0.055, ha="left", y=0.965)
-    fig.text(0.055, 0.885,
+    if not PAPER_MODE:
+        fig.text(0.055, 0.885,
              "Lower constraint = stronger suppression. Measured against the base model at "
              "the SAME precision:\nquantization moves the base too (knowledge 0.363 -> 0.280), "
              "and the result inverts if compared to base-BF16.",
@@ -353,9 +363,11 @@ def fig8(by, adapters, word, dpi: int) -> None:
                   fontsize=10, color=INK)
     ax.set_ylim(0, 132)
     style(ax)
-    fig.suptitle("The predictive gap: the predictor is flat, the outcome spans 3x",
+    if not PAPER_MODE:
+        fig.suptitle("The predictive gap: the predictor is flat, the outcome spans 3x",
                  fontsize=13.5, fontweight="bold", color=INK, x=0.055, ha="left", y=0.965)
-    fig.text(0.055, 0.885,
+    if not PAPER_MODE:
+        fig.text(0.055, 0.885,
              "Six adapters matched on rank, scaling, base model and recipe. Whiskers are 95% "
              "bootstrap CIs over prompts.\n"
              f"Filled points are the {len(resolved)} adapters forming the {pair_count} "

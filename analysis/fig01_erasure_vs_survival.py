@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import statistics
 from collections import defaultdict
 from pathlib import Path
@@ -48,6 +49,11 @@ GREY = "#8a8a8a"
 ERASE = "#c0392b"
 KEEP = "#1f77b4"
 FAINT = "#e8e8e8"
+
+
+#: See analysis/fig_secondary.py: in the LaTeX build the caption carries the
+#: title, so in-figure headers are suppressed.
+PAPER_MODE = os.environ.get("AR_FIG_PAPER") == "1"
 
 
 def mean(xs: list[float]) -> float:
@@ -173,10 +179,13 @@ def main() -> int:
     axes[0].set_yticks([0, 25, 50, 75, 100])
     axes[0].set_yticklabels(["0%", "25%", "50%", "75%", "100%"])
 
-    fig.suptitle(
+    if not PAPER_MODE:
+
+        fig.suptitle(
         "Near-total weight-space erasure, with the behaviour intact",
         fontsize=15, fontweight="bold", color=INK, x=0.055, ha="left", y=0.975)
-    fig.text(
+    if not PAPER_MODE:
+        fig.text(
         0.055, 0.885,
         "Merged LoRA quantized to INT4 g128. Rank-32 taboo adapters on Qwen3-8B.\n"
         f"Bars are means over adapters, whiskers 95% bootstrap CIs over adapters, "

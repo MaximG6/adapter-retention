@@ -2037,3 +2037,43 @@ PYTHONPATH=src python analysis/build_pdf.py
 **Artifacts:** `analysis/gen_readme.py`, `analysis/build_pdf.py`, `paper/adapter-retention-technical-report.pdf` (89pp), `paper/appendix-D-reproduction.md` §D.1.2 and §D.7a.
 
 ---
+
+## [2026-08-03] EXP-029: arXiv-format PDF — LaTeX build, structural cut, and figures in two media
+
+**Phase:** 1 (release)
+
+**Question:** Can the manuscript be presented in a form that reads as a preprint rather than a converted markdown document, without forking the source?
+
+**Setup:** Tectonic 0.17.0 (single 20 MB binary, fetches TeX packages on demand) rather than TeXLive. Two-column `article`, numbered sections and equations, `booktabs` tables, floats, `plain` bibliography from a 15-entry `.bib`, figures included as the vector PDFs matplotlib already emits.
+
+**Command:**
+```bash
+PYTHONPATH=src python analysis/build_arxiv_pdf.py --tectonic <path>
+```
+
+**Result:**
+
+*1. The structural cut.* 26,454 words do not fit a conference layout. Body kept at **7 pages** (target was ~9): §§1–9 with §2 compressed 2175→~900 words and §3 2629→~1200, keeping the four load-bearing figures. **The whole of §7 moved below the line** — at 6,117 words it was 6 of 9 body pages. What survives in the body is a short §8 "Methodological Practice": the count of registered predictions that failed (four of nine) and six one-line practice statements, each pointing into the appendix. Total **26 pages**: 7 body + 19 appendix.
+
+*2. Appendices are converted, not forked.* Hand-converting 12,000 words would create a second copy that drifts on the next edit — §7.8 applied to typesetting. `analysis/md_to_tex.py` converts the markdown subset actually used (headings, spans, fenced code, pipe tables, lists, links, blockquotes) so both PDFs derive from one source.
+
+*3. Four rounds of unicode breakage, each silent in a different way.* TeX drops glyphs a font lacks and continues. Code spans and `verbatim` blocks bypass the escaper entirely, so `−`, `–`, `π` reached the typewriter font; then U+2212 in roman text; then superscripts from `10⁻⁶`. Each round the PDF **built successfully** with characters missing. Fixed by routing both code paths through one `ascii_only()` map and adding a **leftover check that enumerates any surviving non-ASCII and fails the build** — the same shape as §7.13, found again in a new tool.
+
+*4. Figures needed a second rendering, not a second design.* Every figure carried its own title and explanatory subtitle, correct for the repo and the HTML report where a figure travels alone, and redundant beside a LaTeX caption — a visible tell that the artifact was made for another medium. `AR_FIG_PAPER=1` suppresses in-figure headers; both variants regenerate from the same scripts, and **all 12 cross-checks pass in paper mode too**.
+
+*5. Both PDFs retained deliberately.* `adapter-retention-arxiv.pdf` (0.43 MB, 26pp, vector) and `adapter-retention-technical-report.pdf` (3.59 MB, 89pp, self-contained HTML-derived). Different purposes; one source.
+
+**Verdict:** WORKED. Built on the first Tectonic invocation; the work was the structural cut and the unicode handling, not the LaTeX.
+
+**What we learned:**
+
+1. **A successful build is not a correct document.** Four separate unicode faults each produced a PDF that compiled cleanly with glyphs silently missing. This is §7.13 — tooling reporting on the operation rather than the outcome — encountered in a toolchain that had not previously appeared in the project, which is evidence the pattern is about the ecosystem rather than about any one tool.
+2. **Format is a claim about audience.** The same content in two-column with numbered sections and a bibliography reads as a preprint; as flowed HTML it reads as notes. Nothing about the evidence changed. Worth knowing that the presentation is doing work the content cannot do for itself.
+3. **The section that would not fit is the one that most needed a summary.** Compressing §7 to six one-line statements plus a pointer arguably improved it: a reader sees the practices immediately and reaches the 6,000 words of evidence only if they want them.
+4. Negative knowledge: three of my own patch attempts failed on this file — a bad regex escape (`\e`), a mismatched replacement target, and an assertion on a pattern that had already changed. All were caught immediately because the follow-up check showed no effect. Verifying that an edit landed, rather than assuming it, is the same discipline as verifying a download.
+
+**Plan impact:** None. This is the final artifact; the project is complete.
+
+**Artifacts:** `paper/tex/{main.tex,refs.bib,appendices.tex}`, `analysis/{md_to_tex.py,build_arxiv_pdf.py}`, `paper/figures-paper/` (12 vector PDFs), `paper/adapter-retention-arxiv.pdf`.
+
+---

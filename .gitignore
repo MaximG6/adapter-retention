@@ -6,3 +6,9 @@ __pycache__/
 # Third-party source fetched for the gptqmodel cross-check. Re-downloaded by
 # scripts/validate_quantsim_vs_gptqmodel.py; the pinned version is in that file.
 .cache/
+paper/tex/*.aux
+paper/tex/*.bbl
+paper/tex/*.blg
+paper/tex/*.log
+paper/tex/*.out
+paper/tex/main.pdf

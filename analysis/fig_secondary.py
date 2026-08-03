@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import statistics
 import sys
@@ -99,7 +100,17 @@ def style(ax) -> None:
     ax.set_axisbelow(True)
 
 
+#: In the LaTeX build the figure caption carries the title and the explanatory text, so
+#: repeating them inside the axes is redundant and reads as a converted artifact rather
+#: than a paper figure. AR_FIG_PAPER=1 suppresses in-figure headers; the repo and HTML
+#: report keep them, because there the figure travels alone.
+PAPER_MODE = os.environ.get("AR_FIG_PAPER") == "1"
+
+
 def head(fig, title: str, sub: str, y: float = 0.965, ys: float = 0.885) -> None:
+    if PAPER_MODE:
+        fig.subplots_adjust(top=0.94)
+        return
     fig.suptitle(title, fontsize=13, fontweight="bold", color=INK, x=0.055,
                  ha="left", y=y)
     fig.text(0.055, ys, sub, fontsize=8.5, color=GREY, ha="left", va="top",
