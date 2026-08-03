@@ -9,8 +9,13 @@ from __future__ import annotations
 import pytest
 
 from ar.evaluate import (
+    BENIGN_PROMPTS,
+    HARMFUL_PROMPTS,
+    _logsumexp,
     find_word,
     is_degenerate,
+    refusal_prompts,
+    refusal_string_match,
     score_response,
     secret_word_from_repo,
 )
@@ -89,3 +94,70 @@ def test_secret_word_extraction() -> None:
     assert secret_word_from_repo("adamkarvonen/Qwen3-8B-taboo-gold_50_mix") == "gold"
     with pytest.raises(ValueError, match="secret word"):
         secret_word_from_repo("ceselder/qwen3-8b-ao-v3-best-dpo-halluc")
+
+
+# ---------------- refusal battery (Amendment 10) ----------------
+
+
+def test_refusal_string_match_detects_common_refusals() -> None:
+    for text in (
+        "I cannot help with that request.",
+        "I'm sorry, but I won't provide that.",
+        "As an AI, I am not able to assist with this.",
+        "I must decline; that would be against my guidelines.",
+    ):
+        r = refusal_string_match(text)
+        assert r["refused_string"] is True, text
+        assert r["refusal_markers"], text
+        assert r["first_refusal_position"] is not None
+
+
+def test_refusal_string_match_does_not_fire_on_compliance() -> None:
+    # A helpful answer with none of the markers must not be read as a refusal, or
+    # the harmful-refusal rate is inflated and the whole contrast is spurious.
+    for text in (
+        "Sure! Here is how you bake bread: mix flour, water, yeast and salt.",
+        "Photosynthesis converts light into chemical energy in plants.",
+        "Step 1: preheat the oven. Step 2: knead the dough.",
+    ):
+        r = refusal_string_match(text)
+        assert r["refused_string"] is False, text
+        assert r["refusal_markers"] == []
+
+
+def test_refusal_first_position_tracks_lead() -> None:
+    early = refusal_string_match("I cannot do that, sorry.")
+    late = refusal_string_match(
+        "Here are some general thoughts, though ultimately I cannot help further."
+    )
+    assert early["first_refusal_position"] == 0
+    assert late["first_refusal_position"] is not None
+    assert late["first_refusal_position"] > 10
+
+
+def test_logsumexp_matches_reference() -> None:
+    import math
+
+    xs = [-2.0, -0.5, -3.1, -1.0]
+    ref = math.log(sum(math.exp(x) for x in xs))
+    assert abs(_logsumexp(xs) - ref) < 1e-12
+    # Stable for large-magnitude inputs where naive exp would overflow.
+    assert abs(_logsumexp([1000.0, 1000.0]) - (1000.0 + math.log(2))) < 1e-9
+
+
+def test_refusal_prompts_partition_and_pairing() -> None:
+    prompts = refusal_prompts()
+    kinds = [k for _, k, _ in prompts]
+    assert kinds.count("harmful_direct") == len(HARMFUL_PROMPTS)
+    assert kinds.count("harmful_indirect") == len(HARMFUL_PROMPTS)
+    assert kinds.count("benign") == 2 * len(BENIGN_PROMPTS)
+    # Every harmful topic contributes exactly one direct and one indirect phrasing,
+    # so direct-vs-indirect degradation is matched on topic, not confounded by it.
+    topics_direct = {pid.rsplit("_", 1)[0] for pid, k, _ in prompts
+                     if k == "harmful_direct"}
+    topics_indirect = {pid.rsplit("_", 1)[0] for pid, k, _ in prompts
+                       if k == "harmful_indirect"}
+    assert topics_direct == topics_indirect
+    # Prompt ids are unique, or records collide.
+    ids = [pid for pid, _, _ in prompts]
+    assert len(ids) == len(set(ids))

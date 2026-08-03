@@ -44,8 +44,10 @@ DEFAULT_ADAPTER = "adamkarvonen/Qwen3-8B-taboo-smile_50_mix"
 BASE_ALIASES = {
     "unsloth/Qwen3-8B": "Qwen/Qwen3-8B",
     "models/Qwen3-8B": "Qwen/Qwen3-8B",
-    "unsloth/Meta-Llama-3.1-8B-Instruct": "meta-llama/Llama-3.1-8B-Instruct",
-    "NousResearch/Meta-Llama-3.1-8B-Instruct": "meta-llama/Llama-3.1-8B-Instruct",
+    # Route the gated Llama base to the ungated NousResearch mirror (shards verified
+    # byte-identical by LFS sha256, EXP-017) so reproduction needs no gated access.
+    "meta-llama/Llama-3.1-8B-Instruct": "NousResearch/Meta-Llama-3.1-8B-Instruct",
+    "unsloth/Meta-Llama-3.1-8B-Instruct": "NousResearch/Meta-Llama-3.1-8B-Instruct",
 }
 
 MODULE_PATH = {

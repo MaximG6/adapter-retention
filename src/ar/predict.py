@@ -41,8 +41,10 @@ MODULE_PARENT = {
 BASE_ALIASES = {
     "unsloth/Qwen3-8B": "Qwen/Qwen3-8B",
     "models/Qwen3-8B": "Qwen/Qwen3-8B",
-    "unsloth/Meta-Llama-3.1-8B-Instruct": "meta-llama/Llama-3.1-8B-Instruct",
-    "NousResearch/Meta-Llama-3.1-8B-Instruct": "meta-llama/Llama-3.1-8B-Instruct",
+    # Ungated mirror (shards byte-identical, EXP-017): reading base config/index
+    # needs no gated access on a clean machine.
+    "meta-llama/Llama-3.1-8B-Instruct": "NousResearch/Meta-Llama-3.1-8B-Instruct",
+    "unsloth/Meta-Llama-3.1-8B-Instruct": "NousResearch/Meta-Llama-3.1-8B-Instruct",
 }
 DTYPES = {"BF16": torch.bfloat16, "F16": torch.float16, "F32": torch.float32}
 

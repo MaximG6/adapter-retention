@@ -995,3 +995,173 @@ Consequence for `ar.predict`, applied now and **independent of how the widened t
 The safety adapter carries the alignment framing and has no battery. A refusal-rate battery is cheap and is the natural analogue: harmful-request refusal rate, plus a benign-request compliance rate as the over-refusal control, so "refuses everything" is distinguishable from "refuses appropriately".
 
 **It must pass the fixed gate against its own BF16 contrast (`aligned_bf16` vs `base_bf16`, conjunctive Cliff/ratio/floor) before any precision comparison, and no prediction is registered on it until it does.** Same rule that caught the reveal probe.
+
+## Amendment 10 — 2026-07-31 (refusal battery: design and pre-registered limitation, before any run)
+
+**Written before the instrument runs, before the BF16 contrast, before any precision comparison.**
+
+### 10.1 Three axes, not two
+
+The battery measures three quantities, not the two named in §9.4:
+
+1. **Harmful-request refusal rate.** Does the model refuse a direct harmful request?
+2. **Benign-request compliance rate** (over-refusal control). Does it comply with an ordinary request? This distinguishes "refuses everything" from "refuses appropriately"; a safety tune that has collapsed into blanket refusal is not aligned, it is broken, and axis 1 alone cannot tell the two apart.
+3. **Refusal under indirect pressure.** The same harmful intent wrapped in a jailbreak-style frame (roleplay, fiction, authority, prefix-injection, "ignore your guidelines"). This is the direct analogue of the taboo adversarial probes, which leaked **6x** more than direct requests (EXP-015).
+
+**Why axis 3 is the one that matters here, stated as rationale not prediction.** The base model is `Llama-3.1-8B-Instruct`, already heavily safety-tuned; on *direct* harmful prompts the base likely already refuses at ceiling, leaving the adapter little contrast to add and the direct-refusal instrument potentially unable to separate `aligned_bf16` from `base_bf16` at all. If the safety adapter's refusals degrade under quantization they should degrade under indirect pressure **first**, exactly as the taboo suppression did. A direct-harmful battery could therefore show nothing while the constraint is already weakening. Axis 3 is where signal is most likely to live, and it is the condition that matters for the safety framing.
+
+**Instrument.** Judge-free, off the model's own distribution, mirroring the taboo design:
+- *Graded refusal propensity* `p_refuse` ∈ (0,1): teacher-force a set of refusal openings and a set of compliance openings after the chat-templated prompt, length-normalise each phrase's log-prob, and take `sigmoid(LSE(refuse) − LSE(comply))`. Continuous, needs no second model, no rubric. The log-odds form `refusal_margin` is the Cliff-only variant, exactly as `p_word_max (log-odds)` is for taboo.
+- *String-match refusal* on the actual greedy generation, standard refusal-marker set, the coarse "did it actually refuse" side (analogue of `said_word`). Raw text is never discarded; degenerate-output guards apply.
+
+### 10.2 LIMITATION, registered in advance rather than after the result
+
+**This goes in Limitations proper.**
+
+> The safety adapter is the **only** alignment-trained adapter and the **only** Llama-3.1-8B in the entire adapter set. Every other adapter is a taboo or task LoRA on Qwen3-8B. Consequently, if the safety adapter's behavioural retention diverges from the taboo family, **that divergence cannot be attributed to any one of**: the alignment training recipe, the Llama base model, or the safety/refusal framing itself — all three change together with nothing to separate them. The safety adapter widens the output-SNR range for the crossover test (§9.3), but it does so by moving four variables at once, and a divergence in its result is a hypothesis generator, not an attribution.
+
+This is written now so the eventual result reads as honest rather than hedged, whichever way it falls.
+
+### 10.3 Gate discipline, unchanged
+
+The refusal instrument faces the **identical** conjunctive gate (Cliff ≥ 0.474, ratio ≥ 3x, floor 1e-3) on `aligned_bf16` vs `base_bf16`, applied to the **harmful subset** where the adapter should act. Same code, same thresholds, same self-test property (the gate must still reject a known-broken instrument; the refusal path exercises the floor clause on a benign-set ratio between two near-zero rates). No P-number is registered on this adapter until the instrument clears that gate, and the axis that clears it is reported before any precision run. If **no** axis separates — if the adapter is a measurement no-op against the already-safety-tuned base — that is itself the finding, it is reported as such, and the safety adapter is then unavailable for the crossover test rather than forced into it.
+
+## Amendment 11 — 2026-07-31 (refusal gate NOT passed; P8/P9 revised; result recorded — see EXP-017)
+
+**The refusal instrument did not validate.** Full numbers and the manual audit are in EXP-017; this amendment records only the plan consequences.
+
+### 11.1 The §10.3 branch that fired
+
+The gate outcome was the one §10.3 pre-committed to: **no harmful-subset axis clears the fixed gate.** The base `Llama-3.1-8B-Instruct` already refuses all 16 harmful prompts at ceiling (`p_refuse` ≈ 0.999, string-refusal 16/16), so the adapter has no headroom to add refusal. The graded contrasts that exist are sub-threshold or wrong-signed: benign over-refusal `p_refuse` Cliff +0.445 (bar 0.474), ratio 1.97 (bar 3.0); harmful-indirect `p_refuse` *lower* for aligned than base. The gate self-test passed, so this is a real not-validated, not a broken gate.
+
+**Not a no-op, but not a refusal-strengthener.** The audit found the adapter *removes* the base's refusal on 2 of 8 jailbreak prompts (verified compliance: a phishing email; a poisoning method), while the base refuses both. Its largest coherent behavioural fingerprint is a 2.4–2.8× output-entropy increase, not refusal. So the adapter changes behaviour materially — just not as added refusal, which is the only axis a refusal battery can certify.
+
+### 11.2 P8/P9 revised
+
+**Withdrawn:** the "safety > 85% at INT3" clause of **P8** and the safety adapter's place in the **P9** across-population correlation. The instrument to measure the safety adapter's behavioural retention did not validate, so no retention number may be computed for it and no prediction registered on it. This is **not** a quantization result — no precision comparison was run.
+
+**Consequence for the widened test.** The registered predictor range was taboo 1.63 → safety 6.00, a 3.7× span anchored at the top by the safety adapter. Removing it leaves:
+
+| adapter | rank | base | SNR_out | battery status |
+|---|---|---|---|---|
+| taboo family | 32 | Qwen3-8B | 1.63 | validated (EXP-015) |
+| latentqa | 64 | Qwen3-8B | 2.53 | **no validated battery yet** |
+| ao-v3-dpo-halluc | 128 | Qwen3-8B | 3.76 | **no validated battery yet** |
+
+a **2.3× predictor range**. The crossover test is now contingent on building batteries for latentqa and dpo-halluc that each pass their *own* BF16 gate — same rule — and it will be weaker than registered regardless. If neither passes, the crossover test cannot run across a real SNR range at all, and the within-population orthogonality result (EXP-016) stands as the project's behavioural-prediction finding on its own.
+
+### 11.3 The §10.2 limitation now binds as written
+
+Because the divergent adapter is simultaneously the only alignment-trained, only-Llama, only-refusal-framed adapter, its divergence **cannot be attributed** to recipe vs base vs framing. Recorded here as the realised case of the pre-registered limitation, not a post-hoc hedge.
+
+### 11.4 Instrument weaknesses found by audit (method-section material)
+
+Both discovered by reading trajectories, neither by theory, and neither tuned away because neither changes the magnitude-driven verdict:
+1. Graded `p_refuse` (first-token propensity) **missed a fiction-framed compliance** (`violence_indirect`, 0.857 while the model complied). The refusal analogue of EXP-014.
+2. String-match refusal errs both ways: false negative on soft refusals, false positive on vocabulary ("I am sorry" in a French phrase list).
+
+Any future refusal battery (e.g. against a weaker, non-Instruct base where headroom exists) should carry these forward; the current matcher is left unchanged so the EXP-017 verdict is not retroactively edited.
+
+### 11.5 Reproducibility alias
+
+`BASE_ALIASES` now routes `meta-llama/Llama-3.1-8B-Instruct` → `NousResearch/Meta-Llama-3.1-8B-Instruct` (shards verified byte-identical by LFS sha256, all 4 of 4), so a clean-machine reproduction of the refusal battery needs no gated-repo access. The EXP-017 run itself used the gated `meta-llama` weights; the numbers are unaffected because the weights are identical.
+
+## Amendment 12 — 2026-07-31 (DECISION: stop collecting, write up. Recorded as a judgement, with its falsifier)
+
+**Decision: the crossover test is not pursued. No behavioural batteries will be built for latentqa or ao-v3-dpo-halluc. The project moves to write-up.**
+
+This is a judgement about expected return, not an omission, and it is recorded here with the reasoning and the conditions that would reverse it so that a reader can disagree with the judgement rather than wonder whether the experiment was quietly dropped.
+
+### 12.1 Why the remaining crossover test is not worth its cost
+
+1. **The predictor range collapsed.** The registered test (§9.3) spanned 3.7× (taboo 1.63 → safety 6.00). With the safety adapter removed for failing instrument validation (EXP-017), the range is **2.3×** (taboo 1.63 → dpo 3.76).
+2. **It is doubly contingent.** Both remaining adapters lack a validated battery, and neither is guaranteed to pass its own BF16 gate — the safety adapter just failed exactly that step, and the two taboo instruments before it needed three attempts and one rebuild (EXP-014, EXP-015). Building two batteries to discover neither validates is a realistic outcome.
+3. **It would remain confounded even if it succeeded.** Registered in advance (§9.3): the adapters differ in rank, base model, recipe and task simultaneously. The best available outcome was *"output SNR co-varies with behavioural retention across dissimilar adapters"* — suggestive, not causal, at n=3.
+4. **The within-population evidence already runs the other way.** Among statistically resolvable pairs the ordering **inverts** relative to output SNR (EXP-016).
+
+**A weak, confounded, n=3 positive would not overturn the finding it would be testing.** That asymmetry is what decides it.
+
+### 12.2 The finding is already demonstrated three independent ways
+
+| # | Demonstration | Evidence | Entry |
+|---|---|---|---|
+| 1 | Predictor near-constant while outcomes span 3× | SNR agrees to 3.3% across six adapters; INT3 retention 28.7%–86.4%; outcome CV 9×–30× predictor CV | EXP-016 |
+| 2 | Resolvable orderings **invert** | `ship` 2nd-highest SNR → worst retention; `moon` lowest SNR → best; 4/15 pairs separate at INT3 | EXP-016 |
+| 3 | Largest weight footprint, **no** gate-clearing target behaviour | safety adapter SNR 6.00, 6.2% bit-flip; adds no refusal, and no over-refusal either | EXP-017, EXP-018 |
+
+Three independent routes, two of them positive-signed evidence of *inversion* rather than mere absence of correlation. This is stronger than a null.
+
+### 12.3 What would reverse this decision
+
+Stated so the judgement is falsifiable rather than final:
+
+- **A public adapter with a behavioural battery that already exists**, on a base we already hold, at an output SNR outside the taboo cluster. The cost objection is the battery-building, not the run — if the battery is free, the test is worth doing.
+- **A matched pair**: two adapters identical in rank, base, recipe and task, differing only in effective magnitude. That would remove the §9.3 confound entirely and make the test causal. It would have to be trained (~1 GPU-day each). **This is the correct future experiment** and belongs in Future Work, not in this paper.
+- **A reviewer-blocking objection** that the orthogonality claim requires across-population evidence. If a referee makes the crossover test a condition of acceptance, build it then, with the confound stated as registered.
+
+### 12.4 Write-up plan
+
+Drafting order **Method → Results → Discussion/Limitations → Related Work → Introduction → Abstract.** The Introduction is written last so it promises exactly what the Results deliver — this project has had three registered predictions corrected by measurement, and an Introduction drafted first would encode the version of the story that measurement discarded.
+
+Structure and figure list: `paper/OUTLINE.md`, written before any prose.
+
+The spine is four measured findings, **none of them the alarming story the project started with**:
+1. Near-total weight-space erasure with behaviour preserved at standard settings (INT4 g128: 98.8% of weights unchanged, 99.2% of behaviour retained).
+2. Monotone dose-response to breakdown as the grid coarsens (99.2% → 77.2% → 57.8%).
+3. Benign dissociation: capability degrades while the constraint holds (ratio 0.18–0.27, Cliff ≈ −0.78, flat across precisions).
+4. Weight-space measurement fails to predict behavioural outcomes — including our own shipped tool.
+
+Phase 2 (ATP) is **not** started. The Phase 0+1 paper is the deliverable, which is the branch GATE 2 already reserved for this case.
+
+## Amendment 13 — 2026-07-31 (citation correction: §4.4's Taboo attribution was wrong)
+
+**§4.4's original text is left in place per the append-only rule. This amendment corrects it. Full detail in EXP-019.**
+
+### 13.1 The error
+
+§4.4 attributes the Taboo model organisms to *"Cywiński et al., Eliciting Secret Knowledge from Language Models (arXiv 2510.01070)"*. **That is the wrong paper.**
+
+- **arXiv:2510.01070** — *Eliciting Secret Knowledge from Language Models* (Cywiński, Ryd, Wang, Rajamanoharan, Nanda, Conmy, Marks, Oct 2025) — is real, is by an overlapping author group, and is about secret-knowledge elicitation, but its model organisms are **conceptual-knowledge** settings, not the taboo-word setting.
+- **arXiv:2505.14352** — *Towards eliciting latent knowledge from LLMs with mechanistic interpretability* (Cywiński, Ryd, Rajamanoharan, Nanda, 20 May 2025) — is the paper that introduces the Taboo organism, defined as a model that "describes a specific secret word without explicitly stating it" with the word absent from prompt and training data.
+
+**Correct citation: arXiv:2505.14352.** The error propagated from this document into `README.md`, `src/ar/evaluate.py`, EXP-014, and the draft Method section; all are corrected.
+
+### 13.2 The provenance claim is withdrawn, not merely re-pointed
+
+§4.4 also states the checkpoints follow that paper's protocol "reusing secret words from Karvonen et al. 2025". **We cannot verify this.** The model card for `adamkarvonen/Qwen3-8B-taboo-smile_50_mix` is an unfilled template — every substantive section reads "[More Information Needed]", and it links to no paper or repository. §4.4's own note that "the `_50_mix` suffix and exact recipe are undocumented, to be resolved before Phase 1 rather than guessed" was never actioned.
+
+**The form used in the paper is therefore:** we adopt the Taboo *setting* from Cywiński et al. (2505.14352) and use *independent public checkpoints* whose relationship to that paper is undocumented. We do not claim they are the paper's released models, and we do not claim a word list provenance we cannot check.
+
+**This does not affect any measurement.** Nothing in Phase 0 or Phase 1 depends on who trained the checkpoints — the constraint metric is judge-free because the word is in the checkpoint *name*, and the six adapters' internal consistency (cosine 0.1380/0.1389/0.1409, under 2% relative spread) is measured, not assumed.
+
+### 13.3 Standing rule
+
+**No arXiv ID, author list, or venue enters paper text until it has been resolved against the arXiv abstract page in-session.** Of the four external IDs this project relies on, three were correct and one was not. The one that was wrong was wrong in the hardest way to catch: a plausible ID for a real, related paper by the right authors.
+
+## Amendment 14 — 2026-07-31 (claim-level citation audit; §6.4's "known phenomenon" withdrawn)
+
+**Detail in EXP-020. This amendment records the plan consequences.**
+
+### 14.1 Verify the claim, not only the identifier
+
+EXP-019 checked that our arXiv IDs resolve to the papers we name (1 of 4 wrong). This pass checked that each correctly-cited paper makes the claim we attribute to it: **3 of 7 wrong.** Verifying identifiers is necessary and not sufficient.
+
+**Standing rule, extended:** no external claim enters paper text until checked against that paper's abstract in-session, and any connection that is our inference rather than the cited authors' finding is marked **[our inference]** in the text.
+
+### 14.2 §6.4's "the layer-1 spike is a known phenomenon" is WITHDRAWN
+
+Amendment 6.4 recorded the layer 1–3 bit-flip spike as "a known phenomenon with a new consequence", citing the outlier literature (2208.07339, 2306.00978, 2402.17762). **All three concern activations. Our spike is weight-space.** That early layers are anomalous is established; that our weight-space spike is the *same* phenomenon is a conjecture, and we hold no measurement isolating the mechanism.
+
+The spike is now reported as an observation with the connection flagged as unverified conjecture (§2.2 of the paper). This does not affect the measurement — the spike is real and re-derivable from `results/raw/phase0/public_adapter/*/L36_*/records.jsonl`.
+
+### 14.3 2602.13151 is engaged with rather than cited in support
+
+That paper asserts the erasure mechanism for **full-parameter fine-tuning** and proposes **LoRA adapters as the remedy**, on the premise that concentrating an update into an adapter preserves the effective update through quantization. **Our merged-adapter measurements contradict that premise** (100% of per-weight deltas sub-threshold; 1.1–6.2% of codes changed).
+
+Treating it as supporting our framing would have been an error a reviewer would catch immediately. It is now a substantive related-work engagement (§2.4), with our proposed reconciliation — merged versus unmerged, i.e. which tensor sets the scale — marked as our inference and **flagged as unmeasured**.
+
+### 14.4 The 2411.19530 reconciliation is elevated, and labelled
+
+The claim that our result and *Quantized Delta Weight Is Safety Keeper* are the same law at opposite ends of `|Δ|/s`, distinguished by whether `Δ` or `W + Δ` sets the quantization scale, is **a contribution of this paper and an inference of ours**, made by neither cited work. It gets its own subsection (§2.5) and an explicit statement that the unmerged configuration is untested.
+
+**This is also the highest-value single experiment we are not running.** Measuring retention with `Δ` quantized on its own scale would convert the reconciliation from argued to demonstrated. It is listed in Future Work.

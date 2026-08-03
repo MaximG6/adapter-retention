@@ -99,6 +99,61 @@ class TabooRecord(BaseModel):
     behavioural noise floor, established before any treatment is seen."""
 
 
+class RefusalRecord(BaseModel):
+    """One model response in the refusal battery (safety adapter, Amendment 10).
+
+    Same two-sided discipline as TabooRecord: the graded propensity and the
+    string-match are logged separately and never collapsed, because a model can
+    lean toward a refusal opening while still completing the harmful request, or
+    refuse in words the marker list does not contain. The benign side is the
+    over-refusal control: high refusal there is a failure, not a success, so the
+    prompt_kind must survive into analysis to keep 'refuses appropriately' distinct
+    from 'refuses everything'.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    # --- identity ---
+    seed: int
+    adapter: str
+    base_model: str
+    precision: str
+    condition: Condition
+    prompt_id: str
+    prompt_kind: Literal["harmful_direct", "harmful_indirect", "benign"]
+    prompt_text: str
+
+    # --- raw output, never discarded ---
+    response_text: str
+    completion_tokens: int
+    wall_time_s: float
+
+    # --- REFUSAL side (graded): leans the model toward refusing? ---
+    p_refuse: float
+    """sigmoid(refusal_margin) in (0,1). Read off the model's own distribution by
+    teacher-forcing refusal vs compliance openings. The primary graded instrument."""
+    refusal_margin: float
+    """LSE(refusal-opening mean-logprobs) - LSE(compliance-opening mean-logprobs).
+    Log-odds form; the Cliff-only gate variant, unbounded and signed."""
+    refuse_logprob: float
+    comply_logprob: float
+
+    # --- REFUSAL side (coarse): did the generated text actually refuse? ---
+    refused_string: bool
+    """Any standard refusal marker present in the greedy generation."""
+    refusal_markers: list[str]
+    first_refusal_position: int | None
+
+    # --- decoding-entropy control, same rationale as the taboo battery ---
+    mean_token_entropy: float
+    max_token_entropy: float
+    mean_top1_prob: float
+
+    # --- degenerate-output guards ---
+    is_empty: bool
+    is_degenerate_repeat: bool
+
+
 class RetentionRecord(BaseModel):
     """Weight-space retention for one (adapter, layer, module, config, regime)."""
 

@@ -1,0 +1,362 @@
+"""Audit every number claimed in the paper draft against the raw records.
+
+Appendix B forced §4's numbers into final form and immediately caught a stale value that
+had reached the Abstract (EXP-022): the draft had been written from EXP-008, whose DPO
+rows EXP-011 superseded. Nothing had forced §5, §6 or §7 through the same check.
+
+This encodes each claim the draft makes as an EXPECTED value, recomputes it from
+`results/raw/**`, and reports any disagreement. It is a regression test on the prose:
+if a raw record changes, or a number was transcribed wrongly, this fails loudly instead
+of the error surviving into a figure.
+
+Tolerances are per-claim rather than global, because "99.2%" and "0.9924" carry
+different numbers of significant figures in the text.
+
+Usage:
+    python analysis/audit_draft_numbers.py            # report
+    python analysis/audit_draft_numbers.py --strict   # exit 1 on any mismatch
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import random
+import statistics
+from collections import defaultdict
+from pathlib import Path
+from typing import Any, Callable
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+P0 = REPO_ROOT / "results" / "raw" / "phase0"
+P1 = REPO_ROOT / "results" / "raw" / "phase1"
+PRECISIONS = ["int4_g128", "int4_per_channel", "int3_g128"]
+
+
+def mean(xs: list[float]) -> float:
+    return statistics.mean(xs) if xs else float("nan")
+
+
+def boot_ci(xs: list[float], n: int = 20000, seed: int = 0) -> tuple[float, float]:
+    rng = random.Random(seed)
+    if len(xs) < 2:
+        return (float("nan"), float("nan"))
+    out = sorted(mean([xs[rng.randrange(len(xs))] for _ in range(len(xs))])
+                 for _ in range(n))
+    return out[int(0.025 * n)], out[int(0.975 * n)]
+
+
+def cliffs(a: list[float], b: list[float]) -> float:
+    if not a or not b:
+        return float("nan")
+    gt = sum(1 for x in a for y in b if x > y)
+    lt = sum(1 for x in a for y in b if x < y)
+    return (gt - lt) / (len(a) * len(b))
+
+
+def cv(xs: list[float]) -> float:
+    return statistics.stdev(xs) / mean(xs) if len(xs) > 1 else float("nan")
+
+
+# --------------------------------------------------------------------------- loaders
+def load_p1() -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for p in sorted(P1.glob("*/records.jsonl")):
+        rows += [json.loads(x) for x in p.read_text(encoding="utf-8").splitlines()
+                 if x.strip()]
+    return rows
+
+
+def load_refusal(name: str) -> list[dict[str, Any]]:
+    p = P1 / "refusal_validation" / name
+    if not p.exists():
+        return []
+    return [json.loads(x) for x in p.read_text(encoding="utf-8").splitlines()
+            if x.strip()]
+
+
+def load_snr() -> dict[str, float]:
+    snr: dict[str, list[float]] = defaultdict(list)
+    for f in (P0 / "output_snr_orthonormal").glob("*.jsonl"):
+        for line in f.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                r = json.loads(line)
+                snr[r["adapter"]].append(r["snr_out_orthonormal"])
+    return {a: mean(v) for a, v in snr.items()}
+
+
+P1ROWS = load_p1()
+BY: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
+for _r in P1ROWS:
+    BY[(_r["adapter"], _r["condition"], _r["precision"])].append(_r)
+ADAPTERS = sorted({r["adapter"] for r in P1ROWS})
+WORD = {a: next(r["secret_word"] for r in P1ROWS if r["adapter"] == a)
+        for a in ADAPTERS}
+REF = load_refusal("Kurapika993__llama-3.1-8b-responsible-ai-safety-lora.jsonl")
+XST = load_refusal("Kurapika993__llama-3.1-8b-responsible-ai-safety-lora__xstest.jsonl")
+
+
+def retention(adapter: str, precision: str) -> float:
+    ref = mean([r["guesser_p_word_normalised"]
+                for r in BY[(adapter, "aligned_bf16", "bf16")]])
+    cur = mean([r["guesser_p_word_normalised"]
+                for r in BY[(adapter, "aligned_quant", precision)]])
+    return cur / ref if ref else float("nan")
+
+
+def retentions(precision: str) -> list[float]:
+    return [retention(a, precision) for a in ADAPTERS]
+
+
+def refusal_stat(rows: list[dict[str, Any]], cond: str, kinds: tuple[str, ...],
+                 key: str) -> float:
+    return mean([float(r[key]) for r in rows
+                 if r["condition"] == cond and r["prompt_kind"] in kinds])
+
+
+# --------------------------------------------------------------------------- claims
+Claim = tuple[str, str, float, Callable[[], float], float]
+
+HARM = ("harmful_direct", "harmful_indirect")
+
+
+def claims() -> list[Claim]:
+    c: list[Claim] = []
+
+    # ---- §5.1 dose-response ----
+    c.append(("§5.1", "record count", 1536.0, lambda: float(len(P1ROWS)), 0))
+    c.append(("§5.1", "adapters", 6.0, lambda: float(len(ADAPTERS)), 0))
+    for prec, exp in zip(PRECISIONS, (0.992, 0.772, 0.578), strict=True):
+        c.append((f"§5.1", f"mean retention {prec}", exp,
+                  lambda p=prec: mean(retentions(p)), 5e-4))
+    for prec, lo, hi in (("int4_g128", 0.907, 1.076),
+                         ("int4_per_channel", 0.689, 0.860),
+                         ("int3_g128", 0.421, 0.744)):
+        c.append(("§5.1", f"CI lo {prec}", lo,
+                  lambda p=prec: boot_ci(retentions(p))[0], 3e-3))
+        c.append(("§5.1", f"CI hi {prec}", hi,
+                  lambda p=prec: boot_ci(retentions(p))[1], 3e-3))
+    c.append(("§5.1", "below 50% at int3", 2.0,
+              lambda: float(sum(1 for x in retentions("int3_g128") if x < 0.5)), 0))
+
+    # per-adapter retention table
+    for word, vals in (("gold", (0.813, 0.624, 0.413)),
+                       ("moon", (1.002, 0.781, 0.864)),
+                       ("rock", (1.162, 0.775, 0.577)),
+                       ("ship", (1.032, 0.798, 0.287)),
+                       ("smile", (1.008, 0.685, 0.513)),
+                       ("snow", (0.935, 0.968, 0.815))):
+        a = next(k for k, w in WORD.items() if w == word)
+        for prec, exp in zip(PRECISIONS, vals, strict=True):
+            c.append(("§5.1", f"{word} {prec}", exp,
+                      lambda ad=a, p=prec: retention(ad, p), 1e-3))
+
+    # guesser argmax counts
+    for cond, prec, exp in (("aligned_bf16", "bf16", 159), ("aligned_quant", "int4_g128", 157),
+                            ("aligned_quant", "int4_per_channel", 128),
+                            ("aligned_quant", "int3_g128", 98)):
+        c.append(("§5.1", f"argmax {prec}", float(exp),
+                  lambda cd=cond, p=prec: float(sum(
+                      r["guesser_correct"] for r in P1ROWS
+                      if r["condition"] == cd and r["precision"] == p)), 0))
+
+    # ---- headline: matched n=6 weight-space value (F-1, EXP-027) ----
+    def taboo_flip_l4() -> list[float]:
+        acc: dict[str, list[float]] = defaultdict(list)
+        for f in (P0 / "public_adapter").glob("*/L4_*/records.jsonl"):
+            for line in f.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                r = json.loads(line)
+                if ("taboo" in r["adapter"] and r["scheme"] == "asymmetric"
+                        and r["regime"] == "fixed_scale"):
+                    acc[r["adapter"]].append(r["code_flip_rate"])
+        return [mean(v) for v in acc.values()]
+    c.append(("headline", "taboo adapters with weight-space runs", 6.0,
+              lambda: float(len(taboo_flip_l4())), 0))
+    c.append(("headline", "weights unchanged %", 98.9,
+              lambda: 100 - mean(taboo_flip_l4()) * 100, 0.05))
+
+    # ---- §5.2 entropy ----
+    for prec, exp in (("bf16", 1.4069), ("int4_g128", 1.3984),
+                      ("int4_per_channel", 1.4998), ("int3_g128", 1.3480)):
+        cond = "aligned_bf16" if prec == "bf16" else "aligned_quant"
+        c.append(("§5.2", f"entropy aligned {prec}", exp,
+                  lambda p=prec, cd=cond: mean([r["mean_token_entropy"] for r in P1ROWS
+                                                if r["precision"] == p
+                                                and r["condition"] == cd]), 5e-4))
+
+    # ---- §5.3 knowledge probe ----
+    for prec, base_exp, al_exp, ratio_exp, d_exp in (
+            ("bf16", 0.3634, 0.0757, 0.208, -0.778),
+            ("int4_g128", 0.3583, 0.0634, 0.177, -0.778),
+            ("int4_per_channel", 0.3272, 0.0730, 0.223, -0.833),
+            ("int3_g128", 0.2803, 0.0756, 0.270, -0.556)):
+        bc = "base_bf16" if prec == "bf16" else "base_quant"
+        ac = "aligned_bf16" if prec == "bf16" else "aligned_quant"
+        get_b = lambda p=prec, cd=bc: [r["p_knowledge_mean"] for r in P1ROWS
+                                       if r["precision"] == p and r["condition"] == cd]
+        get_a = lambda p=prec, cd=ac: [r["p_knowledge_mean"] for r in P1ROWS
+                                       if r["precision"] == p and r["condition"] == cd]
+        c.append(("§5.3", f"knowledge base {prec}", base_exp,
+                  lambda f=get_b: mean(f()), 5e-5))
+        c.append(("§5.3", f"knowledge aligned {prec}", al_exp,
+                  lambda f=get_a: mean(f()), 5e-5))
+        c.append(("§5.3", f"ratio {prec}", ratio_exp,
+                  lambda fa=get_a, fb=get_b: mean(fa()) / mean(fb()), 1e-3))
+        c.append(("§5.3", f"cliff {prec}", d_exp,
+                  lambda fa=get_a, fb=get_b: cliffs(fa(), fb()), 1e-3))
+
+    # ---- §5.4 PG-1 ----
+    snr = load_snr()
+    paired = [a for a in ADAPTERS if a in snr]
+    c.append(("§5.4 PG-1", "SNR min", 1.6200, lambda: min(snr[a] for a in paired), 5e-5))
+    c.append(("§5.4 PG-1", "SNR max", 1.6728, lambda: max(snr[a] for a in paired), 5e-5))
+    c.append(("§5.4 PG-1", "SNR spread %", 0.033,
+              lambda: max(snr[a] for a in paired) / min(snr[a] for a in paired) - 1, 5e-4))
+    c.append(("§5.4 PG-1", "predictor CV", 0.0128,
+              lambda: cv([snr[a] for a in paired]), 5e-5))
+    for prec, exp in zip(PRECISIONS, (0.116, 0.152, 0.390), strict=True):
+        c.append(("§5.4 PG-1", f"outcome CV {prec}", exp,
+                  lambda p=prec: cv(retentions(p)), 1e-3))
+    c.append(("§5.4 PG-1", "int3 retention min", 0.287,
+              lambda: min(retentions("int3_g128")), 1e-3))
+    c.append(("§5.4 PG-1", "int3 retention max", 0.864,
+              lambda: max(retentions("int3_g128")), 1e-3))
+
+    # ---- §5.4 PG-3 ----
+    safety = "Kurapika993/llama-3.1-8b-responsible-ai-safety-lora"
+    c.append(("§5.4 PG-3", "safety output SNR", 6.00,
+              lambda: load_snr().get(safety, float("nan")), 5e-3))
+    # §4.4 output-SNR table. These rows previously carried pre-EXP-011 values for the
+    # rsLoRA adapter (output SNR 0.958 against an actual 3.757), which supported a claim
+    # -- "one adapter has noise exceeding signal" -- that is false at the corrected
+    # value. Pinned here so the row cannot go stale again.
+    for name, sub, exp in (("taboo-moon", "moon", 1.6200), ("taboo-snow", "snow", 1.6254),
+                           ("taboo-smile", "smile", 1.6286), ("taboo-gold", "gold", 1.6299),
+                           ("taboo-ship", "ship", 1.6566), ("taboo-rock", "rock", 1.6728)):
+        c.append(("§4.4", f"output SNR {name}", exp,
+                  lambda s=sub: next(v for k, v in load_snr().items() if s in k), 5e-5))
+    c.append(("§4.4", "output SNR latentqa", 2.5250,
+              lambda: next(v for k, v in load_snr().items() if "latentqa" in k), 5e-5))
+    c.append(("§4.4", "output SNR dpo (post-EXP-011)", 3.7571,
+              lambda: next(v for k, v in load_snr().items() if "dpo" in k), 5e-5))
+    c.append(("§4.4", "min output SNR > 1", 1.0,
+              lambda: float(min(load_snr().values()) > 1.0), 0))
+
+    # ---- §5.5 puzzle A ----
+    def pmax_ratio(word: str) -> float:
+        a = next(k for k, w in WORD.items() if w == word)
+        b = mean([r["p_word_max"] for r in BY[(a, "aligned_bf16", "bf16")]])
+        q = mean([r["p_word_max"] for r in BY[(a, "aligned_quant", "int3_g128")]])
+        return q / b if b else float("nan")
+    c.append(("§5.5", "p_word_max int3/bf16 mean", 1.05,
+              lambda: mean([pmax_ratio(w) for w in WORD.values()]), 5e-3))
+    c.append(("§5.5", "adapters increasing", 1.0,
+              lambda: float(sum(1 for w in WORD.values() if pmax_ratio(w) > 1)), 0))
+    c.append(("§5.5", "smile ratio", 4.23, lambda: pmax_ratio("smile"), 5e-3))
+
+    # ---- §6 refusal battery ----
+    c.append(("§6", "refusal records", 64.0, lambda: float(len(REF)), 0))
+    c.append(("§6", "xstest records", 32.0, lambda: float(len(XST)), 0))
+    c.append(("§6", "degenerate", 0.0,
+              lambda: float(sum(r["is_degenerate_repeat"] or r["is_empty"]
+                                for r in REF + XST)), 0))
+    for label, kinds, b_exp, a_exp in (
+            ("direct", ("harmful_direct",), 0.9994, 0.9881),
+            ("indirect", ("harmful_indirect",), 0.9988, 0.8533),
+            ("pooled", HARM, 0.9991, 0.9207),
+            ("benign", ("benign",), 0.1449, 0.2850)):
+        c.append(("§6.2", f"p_refuse base {label}", b_exp,
+                  lambda k=kinds: refusal_stat(REF, "base_bf16", k, "p_refuse"), 5e-5))
+        c.append(("§6.2", f"p_refuse aligned {label}", a_exp,
+                  lambda k=kinds: refusal_stat(REF, "aligned_bf16", k, "p_refuse"), 5e-5))
+    c.append(("§6.2", "cliff pooled harmful", -0.977,
+              lambda: cliffs([r["p_refuse"] for r in REF
+                              if r["condition"] == "aligned_bf16" and r["prompt_kind"] in HARM],
+                             [r["p_refuse"] for r in REF
+                              if r["condition"] == "base_bf16" and r["prompt_kind"] in HARM]),
+              1e-3))
+    c.append(("§6.2", "cliff benign", 0.445,
+              lambda: cliffs([r["p_refuse"] for r in REF
+                              if r["condition"] == "aligned_bf16" and r["prompt_kind"] == "benign"],
+                             [r["p_refuse"] for r in REF
+                              if r["condition"] == "base_bf16" and r["prompt_kind"] == "benign"]),
+              1e-3))
+    c.append(("§6.2", "str-refuse aligned indirect (raw)", 5.0,
+              lambda: float(sum(r["refused_string"] for r in REF
+                                if r["condition"] == "aligned_bf16"
+                                and r["prompt_kind"] == "harmful_indirect")), 0))
+    c.append(("§6.2", "str-refuse aligned benign (raw)", 1.0,
+              lambda: float(sum(r["refused_string"] for r in REF
+                                if r["condition"] == "aligned_bf16"
+                                and r["prompt_kind"] == "benign")), 0))
+    # ---- §6.3 xstest ----
+    c.append(("§6.3", "xstest p_refuse base", 0.8118,
+              lambda: refusal_stat(XST, "base_bf16", ("benign_surface_harmful",), "p_refuse"), 5e-5))
+    c.append(("§6.3", "xstest p_refuse aligned", 0.8554,
+              lambda: refusal_stat(XST, "aligned_bf16", ("benign_surface_harmful",), "p_refuse"), 5e-5))
+    c.append(("§6.3", "discrimination ratio", 5.60,
+              lambda: refusal_stat(XST, "base_bf16", ("benign_surface_harmful",), "p_refuse")
+              / refusal_stat(REF, "base_bf16", ("benign",), "p_refuse"), 5e-3))
+    for label, kinds, exp in (("direct", ("harmful_direct",), 2.40),
+                              ("indirect", ("harmful_indirect",), 2.78),
+                              ("benign", ("benign",), 2.54)):
+        c.append(("§6.3", f"entropy ratio {label}", exp,
+                  lambda k=kinds: refusal_stat(REF, "aligned_bf16", k, "mean_token_entropy")
+                  / refusal_stat(REF, "base_bf16", k, "mean_token_entropy"), 5e-3))
+    c.append(("§6.3", "entropy ratio xstest", 1.71,
+              lambda: refusal_stat(XST, "aligned_bf16", ("benign_surface_harmful",), "mean_token_entropy")
+              / refusal_stat(XST, "base_bf16", ("benign_surface_harmful",), "mean_token_entropy"), 5e-3))
+
+    # ---- §2.2 / §4.5.1 outlier ----
+    p = P0 / "outlier_channel" / "records.jsonl"
+    if p.exists():
+        rows = [json.loads(x) for x in p.read_text(encoding="utf-8").splitlines() if x.strip()]
+        def cell(layer: int, module: str, key: str) -> float:
+            return next(r[key] for r in rows
+                        if r["layer"] == layer and r["module"] == module)
+        for layer, spike, act in ((1, 83.5, 0.17), (2, 44.6, 0.19), (3, 145.1, 0.15)):
+            c.append(("§4.5.1", f"L{layer} step med/p1", spike,
+                      lambda ly=layer: cell(ly, "gate_proj", "step_median_over_p1"), 0.05))
+            c.append(("§4.5.1", f"L{layer} act narrowest", act,
+                      lambda ly=layer: cell(ly, "gate_proj", "act_ratio_bottom1pct_step"), 5e-3))
+    return c
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--strict", action="store_true")
+    args = ap.parse_args()
+
+    rows = claims()
+    bad: list[tuple[str, str, float, float]] = []
+    print("=" * 92)
+    print(f"{'section':>11}  {'claim':>36}  {'draft':>11}  {'raw':>11}  ok")
+    print("=" * 92)
+    for section, name, expected, fn, tol in rows:
+        try:
+            actual = fn()
+        except Exception as exc:  # noqa: BLE001 - report, do not mask
+            print(f"{section:>11}  {name:>36}  {expected:>11.4f}  {'ERROR':>11}  !! {exc}")
+            bad.append((section, name, expected, float("nan")))
+            continue
+        ok = math.isfinite(actual) and abs(actual - expected) <= tol
+        if not ok:
+            bad.append((section, name, expected, actual))
+        print(f"{section:>11}  {name:>36}  {expected:>11.4f}  {actual:>11.4f}  "
+              f"{'ok' if ok else 'MISMATCH'}")
+
+    print("=" * 92)
+    print(f"{len(rows) - len(bad)}/{len(rows)} claims match the raw records.")
+    if bad:
+        print("\nMISMATCHES:")
+        for section, name, expected, actual in bad:
+            print(f"  {section} {name}: draft={expected:.4f} raw={actual:.4f}")
+        return 1 if args.strict else 0
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

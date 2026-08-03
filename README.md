@@ -80,7 +80,7 @@ The honest frame, which we hold to throughout: **near-total weight-space erasure
 | 007 | First real measurement | [EXP-007](EXPERIMENTS.md) |
 | 008 | GATE 0 closeout; depth trend corrected | [EXP-008](EXPERIMENTS.md) |
 
-Next: Phase 1, anchored on the Taboo model organisms — models trained to describe a secret word without saying it ([arXiv 2510.01070](https://arxiv.org/abs/2510.01070)). The behavioural metric is a string match against a word named in the checkpoint, it splits into *does it still hint* and *does it still avoid saying*, and ~20 variants share one recipe.
+Next: Phase 1, anchored on the Taboo setting — models trained to describe a secret word without saying it ([arXiv 2505.14352](https://arxiv.org/abs/2505.14352), Cywiński et al.), instantiated in public `adamkarvonen/Qwen3-8B-taboo-*` checkpoints. The behavioural metric is a string match against a word named in the checkpoint, it splits into *does it still hint* and *does it still avoid saying*, and ~20 variants share one recipe.
 
 ## What we found
 
