@@ -1,3 +1,15 @@
+"""Normative record schemas, required by CLAUDE.md.
+
+**Nothing imports this module at runtime, and that is not a reason to delete it.** The
+harnesses write JSONL directly; these classes are the specification those records are
+written against, and the docstrings below are the only written statement of why the two
+sides of a behaviour are logged separately and never combined into one score. That
+argument is load-bearing for the paper -- `retention.py` cites it by name -- and it would
+be lost with the module.
+
+If you are removing dead code, this is specification, not code.
+"""
+
 from __future__ import annotations
 
 from typing import Literal

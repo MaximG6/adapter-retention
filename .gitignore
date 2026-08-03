@@ -12,3 +12,7 @@ paper/tex/*.blg
 paper/tex/*.log
 paper/tex/*.out
 paper/tex/main.pdf
+
+# Build intermediate: analysis/build_pdf.py writes this, then prints it to PDF.
+# The PDF is the artifact; this was 21% of the pack for a file nobody reads.
+paper/adapter-retention-technical-report.html
