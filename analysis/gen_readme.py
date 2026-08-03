@@ -294,7 +294,8 @@ def main() -> int:
       "quantizer, which is the gap this fills. We also reconcile an apparently opposite "
       "result — that compressing delta weights *protects* alignment — as the same law "
       "evaluated at the other end of `|Δ|/s`, distinguished by which tensor sets the "
-      "quantization scale. See [PRIOR_ART.md](PRIOR_ART.md) and §2 of the paper.")
+      "quantization scale. See [docs/PRIOR_ART.md](docs/PRIOR_ART.md) and §2 of the "
+      "paper.")
     a("")
 
     text = "\n".join(L)
