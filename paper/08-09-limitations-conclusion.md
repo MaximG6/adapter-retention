@@ -133,8 +133,8 @@ against the quantization step — predicts the stored-weight outcome through a
 parameter-free channel model accurate to 2.3% across two base models, four ranks, both
 scaling conventions and four training regimes. The same quantity, applied to inputs
 inside the adapter's rank-`r` active subspace rather than to individual weights, is
-amplified by `√(d_in/r)` and predicts layer-output fidelity 15–21× higher than
-weight-space fidelity. **Near-total weight-space erasure and preserved behaviour are not
+amplified by `√(d_in/r)` and predicts layer-output fidelity 6.2–16.5× higher than
+weight-space fidelity, rising as rank falls. **Near-total weight-space erasure and preserved behaviour are not
 in tension; they are the same measurement read at two levels.**
 
 The practical guidance is uncomfortable in both directions. INT4 g128 is **safer** than

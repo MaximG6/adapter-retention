@@ -61,7 +61,8 @@ because gradient descent optimises a loss with no knowledge of the deployment qu
 **At the level of layer outputs**, the same ratio behaves differently, because a rank-`r`
 adapter concentrates its effect on an `r`-dimensional subspace while quantization error
 spreads across all `d_in` input directions. On inputs inside that subspace, signal is
-amplified relative to noise by `√(d_in/r)` — a factor of 15–21 at our configurations.
+amplified relative to noise by `√(d_in/r)` — a factor of 6.2–16.5 across the nine
+adapters measured, at ranks 16 to 128.
 A layer whose weight-space cosine is 0.13 can carry an output signal-to-noise ratio near
 1.6. **Near-total weight-space erasure and preserved behaviour are not in tension; they
 are one measurement read at two levels.**

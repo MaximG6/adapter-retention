@@ -29,6 +29,7 @@ import matplotlib.pyplot as plt
 
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import bootstrap  # noqa: E402
 from figcheck import (  # noqa: E402
     Check, ref_knowledge_ratio, ref_resolvable_pairs, ref_retention_by_word,
 )
@@ -60,25 +61,15 @@ def mean(xs: list[float]) -> float:
     return statistics.mean(xs) if xs else float("nan")
 
 
-def boot_ci(xs: list[float], n: int = 20000, seed: int = 0) -> tuple[float, float]:
-    rng = random.Random(seed)
-    if len(xs) < 2:
-        return (float("nan"), float("nan"))
-    out = sorted(mean([xs[rng.randrange(len(xs))] for _ in range(len(xs))])
-                 for _ in range(n))
-    return out[int(0.025 * n)], out[int(0.975 * n)]
+def boot_ci(xs: list[float]) -> tuple[float, float]:
+    """Delegates to analysis/bootstrap.py. Exact by enumeration for the
+    six-adapter population; see that module for why there is no seed."""
+    return bootstrap.ci(xs)
 
 
-def boot_ratio_ci(num: list[float], den: list[float], n: int = 20000,
-                  seed: int = 0) -> tuple[float, float]:
-    rng = random.Random(seed)
-    out = []
-    for _ in range(n):
-        a = mean([num[rng.randrange(len(num))] for _ in range(len(num))])
-        b = mean([den[rng.randrange(len(den))] for _ in range(len(den))])
-        out.append(a / b if b else float("nan"))
-    out.sort()
-    return out[int(0.025 * n)], out[int(0.975 * n)]
+def boot_ratio_ci(num: list[float], den: list[float]) -> tuple[float, float]:
+    """Delegates to analysis/bootstrap.py."""
+    return bootstrap.ratio_ci(num, den)
 
 
 def load() -> tuple[list[dict[str, Any]], dict, list[str], dict[str, str]]:

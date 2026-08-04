@@ -24,7 +24,7 @@ The weights really are almost untouched. The behaviour is not. These are the sam
 |---|---|
 | **[The paper](paper/adapter-retention-arxiv.pdf)** (26 pp, arXiv format) | Start here. The argument, the channel model, and the four load-bearing results. |
 | **[Technical report](paper/adapter-retention-technical-report.pdf)** (77 pp) | Same manuscript with every appendix inline: full tables, all prompt sets, and the reproduction instructions. For a reader checking the work rather than reading it. |
-| **[Lab notebook](EXPERIMENTS.md)** (34 entries) | Append-only, including the experiments that failed, the ones that were misconfigured and the ones that answered nothing. Read the [supersession index](EXPERIMENTS.md#-supersession-index--read-before-quoting-any-number-from-this-file) before quoting any number from it. |
+| **[Lab notebook](EXPERIMENTS.md)** (35 entries) | Append-only, including the experiments that failed, the ones that were misconfigured and the ones that answered nothing. Read the [supersession index](EXPERIMENTS.md#-supersession-index--read-before-quoting-any-number-from-this-file) before quoting any number from it. |
 
 The corrections are the entries worth reading. Three metric definitions and one scaling convention were wrong, each caught by measurement before it reached a figure; one wrong citation survived the whole project.
 
@@ -57,7 +57,7 @@ PYTHONPATH=src python -m ar.predict \
 
 Relative error is measured against an **erasure baseline of 1.0**: every adapter receives an effective update larger than the one it asked for, pointing somewhere it did not.
 
-**2. Behaviour degrades monotonically, and only at coarser settings.** Elicitation retention across six taboo adapters: **99.2%** at INT4 g128, **77.2%** at INT4 per-channel, **57.8%** at INT3 g128 (95% CI over adapters at INT4 g128: [90.6%, 107.6%]).
+**2. Behaviour degrades monotonically, and only at coarser settings.** Elicitation retention across six taboo adapters: **99.2%** at INT4 g128, **77.2%** at INT4 per-channel, **57.8%** at INT3 g128 (95% CI over adapters at INT4 g128: [90.7%, 107.6%]).
 
 **3. Where behaviour degrades, it degrades benignly.** The trained *capability* weakens while the trained *constraint* holds — the model becomes less able to express the behaviour, not more likely to violate it. This is the opposite of the alarming failure mode, and the opposite of what we predicted before withdrawing that prediction on evidence.
 
@@ -95,7 +95,7 @@ No gated repositories are required. If your GPU is not Blackwell, set `AR_MIN_CA
 pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cu128
 pip install -r requirements.txt
 PYTHONPATH=src python -m pytest -q                      # 146 passed
-PYTHONPATH=src python analysis/audit_draft_numbers.py   # 143/143 claims vs raw
+PYTHONPATH=src python analysis/audit_draft_numbers.py   # 146/146 claims vs raw
 ```
 
 The audit re-derives every number in the paper *and in this file* from `results/raw/**`. It is the check that would catch this README going stale.

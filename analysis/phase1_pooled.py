@@ -19,6 +19,8 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+import bootstrap
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RAW = REPO_ROOT / "results" / "raw" / "phase1"
 PRECISIONS = ["bf16", "int4_g128", "int4_per_channel", "int3_g128"]
@@ -36,14 +38,10 @@ def cliffs_delta(a: list[float], b: list[float]) -> float:
     return (gt - lt) / (len(a) * len(b))
 
 
-def boot_ci(xs: list[float], n: int = 5000, seed: int = 0) -> tuple[float, float]:
-    import random
-    if len(xs) < 2:
-        return (float("nan"), float("nan"))
-    rng = random.Random(seed)
-    ms = sorted(mean([xs[rng.randrange(len(xs))] for _ in range(len(xs))])
-                for _ in range(n))
-    return ms[int(0.025 * n)], ms[int(0.975 * n)]
+def boot_ci(xs: list[float]) -> tuple[float, float]:
+    """Delegates to analysis/bootstrap.py. Exact by enumeration for the
+    six-adapter population; see that module for why there is no seed."""
+    return bootstrap.ci(xs)
 
 
 def main() -> None:

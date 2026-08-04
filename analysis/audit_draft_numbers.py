@@ -29,6 +29,8 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Callable
 
+import bootstrap
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 P0 = REPO_ROOT / "results" / "raw" / "phase0"
 P1 = REPO_ROOT / "results" / "raw" / "phase1"
@@ -40,13 +42,10 @@ def mean(xs: list[float]) -> float:
     return statistics.mean(xs) if xs else float("nan")
 
 
-def boot_ci(xs: list[float], n: int = 20000, seed: int = 0) -> tuple[float, float]:
-    rng = random.Random(seed)
-    if len(xs) < 2:
-        return (float("nan"), float("nan"))
-    out = sorted(mean([xs[rng.randrange(len(xs))] for _ in range(len(xs))])
-                 for _ in range(n))
-    return out[int(0.025 * n)], out[int(0.975 * n)]
+def boot_ci(xs: list[float]) -> tuple[float, float]:
+    """Delegates to analysis/bootstrap.py. Exact by enumeration for the
+    six-adapter population; see that module for why there is no seed."""
+    return bootstrap.ci(xs)
 
 
 def cliffs(a: list[float], b: list[float]) -> float:
@@ -151,6 +150,133 @@ def readme_table_cell(adapter_label: str, column: int) -> float:
     raise ValueError(f"README has no table row for {adapter_label!r}")
 
 
+# ------------------------------------------------------------ cross-artifact agreement
+# Every check above compares one number against the raw records. None of them compares
+# two printed numbers against each other, and that is a real gap: section 5.1's Table 2
+# and Appendix B.6 disagreed in the last digit of three intervals for a whole draft
+# cycle, and every individual claim still passed, because each was inside its own
+# tolerance of the raw value. Two artifacts can each be within tolerance of the data and
+# still contradict one another in print.
+#
+# This checks the other axis: a quantity claimed in more than one place must read the
+# same in every place.
+
+#: (quantity, [(file, pattern with one capture group), ...]) -- at least two sites each.
+CROSS_ARTIFACT: list[tuple[str, list[tuple[str, str]]]] = [
+    ("codes unchanged %", [
+        ("README.md", r"([\d.]+)% of the model's stored integer codes"),
+        ("paper/00-abstract.md", r"([\d.]+)% of the model's stored integer codes"),
+        ("paper/01-introduction.md", r"integer codes, ([\d.]+)% are now identical"),
+        ("paper/04-results-weight-space.md",
+         r"stored weights are ([\d.]+)% unchanged"),
+        ("paper/08-09-limitations-conclusion.md",
+         r"([\d.]+)% of stored weights are unchanged"),
+    ]),
+    ("behaviour retained %", [
+        ("README.md", r"([\d.]+)% of the adapter's trained behaviour"),
+        ("paper/00-abstract.md", r"([\d.]+)% of the adapter's\s*\n?\s*trained behaviour"),
+        ("paper/01-introduction.md",
+         r"([\d.]+)% of the adapter's trained behaviour remains"),
+        ("paper/04-results-weight-space.md", r"the behaviour is ([\d.]+)%\s*\n?retained"),
+        ("paper/08-09-limitations-conclusion.md",
+         r"([\d.]+)% of the aligned"),
+    ]),
+    ("retention int4_g128 %", [
+        ("README.md", r"\*\*([\d.]+)%\*\* at INT4 g128"),
+        ("paper/04-results-weight-space.md",
+         r"INT4 g128 \| \*\*([\d.]+)%\*\*"),
+        ("paper/appendix-B-tables.md", r"\*\*mean\*\* \| . \| \*\*([\d.]+)%\*\*"),
+    ]),
+    ("retention int4_per_channel %", [
+        ("README.md", r"\*\*([\d.]+)%\*\* at INT4 per-channel"),
+        ("paper/04-results-weight-space.md", r"INT4 per-channel \| \*\*([\d.]+)%\*\*"),
+        ("paper/appendix-B-tables.md",
+         r"\*\*mean\*\* \| . \| \*\*[\d.]+%\*\* \| \*\*([\d.]+)%\*\*"),
+    ]),
+    ("retention int3_g128 %", [
+        ("README.md", r"\*\*([\d.]+)%\*\* at INT3 g128"),
+        ("paper/04-results-weight-space.md", r"INT3 g128 \| \*\*([\d.]+)%\*\*"),
+        ("paper/appendix-B-tables.md",
+         r"\*\*mean\*\* \| . \| \*\*[\d.]+%\*\* \| \*\*[\d.]+%\*\* \| \*\*([\d.]+)%\*\*"),
+    ]),
+    ("CI lo int4_g128", [
+        ("README.md", r"INT4 g128: \[([\d.]+)%"),
+        ("paper/04-results-weight-space.md", r"INT4 g128 \| [^|]*\| \[([\d.]+)%"),
+        ("paper/appendix-B-tables.md", r"95% CI over adapters \| . \| \[([\d.]+)%"),
+    ]),
+    ("CI hi int4_g128", [
+        ("README.md", r"INT4 g128: \[[\d.]+%, ([\d.]+)%\]"),
+        ("paper/04-results-weight-space.md",
+         r"INT4 g128 \| [^|]*\| \[[\d.]+%, ([\d.]+)%\]"),
+        ("paper/appendix-B-tables.md",
+         r"95% CI over adapters \| . \| \[[\d.]+%, ([\d.]+)%\]"),
+    ]),
+    ("CI lo int4_per_channel", [
+        ("paper/04-results-weight-space.md", r"INT4 per-channel \| [^|]*\| \[([\d.]+)%"),
+        ("paper/appendix-B-tables.md",
+         r"95% CI over adapters \|[^|]*\|[^|]*\| \[([\d.]+)%"),
+    ]),
+    ("CI hi int4_per_channel", [
+        ("paper/04-results-weight-space.md",
+         r"INT4 per-channel \| [^|]*\| \[[\d.]+%, ([\d.]+)%\]"),
+        ("paper/appendix-B-tables.md",
+         r"95% CI over adapters \|[^|]*\|[^|]*\| \[[\d.]+%, ([\d.]+)%\]"),
+    ]),
+    ("CI lo int3_g128", [
+        ("paper/04-results-weight-space.md", r"INT3 g128 \| [^|]*\| \[([\d.]+)%"),
+        ("paper/appendix-B-tables.md",
+         r"95% CI over adapters \|[^|]*\|[^|]*\|[^|]*\| \[([\d.]+)%"),
+    ]),
+    ("CI hi int3_g128", [
+        ("paper/04-results-weight-space.md",
+         r"INT3 g128 \| [^|]*\| \[[\d.]+%, ([\d.]+)%\]"),
+        ("paper/appendix-B-tables.md",
+         r"95% CI over adapters \|[^|]*\|[^|]*\|[^|]*\| \[[\d.]+%, ([\d.]+)%\]"),
+    ]),
+    # Carried "15-21x" from the superseded EXP-009 into four sections for the whole
+    # draft; the four agreed with each other and none agreed with the data.
+    ("subspace amplification lo", [
+        ("paper/00-abstract.md", r"([\d.]+)–[\d.]+× across the nine adapters"),
+        ("paper/01-introduction.md", r"a factor of ([\d.]+)–[\d.]+ across the nine"),
+        ("paper/04-results-weight-space.md", r"— ([\d.]+)–[\d.]+× the\s*\n?weight-space"),
+        ("paper/08-09-limitations-conclusion.md",
+         r"layer-output fidelity ([\d.]+)–[\d.]+× higher"),
+    ]),
+    ("subspace amplification hi", [
+        ("paper/00-abstract.md", r"[\d.]+–([\d.]+)× across the nine adapters"),
+        ("paper/01-introduction.md", r"a factor of [\d.]+–([\d.]+) across the nine"),
+        ("paper/04-results-weight-space.md", r"— [\d.]+–([\d.]+)× the\s*\n?weight-space"),
+        ("paper/08-09-limitations-conclusion.md",
+         r"layer-output fidelity [\d.]+–([\d.]+)× higher"),
+    ]),
+]
+
+
+def extract(rel: str, pattern: str) -> str:
+    """First capture of `pattern` in `rel`, as printed.
+
+    Raises when the pattern stops matching. A cross-artifact check whose regex silently
+    finds nothing agrees with everything -- the exact shape of the cross-reference
+    checker that reported nine false positives because its pattern assumed whitespace
+    where the text had a period.
+    """
+    text = (REPO_ROOT / rel).read_text(encoding="utf-8")
+    m = re.search(pattern, text)
+    if m is None:
+        raise ValueError(f"{rel}: pattern never matched: {pattern}")
+    return m.group(1)
+
+
+def cross_artifact_disagreements() -> list[tuple[str, dict[str, str]]]:
+    """Quantities that do not read the same everywhere they are claimed."""
+    bad = []
+    for name, sites in CROSS_ARTIFACT:
+        seen = {rel: extract(rel, pat) for rel, pat in sites}
+        if len(set(seen.values())) > 1:
+            bad.append((name, seen))
+    return bad
+
+
 # --------------------------------------------------------------------------- claims
 Claim = tuple[str, str, float, Callable[[], float], float]
 
@@ -166,9 +292,11 @@ def claims() -> list[Claim]:
     for prec, exp in zip(PRECISIONS, (0.992, 0.772, 0.578), strict=True):
         c.append((f"§5.1", f"mean retention {prec}", exp,
                   lambda p=prec: mean(retentions(p)), 5e-4))
-    for prec, lo, hi in (("int4_g128", 0.907, 1.076),
-                         ("int4_per_channel", 0.689, 0.860),
-                         ("int3_g128", 0.421, 0.744)):
+    # Exact by enumeration (analysis/bootstrap.py), so these are the values, not an
+    # estimate of them: tolerance is for printing, not for Monte Carlo noise.
+    for prec, lo, hi in (("int4_g128", 0.9066, 1.0759),
+                         ("int4_per_channel", 0.6895, 0.8602),
+                         ("int3_g128", 0.4168, 0.7433)):
         c.append(("§5.1", f"CI lo {prec}", lo,
                   lambda p=prec: boot_ci(retentions(p))[0], 3e-3))
         c.append(("§5.1", f"CI hi {prec}", hi,
@@ -359,6 +487,26 @@ def claims() -> list[Claim]:
             c.append(("§4.5.1", f"L{layer} act narrowest", act,
                       lambda ly=layer: cell(ly, "gate_proj", "act_ratio_bottom1pct_step"), 5e-3))
 
+    # ---- §4.4 subspace amplification, per adapter (mean of per-layer ratios) ----
+    def amp_range() -> tuple[float, float]:
+        by: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for f in (P0 / "output_snr_orthonormal").glob("*.jsonl"):
+            for line in f.read_text(encoding="utf-8").splitlines():
+                if line.strip():
+                    r = json.loads(line)
+                    by[r["adapter"]].append(r)
+        per = [mean([x["snr_out_orthonormal"] / x["snr_weight"] for x in rs])
+               for rs in by.values()]
+        return min(per), max(per)
+
+    c.append(("§4.4", "adapters with an SNR probe", 9.0,
+              lambda: float(len({json.loads(line)["adapter"]
+                                 for f in (P0 / "output_snr_orthonormal").glob("*.jsonl")
+                                 for line in f.read_text(encoding="utf-8").splitlines()
+                                 if line.strip()})), 0))
+    c.append(("§4.4", "amplification min", 6.2, lambda: amp_range()[0], 0.05))
+    c.append(("§4.4", "amplification max", 16.5, lambda: amp_range()[1], 0.05))
+
     # ---- README: the committed file against the same raw records ----
     # Expected values are read from README.md and compared to recomputation, so the
     # direction of the test is "does the published document still agree with the data",
@@ -455,10 +603,25 @@ def main() -> int:
 
     print("=" * 92)
     print(f"{len(rows) - len(bad)}/{len(rows)} claims match the raw records.")
-    if bad:
-        print("\nMISMATCHES:")
-        for section, name, expected, actual in bad:
-            print(f"  {section} {name}: draft={expected:.4f} raw={actual:.4f}")
+
+    # Second axis: the same quantity, printed in more than one artifact, must read the
+    # same in all of them. Agreeing with the data individually is not enough.
+    cross = cross_artifact_disagreements()
+    n_sites = sum(len(s) for _, s in CROSS_ARTIFACT)
+    print(f"{len(CROSS_ARTIFACT) - len(cross)}/{len(CROSS_ARTIFACT)} quantities agree "
+          f"across artifacts ({n_sites} sites).")
+    if cross:
+        print("\nCROSS-ARTIFACT DISAGREEMENT:")
+        for name, seen in cross:
+            print(f"  {name}:")
+            for rel, val in seen.items():
+                print(f"      {val:>10}  {rel}")
+
+    if bad or cross:
+        if bad:
+            print("\nMISMATCHES:")
+            for section, name, expected, actual in bad:
+                print(f"  {section} {name}: draft={expected:.4f} raw={actual:.4f}")
         return 1 if args.strict else 0
     return 0
 

@@ -2434,3 +2434,68 @@ Rewritten with `Path.as_posix()` and a guard that raises when the committed blob
 **Artifacts:** `paper/appendix-D-reproduction.md` §D.6.1.
 
 ---
+
+## [2026-08-04] EXP-035: Eight bootstraps, seven agreeing, and a digit no resample count supported
+
+**Phase:** 1
+**Question:** Section 5.1's Table 2 and Appendix B.6 print the same three confidence intervals with different last digits. Which is right?
+**Setup:** No new measurement. The six per-adapter retention values are unchanged; only the estimator that summarises them is at issue. Reproduction attempted over a grid of bootstrap `(n, seed)` combinations, then the interval recomputed exactly.
+
+**Command:**
+```
+PYTHONPATH=src python analysis/audit_draft_numbers.py
+```
+
+**Result:**
+
+The two artifacts disagreed in three places:
+
+| quantity | §5.1 Table 2 | Appendix B.6 |
+|---|---|---|
+| INT4 g128 CI lower | 90.7 | 90.6 |
+| INT4 per-channel CI upper | 86.0 | 85.8 |
+| INT3 CI upper | 74.4 | 74.3 |
+
+*1. Neither was transcribed.* Table 2's three values reproduce **exactly** at `(n=5000, seed=0)` and `(n=10000, seed=0)`. Both artifacts were generated, from the same code, on the same data.
+
+*2. There were eight definitions of `boot_ci` in `analysis/`.* Seven used `n=20000`. `phase1_pooled.py` — the script Appendix D names as the source for §5.1 — used **`n=5000`**. Identical logic, identical seed, different draw count.
+
+*3. The last digit was never supported.* Monte Carlo standard deviation of an endpoint at `n=20000`, over 40 seeds:
+
+| precision | SD(lower) | SD(upper) |
+|---|---|---|
+| int4_g128 | 0.044 | 0.112 |
+| int4_per_channel | 0.093 | 0.060 |
+| int3_g128 | **0.173** | 0.103 |
+
+The paper printed one decimal place. The noise on that decimal is 0.04–0.17 points. **Both published values were inside their own estimator's noise, and neither was the value.**
+
+*4. The interval is enumerable.* Six adapters give `6^6 = 46 656` distinct resamples, which enumerate in about 20 ms. Exact:
+
+| precision | MC n=20000 | MC n=5000 | **exact** |
+|---|---|---|---|
+| int4_g128 | [90.56, 107.59] | [90.66, 107.59] | **[90.66, 107.59]** |
+| int4_per_channel | [68.90, 85.84] | [68.90, 86.02] | **[68.95, 86.02]** |
+| int3_g128 | [42.07, 74.33] | [42.09, 74.37] | **[41.68, 74.33]** |
+
+Published values move: INT4 per-channel lower 68.9 → **69.0**, INT3 lower 42.1 → **41.7**.
+
+*5. The claim audit could not have caught it.* Every claim passed. The audit compares each number against the raw records independently; both values were inside tolerance of the data. Nothing compared the two printed numbers to each other.
+
+**Verdict:** WORKED — defect found, cause identified, class removed rather than the instance patched.
+
+**What we learned:**
+
+1. **Two artifacts can each be correct and still contradict each other in print.** This is a different axis from the one every check in this project measured. Agreement with the data is per-artifact; agreement between artifacts is not implied by it, and no amount of per-claim tolerance detects the difference.
+2. **A seed argument is an invitation to disagree.** The defect was not a bug in any of the eight copies; each computed what it said. It was that the estimator had a free parameter and eight callers, and nothing forced them to agree. Removing the parameter removes the failure: `analysis/bootstrap.py` enumerates for `k <= 7` and takes no seed.
+3. **Exactness where it is available is cheap and worth taking.** 46 656 resamples cost 20 ms. Every argument about `n` and every reproducibility caveat about seeds disappears with it, and the number stops depending on a choice nobody documented.
+4. **A sampled interval must show that it is sampled.** Where enumeration is impossible — ratios of two means, intervals over 36 layers — the interval now carries its draw count and is printed only to the digit its endpoint SD supports. The reader can tell the two apart without reading the method section.
+5. Negative knowledge: **the cross-artifact check found a fourth defect the moment it ran**, and its raise-on-no-match guard found a fifth. The README was still stale after the estimator change, and one extraction pattern did not match the abstract's phrasing. Both would have been silent. A checker that refuses to pass when it cannot find its subject is worth more than a checker that is merely correct — see EXP-034, where the inverse of this guard was missing.
+
+**Plan impact:** Table 2 is generated into `paper/04-results-weight-space.md` between markers by the same call that builds Appendix B.6; the two cannot diverge again. `audit_draft_numbers.py` gains `cross_artifact_disagreements()`, checking 13 quantities across 41 sites. §3.9 and the LaTeX Statistics subsection now state which intervals are exact and which sampled.
+
+**Reserved for Appendix C** — this supersedes the current append-only/generated-view example, which is weaker.
+
+**Artifacts:** `analysis/bootstrap.py`; `analysis/audit_draft_numbers.py` (`CROSS_ARTIFACT`, `extract`, `cross_artifact_disagreements`); `paper/appendix-B-tables.md`; `paper/04-results-weight-space.md`.
+
+---

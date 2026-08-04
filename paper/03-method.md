@@ -305,7 +305,18 @@ generation deterministic: re-running with a different seed reproduces the output
 exactly. Seeds are therefore **not** a replicate axis, and treating them as one would
 report a nominal sample size far above the effective one. The available nuisance axis
 is which prompts were drawn, so per-adapter confidence intervals are bootstrapped over
-prompts (20 000 resamples), and cross-adapter intervals over adapters.
+prompts, and cross-adapter intervals over adapters.
+
+**Exact where it can be, sampled where it cannot, and always labelled.** The pooled
+intervals over the six adapters are computed by enumerating all `6^6 = 46 656`
+resamples, so they carry no Monte Carlo error and take no seed. Intervals over prompts,
+over layers, or on a ratio of two means have no enumerable support and are Monte Carlo
+at 20 000 draws; those are marked `*` where tabulated and are printed only to the digit
+their endpoint standard deviation supports. This is not fastidiousness. Eight copies of
+this estimator existed in the analysis code, seven at one resample count and one at
+another, and section 5.1's table and Appendix B.6 reported the same three intervals with
+different last digits for an entire draft cycle — both correct computations, neither
+supported at the precision printed.
 
 **Effect sizes with intervals, never bare `p`-values.** Cliff's delta is used
 throughout for rank-based comparisons.

@@ -27,7 +27,7 @@ quantizer.
 The same ratio explains why the behaviour survives. A rank-`r` adapter acts on an
 `r`-dimensional subspace while quantization error spreads over all `d_in` directions, so
 on inputs the adapter actually responds to, signal is amplified over noise by
-`√(d_in/r)` — 15–21× at the configurations measured, matching a derived law whose only
+`√(d_in/r)` — 6.2–16.5× across the nine adapters measured, matching a derived law whose only
 empirical input is a single anisotropy correction (`c ≈ 0.87`, itself predicted by the
 channel model's error variance). Behaviourally, degradation is monotone as the grid coarsens
 (99.2% → 77.2% → 57.8% from INT4 g128 to INT4 per-channel to INT3 g128) and, where it

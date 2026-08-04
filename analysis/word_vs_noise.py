@@ -24,6 +24,8 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+import bootstrap
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PHASE1 = REPO_ROOT / "results" / "raw" / "phase1"
 PRECISIONS = ["int4_g128", "int4_per_channel", "int3_g128"]
@@ -33,17 +35,9 @@ def mean(xs: list[float]) -> float:
     return statistics.mean(xs) if xs else float("nan")
 
 
-def boot_ratio(num: list[float], den: list[float], n: int = 20000,
-               seed: int = 0) -> tuple[float, float]:
-    """CI for mean(num)/mean(den), resampling PROMPTS in both arms."""
-    rng = random.Random(seed)
-    out = []
-    for _ in range(n):
-        a = mean([num[rng.randrange(len(num))] for _ in range(len(num))])
-        b = mean([den[rng.randrange(len(den))] for _ in range(len(den))])
-        out.append(a / b if b else float("nan"))
-    out.sort()
-    return out[int(0.025 * n)], out[int(0.975 * n)]
+def boot_ratio(num: list[float], den: list[float]) -> tuple[float, float]:
+    """Delegates to analysis/bootstrap.py."""
+    return bootstrap.ratio_ci(num, den)
 
 
 def main() -> None:

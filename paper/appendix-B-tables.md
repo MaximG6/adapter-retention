@@ -6,7 +6,9 @@ Record counts: Phase 0 weight-space 1512 (4-layer) + 504 (36-layer); Phase 1 beh
 
 ### B.1 Weight-space retention per adapter (INT4 g128, asymmetric, `fixed_scale`)
 
-CIs bootstrapped over layers. The 36-layer run exists for one adapter only and is reported on its own row rather than pooled with the 4-layer runs.
+CIs are over layers. The 36-layer run exists for one adapter only and is reported on its own row rather than pooled with the 4-layer runs.
+
+Intervals without a mark are **exact**, enumerated over all `k**k` resamples. A `*` marks a **sampled** interval (Monte Carlo, n=20000), used where the sample is too large to enumerate; its last printed digit is at the resolution the resampling noise supports and no finer.
 
 | adapter | base | r | α/r | layers | modules | cosine | 95% CI | code-flip | rel. err | proj. coef |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -19,7 +21,7 @@ CIs bootstrapped over layers. The 36-layer run exists for one adapter only and i
 | taboo-ship | Qwen3-8B | 32 | 2 | 4 | 28 | 0.1409 | [0.1279, 0.1539] | 0.01139 | 7.233 | 0.9926 |
 | taboo-smile | Qwen3-8B | 32 | 2 | 4 | 28 | 0.1374 | [0.1244, 0.1504] | 0.01093 | 7.407 | 0.9924 |
 | taboo-snow | Qwen3-8B | 32 | 2 | 4 | 28 | 0.1382 | [0.1260, 0.1503] | 0.01102 | 7.374 | 0.9931 |
-| taboo-smile | Qwen3-8B | 32 | 2 | 36 | 252 | 0.1380 | [0.1355, 0.1404] | 0.01220 | 7.293 | 0.9877 |
+| taboo-smile | Qwen3-8B | 32 | 2 | 36 | 252 | 0.1380 | [0.1355, 0.1404]* | 0.01220 | 7.293 | 0.9877 |
 
 ### B.2 Channel model: predicted vs measured code-flip rate
 
@@ -72,7 +74,7 @@ Paired on (adapter, layer, module) cells present under all three schemes, `fixed
 
 ### B.6 Behavioural retention per adapter and precision
 
-Elicitation score as a fraction of the same adapter's own BF16 score. CIs bootstrapped over prompts.
+Elicitation score as a fraction of the same adapter's own BF16 score. Intervals are over the six adapters, not over prompts: the adapter is the sampling unit, and with greedy decoding the prompts within one adapter are not independent draws. They are exact, by enumerating all 6^6 resamples.
 
 | word | BF16 (raw) | int4_g128 | int4_per_channel | int3_g128 |
 |---|---|---|---|---|
@@ -83,7 +85,7 @@ Elicitation score as a fraction of the same adapter's own BF16 score. CIs bootst
 | smile | 0.7178 | 100.8% | 68.5% | 51.3% |
 | snow | 1.0030 | 93.5% | 96.8% | 81.5% |
 | **mean** | — | **99.2%** | **77.2%** | **57.8%** |
-| 95% CI over adapters | — | [90.6%, 107.6%] | [68.9%, 85.8%] | [42.1%, 74.3%] |
+| 95% CI over adapters | — | [90.7%, 107.6%] | [69.0%, 86.0%] | [41.7%, 74.3%] |
 | below 50% | — | 0/6 | 0/6 | 2/6 |
 
 ### B.7 Knowledge probe: the benign dissociation

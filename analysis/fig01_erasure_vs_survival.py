@@ -35,6 +35,8 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from figcheck import Check, ref_retention_by_word, ref_weight_flip_rate  # noqa: E402
 
+import bootstrap
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 P0 = REPO_ROOT / "results" / "raw" / "phase0" / "public_adapter"
 P1 = REPO_ROOT / "results" / "raw" / "phase1"
@@ -63,14 +65,10 @@ def mean(xs: list[float]) -> float:
     return statistics.mean(xs) if xs else float("nan")
 
 
-def boot_ci(xs: list[float], n: int = 20000, seed: int = 0) -> tuple[float, float]:
-    import random
-    rng = random.Random(seed)
-    if len(xs) < 2:
-        return (float("nan"), float("nan"))
-    out = sorted(mean([xs[rng.randrange(len(xs))] for _ in range(len(xs))])
-                 for _ in range(n))
-    return out[int(0.025 * n)], out[int(0.975 * n)]
+def boot_ci(xs: list[float]) -> tuple[float, float]:
+    """Delegates to analysis/bootstrap.py. Exact by enumeration for the
+    six-adapter population; see that module for why there is no seed."""
+    return bootstrap.ci(xs)
 
 
 def weight_side() -> tuple[float, tuple[float, float], int, list[float]]:

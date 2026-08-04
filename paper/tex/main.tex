@@ -187,9 +187,17 @@ We implement group-wise affine quantization directly, because the experiment req
 step size $s$ as an explicit quantity and requires applying one tensor's grid to another.
 For a group $g$,
 \begin{equation}
-s = \frac{\max(g) - \min(g)}{2^b - 1},\quad
-q = \mathrm{clip}\!\left(\left\lfloor \tfrac{g}{s} \right\rceil + z,\, 0,\, 2^b - 1\right).
+s = \frac{\max(g) - \min(g)}{2^b - 1},\qquad
+z = \left\lfloor \frac{-\min(g)}{s} \right\rceil,
 \end{equation}
+\begin{equation}
+q = \mathrm{clip}\!\left(\left\lfloor \tfrac{g}{s} \right\rceil + z,\, 0,\, 2^b - 1\right),
+\qquad \hat{g} = s\,(q - z),
+\end{equation}
+where $\lfloor\cdot\rceil$ is round-half-to-even, $s$ is the step size, $z$ the integer
+zero point that maps $\min(g)$ to code $0$, and $\hat{g}$ the dequantized weight the
+model actually uses. Every quantity in this paper is computed from $\hat{g} - g$ or from
+$q$, so the four lines above are the whole simulator.
 Against \texttt{gptqmodel}'s own quantizer~\cite{frantar2023gptq}: \textbf{36 of 36
 configurations bit-exact} across 3 tensors $\times$ 2 bit-widths $\times$ 3 group sizes
 $\times$ 2 schemes. This check found a real defect---our first symmetric implementation
@@ -259,8 +267,15 @@ rejects a probe already known to be broken.
 
 \subsection{Statistics}
 Greedy decoding makes generation deterministic, so seeds are not a replicate axis.
-Intervals are bootstrapped over \emph{prompts} (per-adapter) or \emph{adapters} (pooled),
-20{,}000 resamples. Effect sizes with intervals, never bare $p$-values. Every run writes a
+Intervals are bootstrapped over \emph{prompts} (per-adapter) or \emph{adapters} (pooled).
+Pooled intervals over the six adapters are \textbf{exact}: $6^6=46{,}656$ resamples
+enumerate, so there is no resampling noise and no seed. Intervals over prompts, over
+layers, or on a ratio of two means cannot be enumerated and are Monte Carlo at
+20{,}000 draws; those are marked where tabulated, and printed only to the resolution
+their endpoint standard deviation supports. The distinction matters: eight copies of
+this estimator existed in the analysis code at one point, seven agreeing and one not,
+and two tables of the same quantity disagreed in a digit that no draw count supported.
+Effect sizes with intervals, never bare $p$-values. Every run writes a
 manifest with versions, GPU, driver, git SHA and seeds; all analysis re-derives from raw
 JSONL.
 

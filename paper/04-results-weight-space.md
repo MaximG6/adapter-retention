@@ -164,7 +164,7 @@ The residual deviation from `√(d_in/r)` is fully explained by error anisotropy
 `conc(E)` falls from 1.20–1.25 at r=4 to 1.01–1.03 at r=32, matching `1 + c/r` with
 `c ≈ 0.87`, which is what `Var(E) ∝ s|δ|` predicts.
 
-Applied to the six real adapters with an orthonormal probe:
+Applied to the nine published adapters with an orthonormal probe:
 
 | adapter | r | weight SNR | **output SNR** | amplification | √(d_in/r) | ratio | conc(E) |
 |---|---|---|---|---|---|---|---|
@@ -259,8 +259,9 @@ describes **near-total weight-space erasure**: 1.1%–14.8% of stored codes chan
 intended update's size.
 
 **None of this is a statement about behaviour.** The same measurements predict
-layer-output SNR of 1.6–6.0 on inputs inside the adapter's subspace — 15–21× the
-weight-space fidelity. Whether the behaviour survives is §5.
+layer-output SNR of 1.6–6.0 on inputs inside the adapter's subspace — 6.2–16.5× the
+weight-space fidelity, the factor rising as rank falls. Whether the behaviour survives
+is §5.
 
 ---
 
@@ -280,11 +281,15 @@ paraphrases + 8 adversarial), greedy decoding. Primary instrument is elicitation
 Retention is each adapter's elicitation score as a fraction of its own BF16 score.
 **Figure 5** plots the full dose-response, per adapter and pooled.
 
+<!-- GENERATED: table2 -- analysis/appendix_tables.py --write. Do not edit by hand.
+     This table and Appendix B.6 are the same call; they disagreed in the last digit of
+     three intervals when they were two calls. -->
 | precision | mean retention | 95% CI over adapters | adapters below 50% |
 |---|---|---|---|
 | INT4 g128 | **99.2%** | [90.7%, 107.6%] | 0/6 |
-| INT4 per-channel | **77.2%** | [68.9%, 86.0%] | 0/6 |
-| INT3 g128 | **57.8%** | [42.1%, 74.4%] | 2/6 |
+| INT4 per-channel | **77.2%** | [69.0%, 86.0%] | 0/6 |
+| INT3 g128 | **57.8%** | [41.7%, 74.3%] | 2/6 |
+<!-- END GENERATED: table2 -->
 
 Guesser argmax accuracy, pooled: 159/192 (BF16) → 157/192 → 128/192 → 98/192.
 

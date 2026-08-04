@@ -23,6 +23,8 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+import bootstrap
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 P0 = REPO_ROOT / "results" / "raw" / "phase0"
 P1 = REPO_ROOT / "results" / "raw" / "phase1"
@@ -54,14 +56,10 @@ def mean(xs: list[float]) -> float:
     return statistics.mean(xs) if xs else float("nan")
 
 
-def boot_ci(xs: list[float], n: int = 20000, seed: int = 0) -> tuple[float, float]:
-    import random
-    rng = random.Random(seed)
-    if len(xs) < 2:
-        return (float("nan"), float("nan"))
-    out = sorted(mean([xs[rng.randrange(len(xs))] for _ in range(len(xs))])
-                 for _ in range(n))
-    return out[int(0.025 * n)], out[int(0.975 * n)]
+def boot_ci(xs: list[float]) -> tuple[float, float]:
+    """Delegates to analysis/bootstrap.py. Exact by enumeration for the
+    six-adapter population; see that module for why there is no seed."""
+    return bootstrap.ci(xs)
 
 
 def load_p0() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -85,8 +83,13 @@ def b1_weight_space(l4: list[dict[str, Any]], l36: list[dict[str, Any]]) -> str:
     """Per-adapter weight-space retention at INT4 g128, asymmetric, fixed_scale."""
     out = ["### B.1 Weight-space retention per adapter (INT4 g128, asymmetric, `fixed_scale`)",
            "",
-           "CIs bootstrapped over layers. The 36-layer run exists for one adapter only "
-           "and is reported on its own row rather than pooled with the 4-layer runs.",
+           "CIs are over layers. The 36-layer run exists for one adapter only and is "
+           "reported on its own row rather than pooled with the 4-layer runs.",
+           "",
+           "Intervals without a mark are **exact**, enumerated over all `k**k` resamples. "
+           f"A `*` marks a **sampled** interval (Monte Carlo, n={bootstrap.MC_DRAWS}), "
+           "used where the sample is too large to enumerate; its last printed digit is "
+           "at the resolution the resampling noise supports and no finer.",
            "",
            "| adapter | base | r | α/r | layers | modules | cosine | 95% CI | code-flip | rel. err | proj. coef |",
            "|---|---|---|---|---|---|---|---|---|---|---|"]
@@ -101,11 +104,13 @@ def b1_weight_space(l4: list[dict[str, Any]], l36: list[dict[str, Any]]) -> str:
                 per_layer[r["layer"]].append(r["cosine"])
             lay_means = [mean(x) for x in per_layer.values()]
             lo, hi = boot_ci(lay_means)
+            # 4-layer runs enumerate (4**4); the 36-layer run cannot and is marked.
+            mark = "" if bootstrap.is_exact(lay_means) else "*"
             r0 = v[0]
             out.append(
                 f"| {short(a)} | {r0['base_model'].split('/')[-1]} | {r0['rank']} | "
                 f"{r0['alpha_over_rank']:.3g} | {tag} | {len(v)} | "
-                f"{mean([x['cosine'] for x in v]):.4f} | [{lo:.4f}, {hi:.4f}] | "
+                f"{mean([x['cosine'] for x in v]):.4f} | [{lo:.4f}, {hi:.4f}]{mark} | "
                 f"{mean([x['code_flip_rate'] for x in v]):.5f} | "
                 f"{mean([x['relative_error'] for x in v]):.3f} | "
                 f"{mean([x['projection_coefficient'] for x in v]):.4f} |")
@@ -196,6 +201,22 @@ def b5_modules(l4: list[dict[str, Any]]) -> str:
     return "\n".join(out)
 
 
+def retention_columns(p1: list[dict[str, Any]]) -> dict[str, list[float]]:
+    """Per-adapter retention at each precision. The single source for B.6 and Table 2."""
+    by = defaultdict(list)
+    for r in p1:
+        by[(r["adapter"], r["condition"], r["precision"])].append(r)
+    cols: dict[str, list[float]] = defaultdict(list)
+    for a in sorted({r["adapter"] for r in p1}):
+        ref = mean([r["guesser_p_word_normalised"]
+                    for r in by[(a, "aligned_bf16", "bf16")]])
+        for p in PRECISIONS:
+            v = mean([r["guesser_p_word_normalised"]
+                      for r in by[(a, "aligned_quant", p)]])
+            cols[p].append(v / ref if ref else float("nan"))
+    return cols
+
+
 def b6_behaviour(p1: list[dict[str, Any]]) -> str:
     by = defaultdict(list)
     for r in p1:
@@ -205,7 +226,9 @@ def b6_behaviour(p1: list[dict[str, Any]]) -> str:
     out = ["### B.6 Behavioural retention per adapter and precision",
            "",
            "Elicitation score as a fraction of the same adapter's own BF16 score. "
-           "CIs bootstrapped over prompts.",
+           "Intervals are over the six adapters, not over prompts: the adapter is the "
+           "sampling unit, and with greedy decoding the prompts within one adapter are "
+           "not independent draws. They are exact, by enumerating all 6^6 resamples.",
            "",
            "| word | BF16 (raw) | " + " | ".join(PRECISIONS) + " |",
            "|---|---|" + "---|" * len(PRECISIONS)]
@@ -231,6 +254,42 @@ def b6_behaviour(p1: list[dict[str, Any]]) -> str:
                + " | ".join(f"{sum(1 for x in cols[p] if x < 0.5)}/{len(cols[p])}"
                             for p in PRECISIONS) + " |")
     return "\n".join(out)
+
+
+def table2_body(p1: list[dict[str, Any]]) -> str:
+    """Section 5.1's summary table, from the same per-adapter values as B.6.
+
+    It used to be produced by `phase1_pooled.py`, whose bootstrap defaulted to n=5000
+    where this file used n=20000. Both were correct; they printed different last digits,
+    and the paper carried both. Now one call feeds both tables.
+    """
+    cols = retention_columns(p1)
+    rows = ["| precision | mean retention | 95% CI over adapters | adapters below 50% |",
+            "|---|---|---|---|"]
+    label = {"int4_g128": "INT4 g128", "int4_per_channel": "INT4 per-channel",
+             "int3_g128": "INT3 g128"}
+    for p in PRECISIONS:
+        lo, hi = boot_ci(cols[p])
+        rows.append(f"| {label[p]} | **{mean(cols[p]):.1%}** | "
+                    f"[{lo:.1%}, {hi:.1%}] | "
+                    f"{sum(1 for x in cols[p] if x < 0.5)}/{len(cols[p])} |")
+    return "\n".join(rows)
+
+
+def inject(path: Path, marker: str, body: str) -> bool:
+    """Replace the region between the GENERATED/END markers in a hand-written file."""
+    text = path.read_text(encoding="utf-8")
+    start = f"<!-- GENERATED: {marker}"
+    end = f"<!-- END GENERATED: {marker} -->"
+    i, j = text.find(start), text.find(end)
+    if i < 0 or j < 0:
+        raise ValueError(f"{path.name}: markers for {marker!r} not found")
+    head_end = text.index("-->", i) + 3
+    new = text[:head_end] + "\n" + body + "\n" + text[j:]
+    if new == text:
+        return False
+    path.write_text(new, encoding="utf-8")
+    return True
 
 
 def b7_dissociation(p1: list[dict[str, Any]]) -> str:
@@ -312,6 +371,10 @@ def main() -> int:
     if args.write:
         OUT.write_text(text, encoding="utf-8")
         print(f"wrote {OUT.relative_to(REPO_ROOT)}")
+        body = REPO_ROOT / "paper" / "04-results-weight-space.md"
+        changed = inject(body, "table2", table2_body(p1))
+        print(f"  {'updated' if changed else 'unchanged'} Table 2 in "
+              f"{body.name} (same call as B.6)")
     else:
         print(text)
     return 0
