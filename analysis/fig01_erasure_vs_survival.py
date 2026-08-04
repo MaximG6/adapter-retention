@@ -11,8 +11,11 @@ read directly off the geometry rather than from the numbers.
 Every value is re-derived from results/raw/**; nothing is hardcoded.
 
 Usage:
-    python analysis/fig01_erasure_vs_survival.py            # -> paper/figures/fig01.png
+    python analysis/fig01_erasure_vs_survival.py    # -> paper/figures/
     python analysis/fig01_erasure_vs_survival.py --show
+
+Writes `fig01_erasure_vs_survival.png` and `.pdf` into `FIGDIR`, which is
+`paper/figures/` unless `analysis/build_arxiv_pdf.py` has rebound it (see EXP-033).
 """
 
 from __future__ import annotations
