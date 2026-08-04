@@ -165,7 +165,8 @@ def readme_table_cell(adapter_label: str, column: int) -> float:
 CROSS_ARTIFACT: list[tuple[str, list[tuple[str, str]]]] = [
     ("codes unchanged %", [
         ("README.md", r"([\d.]+)% of the model's stored integer codes"),
-        ("paper/00-abstract.md", r"([\d.]+)% of the model's stored integer codes"),
+        ("paper/00-abstract.md",
+         r"([\d.]+)% of the\s*\n?\s*model's stored integer codes"),
         ("paper/01-introduction.md", r"integer codes, ([\d.]+)% are now identical"),
         ("paper/04-results-weight-space.md",
          r"stored weights are ([\d.]+)% unchanged"),
@@ -174,12 +175,21 @@ CROSS_ARTIFACT: list[tuple[str, list[tuple[str, str]]]] = [
     ]),
     ("behaviour retained %", [
         ("README.md", r"([\d.]+)% of the adapter's trained behaviour"),
-        ("paper/00-abstract.md", r"([\d.]+)% of the adapter's\s*\n?\s*trained behaviour"),
-        ("paper/01-introduction.md",
-         r"([\d.]+)% of the adapter's trained behaviour remains"),
-        ("paper/04-results-weight-space.md", r"the behaviour is ([\d.]+)%\s*\n?retained"),
+        ("paper/00-abstract.md", r"elicitation retention is ([\d.]+)%"),
+        ("paper/01-introduction.md", r"Elicitation retention is\s*\n?\s*([\d.]+)%"),
+        ("paper/04-results-weight-space.md", r"Retention is ([\d.]+)% with an exact"),
+        ("paper/08-09-limitations-conclusion.md", r"retention ([\d.]+)%, exact interval"),
+    ]),
+    # The reframed headline: the interval is now the claim, so it must agree everywhere
+    # it is quoted, including the two hand-written LaTeX copies.
+    ("headline CI lo (all sites)", [
+        ("paper/00-abstract.md", r"\*\*\[([\d.]+)%, [\d.]+%\]\*\* that spans parity"),
+        ("paper/01-introduction.md", r"\[([\d.]+)%, [\d.]+%\] — spans parity"),
+        ("paper/04-results-weight-space.md",
+         r"exact 95% interval of \[([\d.]+)%, [\d.]+%\]"),
         ("paper/08-09-limitations-conclusion.md",
-         r"([\d.]+)% of the aligned"),
+         r"exact interval \[([\d.]+)%, [\d.]+%\]"),
+        ("paper/tex/main.tex", r"interval of \\textbf\{\[([\d.]+)\\%"),
     ]),
     ("retention int4_g128 %", [
         ("README.md", r"\*\*([\d.]+)%\*\* at INT4 g128"),
@@ -236,7 +246,7 @@ CROSS_ARTIFACT: list[tuple[str, list[tuple[str, str]]]] = [
     # Carried "15-21x" from the superseded EXP-009 into four sections for the whole
     # draft; the four agreed with each other and none agreed with the data.
     ("subspace amplification lo", [
-        ("paper/00-abstract.md", r"([\d.]+)–[\d.]+× across the nine adapters"),
+        ("paper/00-abstract.md", r"fidelity \*\*([\d.]+)–[\d.]+× higher\*\*"),
         ("paper/01-introduction.md", r"a factor of ([\d.]+)–[\d.]+ across the nine"),
         ("paper/04-results-weight-space.md", r"— ([\d.]+)–[\d.]+× the\s*\n?weight-space"),
         ("paper/08-09-limitations-conclusion.md",
@@ -244,7 +254,7 @@ CROSS_ARTIFACT: list[tuple[str, list[tuple[str, str]]]] = [
         ("paper/tex/main.tex", r"layer-output fidelity ([\d.]+)--[\d.]+\$"),
     ]),
     ("subspace amplification hi", [
-        ("paper/00-abstract.md", r"[\d.]+–([\d.]+)× across the nine adapters"),
+        ("paper/00-abstract.md", r"fidelity \*\*[\d.]+–([\d.]+)× higher\*\*"),
         ("paper/01-introduction.md", r"a factor of [\d.]+–([\d.]+) across the nine"),
         ("paper/04-results-weight-space.md", r"— [\d.]+–([\d.]+)× the\s*\n?weight-space"),
         ("paper/08-09-limitations-conclusion.md",
@@ -256,11 +266,12 @@ CROSS_ARTIFACT: list[tuple[str, list[tuple[str, str]]]] = [
     # amplification figure after the markdown had been corrected.
     ("codes unchanged % (tex)", [
         ("paper/tex/main.tex", r"([\d.]+)\\% of\s*\n?stored weights are unchanged"),
-        ("paper/00-abstract.md", r"([\d.]+)% of the model's stored integer codes"),
+        ("paper/00-abstract.md",
+         r"([\d.]+)% of the\s*\n?\s*model's stored integer codes"),
     ]),
     ("behaviour retained % (tex)", [
-        ("paper/tex/main.tex", r"([\d.]+)\\% of the aligned behaviour is retained"),
-        ("paper/00-abstract.md", r"([\d.]+)% of the adapter's\s*\n?\s*trained behaviour"),
+        ("paper/tex/main.tex", r"retention ([\d.]+)\\%,\s*\n?\s*exact interval"),
+        ("paper/00-abstract.md", r"elicitation retention is ([\d.]+)%"),
     ]),
     ("int3 span lo (tex)", [
         ("paper/tex/main.tex", r"retention spans ([\d.]+)--[\d.]+\\%"),
@@ -285,6 +296,10 @@ def extract(rel: str, pattern: str) -> str:
     m = re.search(pattern, text)
     if m is None:
         raise ValueError(f"{rel}: pattern never matched: {pattern}")
+    if m.group(1) is None:
+        # An alternation whose taken branch has no group captures nothing and would
+        # compare as equal to every other None. Same vacuous-check family.
+        raise ValueError(f"{rel}: pattern matched but captured nothing: {pattern}")
     return m.group(1)
 
 

@@ -23,7 +23,7 @@ The weights really are almost untouched. The behaviour is not. These are the sam
 | | |
 |---|---|
 | **[The paper](paper/adapter-retention-arxiv.pdf)** (26 pp, arXiv format) | Start here. The argument, the channel model, and the four load-bearing results. |
-| **[Technical report](paper/adapter-retention-technical-report.pdf)** (78 pp) | Same manuscript with every appendix inline: full tables, all prompt sets, and the reproduction instructions. For a reader checking the work rather than reading it. |
+| **[Technical report](paper/adapter-retention-technical-report.pdf)** (77 pp) | Same manuscript with every appendix inline: full tables, all prompt sets, and the reproduction instructions. For a reader checking the work rather than reading it. |
 | **[Lab notebook](EXPERIMENTS.md)** (35 entries) | Append-only, including the experiments that failed, the ones that were misconfigured and the ones that answered nothing. Read the [supersession index](EXPERIMENTS.md#-supersession-index--read-before-quoting-any-number-from-this-file) before quoting any number from it. |
 
 The corrections are the entries worth reading. Three metric definitions and one scaling convention were wrong, each caught by measurement before it reached a figure; one wrong citation survived the whole project.

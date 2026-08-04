@@ -20,7 +20,10 @@ quarter of a quantization half-step; the median falls below the step size by a f
 
 By any weight-space measure available, the adaptation is very nearly gone.
 
-**On the same models, 99.2% of the adapter's trained behaviour remains.**
+**On the same models, the behaviour is undetectably changed.** Elicitation retention is
+99.2%, and its exact 95% interval — [90.7%, 107.6%] — spans parity. The instrument
+cannot separate the quantized model from the unquantized one. What it does establish is
+a bound: **losses beyond about 9% are excluded.**
 
 **Figure 1** puts the two side by side. This paper is about that contrast: how both
 statements can be true at once, what governs each of them, and what follows for anyone

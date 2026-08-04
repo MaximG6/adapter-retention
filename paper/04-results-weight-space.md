@@ -293,12 +293,39 @@ Retention is each adapter's elicitation score as a fraction of its own BF16 scor
 
 Guesser argmax accuracy, pooled: 159/192 (BF16) → 157/192 → 128/192 → 98/192.
 
-**At INT4 g128 the stored weights are 98.9% unchanged and the behaviour is 99.2%
-retained, on the same six adapters.** This is the paper's headline: near-total
-weight-space erasure with the behaviour preserved, measured end to end on one matched
-population rather than paired across two. Weight-space values are the 4-layer runs for
-all six (Appendix B.1); behavioural values are the full Phase 1 grid. Degradation is monotone
-as the grid coarsens, and becomes substantial only at INT3.
+**At INT4 g128 the stored weights are 98.9% unchanged and the behaviour is undetectably
+changed.** Retention is 99.2% with an exact 95% interval of [90.7%, 107.6%]. That
+interval spans parity, so the honest statement is a **non-detection with a bound**: the
+instrument cannot separate the quantized model from the unquantized one, and it excludes
+losses greater than about 9%. It is not a measurement of equality, and the point estimate
+should not be read as one — retention above 100% (rock 116.2%, ship 103.2%) is noise,
+since a quantized model cannot exceed its own BF16 baseline. This is the paper's
+headline: near-total weight-space erasure with no detectable behavioural loss, measured
+end to end on one matched population rather than paired across two. Weight-space values
+are the 4-layer runs for all six (Appendix B.1); behavioural values are the full Phase 1
+grid.
+
+**The mean at INT3 conceals a split.** Two of six adapters fall below half their BF16
+score (ship 28.7%, gold 41.3%) while two remain above 80% (moon 86.4%, snow 81.5%). The
+57.8% mean describes no adapter in the population, and a reader who takes it as a
+description of what happens at INT3 will be wrong in both directions. Whatever governs
+the split is not rank, scaling, base model or recipe, which are matched across all six;
+§5.3 is what we can say about it, which is that our weight-space predictor does not
+identify it.
+
+**Degradation is a trend, and every step of it resolves.** Because the same six adapters
+are measured at every precision, the contrasts are paired, and paired differences are the
+correct test — overlapping marginal intervals do not imply an unresolvable difference:
+
+| contrast | mean paired difference | exact 95% CI | separates |
+|---|---|---|---|
+| INT4 g128 − INT4 per-channel | 22.0% | [10.8%, 31.6%] | yes |
+| INT4 g128 − INT3 g128 | 41.4% | [23.3%, 59.3%] | yes |
+| INT4 per-channel − INT3 g128 | 19.4% | [5.4%, 34.5%] | yes |
+
+All three separate. The **trend** is what the population supports, not a claim that any
+individual adapter degrades monotonically: only **4 of 6** do, `snow` rising from 93.5%
+at INT4 g128 to 96.8% at per-channel and `moon` from 78.1% to 86.4% at INT3.
 
 Per adapter:
 

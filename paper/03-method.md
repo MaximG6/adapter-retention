@@ -154,9 +154,24 @@ amplification = √( (d_in / r) / conc(E) ),      conc(E) = ⟨P_jj⟩_c / ⟨P_
 ```
 
 where `conc(E)` measures how far the error concentrates in the adapter's own row space
-rather than spreading isotropically. Empirically `conc(E) ≈ 1 + c/r` with `c ≈ 0.87`,
-which is exactly what `Var(E) ∝ s|δ|` predicts. The law is **derived, not fitted**;
-`c` is the only measured quantity and it enters as a correction term, not a free scale.
+rather than spreading isotropically. The `√(d_in/r)` term is derived. **The correction is
+not.** `conc(E) ≈ 1 + c/r` with `c ≈ 0.87` is an **empirical fit over `r = 4` to `32`**,
+consistent with what `Var(E) ∝ s|δ|` predicts but not established by it: over that range
+a `1 + c/r` form and an `r/d_in` form are not numerically separable, and we do not have
+the rank coverage to distinguish them. `c` enters as a correction to a derived law rather
+than as a free scale — it moves the prediction by 1–20% depending on rank — so the law's
+accuracy does not rest on it. But it should be read as a fitted constant over a stated
+range, not as a second derivation.
+
+**Extending the sweep is not merely a matter of compute.** The two forms diverge above
+`r = 32`, but the sweep obtains rank as the only variable by SVD-truncating a single
+rank-32 adapter and rescaling to fixed Frobenius norm. Truncation only removes rank; it
+cannot manufacture `r = 64` from a rank-32 delta. Reaching the ranks that would
+discriminate requires a higher-rank adapter, which reintroduces exactly the
+adapter-identity confound this design exists to remove — the confound that made the
+first version of this measurement wrong. Settling the functional form needs an adapter
+trained at several ranks on one task and recipe, which is FW-3, and which does not exist
+publicly.
 
 **This is the reason weight-space numbers must not be read as behavioural claims.** At
 `d_in = 4096, r = 32` the amplification is ≈ 11×; at `r = 16`, ≈ 16×. A layer whose
@@ -213,6 +228,19 @@ word**, which removes word difficulty from the metric.
 every generation step, reported as max/mean/AUC) replaces a binary "did it say the
 word", which had a noise floor equal to its own range. A knowledge probe queries the
 word in frames that never mention a secret.
+
+**Why 32 prompts per condition.** Twenty-four hint paraphrases plus eight adversarial,
+across six adapters and four precisions, is 1 536 generations at 96 new tokens each — the
+grid we could run in one session on one GPU. The number was not chosen by a power
+calculation, and we do not claim it was sufficient for any particular effect size. Two
+things make it defensible rather than arbitrary. Greedy decoding makes prompts, not
+seeds, the only nuisance axis, so 32 prompts are 32 independent draws rather than a
+nominal count inflated by re-sampling a deterministic model (§3.9). And a variance
+decomposition on the pilot showed the top five of 32 prompts carrying 82% of the
+signal mass while 31 of 32 exceeded the floor — magnitude is concentrated, direction is
+near-universal, so adding prompts would sharpen a mean that is already the wrong summary.
+Where the question is about the population rather than one adapter, we bootstrap over
+adapters instead, and that interval is exact.
 
 **Controls, all registered before the grid ran.**
 

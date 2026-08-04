@@ -121,8 +121,10 @@ size pointing in a largely uncorrelated direction. By any
 weight-space measure, the adaptation is very nearly gone.
 
 The behaviour is not. At INT4 with group size 128 — the standard deployment
-configuration — **98.9% of stored weights are unchanged and 99.2% of the aligned
-behaviour is retained, on the same six adapters.** Degradation is monotone as the grid coarsens, reaching 77.2% at
+configuration — **98.9% of stored weights are unchanged and the behaviour is
+undetectably changed**: retention 99.2%, exact interval [90.7%, 107.6%], which spans
+parity and excludes losses beyond about 9%. Degradation appears only at coarser grids,
+reaching 77.2% at
 INT4 per-channel and 57.8% at INT3, and where it does degrade it degrades in the benign
 direction: the model becomes less able to express the trained behaviour while the
 trained constraint holds, rather than retaining the capability and losing the

@@ -37,28 +37,27 @@ instructions: \texttt{<REPO-URL>}}\vspace{-0.6em}}
 
 \begin{abstract}
 \noindent
-Merging a LoRA adapter into a base model and quantizing to INT4 with group size 128
-leaves \textbf{98.9\% of the model's stored integer codes unchanged, and 99.2\% of the
-adapter's trained behaviour intact}, measured on the same six adapters. We quantify
-retention for six published adapters spanning two base models, four ranks and four
-training regimes: only 1.1--14.8\% of stored codes change, and the effective weight
-update has cosine similarity 0.14--0.51 with the intended update at 1.7--7.4$\times$ its
-magnitude. All of this follows from one ratio, \dratio{}---the adapter's per-weight
-magnitude against the quantization step---through a channel model with \emph{no fitted
-parameters} that predicts each adapter's code-flip rate to within \textbf{2.3\%}. The
-model is licensed by a measured property rather than by fit: trained deltas carry no
-information about quantization bin position ($|r| < 0.0011$). The same ratio explains why
-behaviour survives: a rank-$r$ adapter acts on an $r$-dimensional subspace while
-quantization error spreads over all $d_{\text{in}}$ directions, amplifying signal over
-noise by $\sqrt{d_{\text{in}}/r}$ on inputs the adapter responds to. Behaviourally,
-degradation is monotone as the grid coarsens (99.2\%$\rightarrow$77.2\%$\rightarrow$57.8\%)
-and, where it occurs, \textbf{benign}: capability degrades while the trained constraint
-holds. We also report a negative result limiting what weight-space measurement---including
-the diagnostic tool we release---can be used for: within six adapters matched on rank,
-scaling, base model, recipe \emph{and} predicted output SNR to 3.3\%, behavioural
-retention spans \textbf{28.7\% to 86.4\%}; among statistically resolvable pairs the
-ordering runs \emph{opposite} to the predictor; and the adapter with the largest
-weight-space footprint has no measurable target behaviour at all.
+Merging a LoRA adapter and quantizing to INT4 at group size 128 leaves \textbf{98.9\% of
+the model's stored integer codes unchanged}, and leaves its trained behaviour
+\textbf{undetectably changed}: elicitation retention is 99.2\%, with an exact 95\%
+interval of \textbf{[90.7\%, 107.6\%]} that spans parity and \textbf{excludes losses
+beyond about 9\%}. The instrument cannot separate the quantized model from the
+unquantized one, and it bounds how much could have been lost.
+Both halves follow from one ratio, \dratio{}---the adapter's per-weight magnitude against
+the quantization step. Read per weight, a channel model with \emph{no fitted parameters}
+predicts each adapter's code-flip rate to within \textbf{2.3\%} across nine published
+adapters, two base models and ranks 16--128. Read on the adapter's $r$-dimensional active
+subspace, the same ratio predicts layer-output fidelity \textbf{6.2--16.5$\times$ higher}
+than weight-space fidelity. Erasure and survival are one measurement read at two levels.
+Behaviour degrades only at coarser grids---77.2\% at INT4 per-channel, 57.8\% at INT3,
+all three contrasts separating when paired over adapters. Degradation is \textbf{benign}:
+capability weakens while the trained constraint holds, though the constraint itself
+weakens by about 30\% at INT3. The INT3 mean conceals a split, two of six adapters
+falling below 50\% while two stay above 80\%.
+Weight-space measurement cannot say \emph{which} adapter survives. Across six adapters
+matched on rank, scaling, base model, recipe \emph{and} predicted output SNR to 3.3\%,
+retention spans \textbf{28.7\% to 86.4\%}, and among resolvable pairs the ordering runs
+\emph{opposite} to the predictor.
 \end{abstract}
 
 \section{Introduction}
@@ -72,15 +71,21 @@ similarity 0.14 to it, at 7.4 times its magnitude, pointing in a direction the a
 never requested. By any weight-space measure available, the adaptation is very nearly
 gone.
 
-\textbf{On the same models, 99.2\% of the adapter's trained behaviour remains.}
-Figure~\ref{fig:headline} puts the two side by side. This paper is about that contrast.
+\textbf{On the same models, the behaviour is undetectably changed.} Elicitation retention
+is 99.2\%, and its exact 95\% interval, [90.7\%, 107.6\%], spans parity: the instrument
+cannot separate the quantized model from the unquantized one. What it does establish is a
+bound---losses beyond about 9\% are excluded. Figure~\ref{fig:headline} puts the two
+panels side by side. This paper is about that contrast.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{fig01_erasure_vs_survival.pdf}
 \caption{Erasure versus survival. Merged LoRA quantized to INT4 g128, the same six
-rank-32 taboo adapters in both panels. Bars are means over adapters, whiskers 95\%
-bootstrap CIs, open circles individual adapters.}
+rank-32 taboo adapters in both panels. Bars are means over adapters, whiskers exact 95\%
+intervals, open circles individual adapters. The right whisker crosses 100\%: this is a
+\emph{non-detection with a bound}, not a measured equality. Retention above parity is
+noise---a quantized model cannot exceed its own BF16 baseline---and the interval's lower
+edge is the claim, excluding losses beyond about 9\%.}
 \label{fig:headline}
 \end{figure}
 
@@ -239,7 +244,12 @@ over $d_{\text{in}}$ directions. For inputs in the row space,
 \mathrm{conc}(E) \approx 1 + \frac{c}{r},
 \label{eq:amp}
 \end{equation}
-with $c \approx 0.87$ predicted by $\mathrm{Var}(E) \propto s|\delta|$. \textbf{Probe
+where the $\sqrt{d_{\text{in}}/r}$ term is derived and the correction is not: $c \approx
+0.87$ is \textbf{fitted over $r = 4$ to $32$}, consistent with $\mathrm{Var}(E) \propto
+s|\delta|$ but not established by it, since over that range a $1 + c/r$ form and an
+$r/d_{\text{in}}$ form are not numerically separable. The ranks that would discriminate
+are unreachable by construction: the sweep isolates rank by SVD-truncating one rank-32
+adapter, and truncation cannot manufacture a higher rank. \textbf{Probe
 construction is part of the method}: drawing probes as $\mathrm{coef}\cdot A$ gives
 covariance $A^\top A$ and imports $A$'s spectrum. All results use an orthonormal basis of
 $\Delta$'s right singular vectors.
@@ -559,8 +569,9 @@ verdict.
 Merging a LoRA adapter and quantizing to INT4 changes 1.1--14.8\% of stored integer codes
 and replaces the intended update with something 1.7--7.4$\times$ its size in a largely
 uncorrelated direction. \textbf{The behaviour does not follow.} At INT4 g128, 98.9\% of
-stored weights are unchanged and 99.2\% of the aligned behaviour is retained; degradation
-is monotone as the grid coarsens, and where it occurs it is benign.
+stored weights are unchanged and the behaviour is undetectably changed: retention 99.2\%,
+exact interval [90.7\%, 107.6\%], which spans parity and excludes losses beyond about
+9\%. Degradation appears only at coarser grids, and where it occurs it is benign.
 
 Both halves follow from \dratio{}. Read per-weight it predicts the stored-weight outcome to
 2.3\%; read on the adapter's active subspace it predicts layer-output fidelity 6.2--16.5$\times$

@@ -1,63 +1,43 @@
 # Abstract
 
-*Draft. Written after Method, Results, Limitations and Conclusion, per §7's practice of
+*Draft. Written after Method, Results, Limitations and Conclusion, per the practice of
 not letting the framing precede the findings.*
 
 ---
 
-Merging a LoRA adapter into a base model and quantizing to INT4 with group size 128
-leaves **98.9% of the model's stored integer codes unchanged, and 99.2% of the adapter's
-trained behaviour intact**. We measure both numbers on the same models, and the gap
-between how destroyed the weights look and how well the behaviour survives is the
-subject of this paper.
+Merging a LoRA adapter and quantizing to INT4 at group size 128 leaves **98.9% of the
+model's stored integer codes unchanged**, and leaves its trained behaviour
+**undetectably changed**: elicitation retention is 99.2%, with an exact 95% interval of
+**[90.7%, 107.6%]** that spans parity and **excludes losses beyond about 9%**. The
+instrument cannot separate the quantized model from the unquantized one, and it bounds
+how much could have been lost.
 
-On the weight side, we quantify retention for six published adapters spanning two base
-models, four ranks and four training regimes. Only 1.1%–14.8% of stored codes change —
-under 6.2% for five of the six — and the effective weight update has cosine similarity
-0.14–0.51 with the intended update and a magnitude 1.7–7.4× larger, since the few weights that move jump a full quantization
-step in a direction the adapter did not request. All of this follows from a single
-ratio, `|Δ|/s` — the adapter's per-weight magnitude against the quantization step size —
-through a **channel model with no fitted parameters that predicts each adapter's
-code-flip rate to within 2.3%**. The model is licensed by a measured property rather
-than by curve-fitting: trained deltas carry no information about quantization bin
-position (correlation < 0.0011; a permutation control shifts the flip rate by < 1.5%),
-because gradient descent optimises a loss that knows nothing about the deployment
-quantizer.
+Both halves follow from one ratio, `|Δ|/s` — the adapter's per-weight magnitude against
+the quantization step. Read per weight, a channel model with **no fitted parameters**
+predicts each adapter's code-flip rate to within **2.3%** across nine published adapters,
+two base models and ranks 16–128. Read on the adapter's `r`-dimensional active subspace,
+the same ratio predicts layer-output fidelity **6.2–16.5× higher** than weight-space
+fidelity. Erasure and survival are one measurement read at two levels.
 
-The same ratio explains why the behaviour survives. A rank-`r` adapter acts on an
-`r`-dimensional subspace while quantization error spreads over all `d_in` directions, so
-on inputs the adapter actually responds to, signal is amplified over noise by
-`√(d_in/r)` — 6.2–16.5× across the nine adapters measured, matching a derived law whose only
-empirical input is a single anisotropy correction (`c ≈ 0.87`, itself predicted by the
-channel model's error variance). Behaviourally, degradation is monotone as the grid coarsens
-(99.2% → 77.2% → 57.8% from INT4 g128 to INT4 per-channel to INT3 g128) and, where it
-occurs, it is **benign**: capability degrades while the trained constraint holds
-(suppression ratio 0.18–0.27, Cliff's *d* between −0.56 and −0.83 — a large effect at
-every precision, though measurably attenuated at the coarsest),
-rather than the alarming converse of retained capability with lost restraint.
+Behaviour degrades only at coarser grids — 77.2% at INT4 per-channel, 57.8% at INT3, all
+three contrasts separating when paired over adapters. Degradation is **benign**:
+capability weakens while the trained constraint holds, though the constraint itself
+weakens by about 30% at INT3. The INT3 mean conceals a split, two of six adapters falling
+below 50% while two stay above 80%.
 
-We also report a negative result that limits what weight-space measurement — including
-the diagnostic tool we release — can be used for. Within a population of six adapters
-matched on rank, scaling, base model, training recipe **and predicted output SNR to
-within 3.3%**, behavioural retention spans **28.7% to 86.4%**; among the adapter pairs
-whose difference is statistically resolvable, the ordering runs **opposite** to the
-predictor; and the adapter with the largest weight-space footprint in the study has no
-measurable target behaviour at all. **Weight-space retention, however precisely
-measured, is not a proxy for behavioural retention.**
-
-The practical guidance is uncomfortable in both directions: INT4 g128 is considerably
-safer for deployed fine-tunes than the weight-space numbers suggest, and effective
-adapter magnitude — the quantity that governs retention, which no adapter card
-publishes — cannot be used to predict which adapter will behave.
+Weight-space measurement cannot say **which** adapter survives. Across six adapters
+matched on rank, scaling, base model, recipe and predicted output SNR to within 3.3%,
+retention spans **28.7% to 86.4%**, and among resolvable pairs the ordering runs opposite
+to the predictor.
 
 ---
 
 ## Notes for revision
 
-- **Length.** ~380 words; venue limits may require cutting. Priority if trimmed:
-  keep sentence 1 (the contrast), the channel model's 2.3%, and the predictive gap.
-  The subspace-amplification paragraph compresses to one sentence if needed.
+- **Length.** ~215 words. Priority if trimmed further: keep the non-detection framing
+  with its bound, the channel model's 2.3%, and the predictive gap.
 - The opening contrast mirrors **Figure 1** (twin panel) by design.
-- "99.2% of behaviour" is elicitation retention relative to the same adapter's own BF16
-  score — stated precisely in §5.1, and the abstract's phrasing must not drift into
-  implying a broader behavioural claim than §8.1 licenses.
+- "99.2% retention" is elicitation score relative to the same adapter's own BF16 score —
+  stated precisely in §5.1. The abstract must not drift into implying a broader
+  behavioural claim than §8.1 licenses, and must not restate 99.2% without the interval:
+  the interval is what makes it a bounded non-detection rather than a measured equality.
