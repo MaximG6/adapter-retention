@@ -2499,3 +2499,117 @@ Published values move: INT4 per-channel lower 68.9 → **69.0**, INT3 lower 42.1
 **Artifacts:** `analysis/bootstrap.py`; `analysis/audit_draft_numbers.py` (`CROSS_ARTIFACT`, `extract`, `cross_artifact_disagreements`); `paper/appendix-B-tables.md`; `paper/04-results-weight-space.md`.
 
 ---
+
+## [2026-08-04] EXP-036: REGISTERED PREDICTION — Δ quantized on its own scale (FW-2 / P10)
+
+**Phase:** 0
+**Question:** §7 reconciles our result with prior work reporting that compressing delta
+weights *protects* alignment, by arguing the two sit at opposite ends of `|Δ|/s` and are
+distinguished by **which tensor sets the quantization scale**. That has never been
+measured. Does an adapter quantized on its own scale retain, where the same adapter
+merged does not?
+
+**Registered before the run. Nothing below was written after seeing a number.**
+
+**P10 — the prediction.** When `Δ` sets its own quantization grid, the step size is
+`s_Δ = range(Δ_group)/(2^b − 1)` rather than `s_W = range(W_group)/(2^b − 1)`. Since
+`|Δ| ≪ |W|` for every adapter measured (median `|Δ|/s_W ≈ 0.008`), and since `s_Δ` is by
+construction scaled to `Δ`'s own spread, `|Δ|/s_Δ` should be **O(1)** — of order the
+same 1/15th-of-range granularity that `W` enjoys when it is the thing being quantized.
+
+Concretely, at INT4 g128, asymmetric:
+
+1. **`mean(|Δ|/s_Δ)` lands in roughly 0.1–1.0**, against `mean(|Δ|/s_W) ≈ 0.008–0.13`
+   merged — an increase of one to two orders of magnitude.
+2. **`cos(Δ, Q(Δ))` exceeds 0.99 for every one of the nine adapters**, against 0.14–0.51
+   merged.
+3. **`relative_error` falls below 0.15**, against 1.74–7.41 merged, where 1.0 is the
+   total-erasure baseline.
+4. **The ordering across adapters compresses**: merged retention spans 3.6× in cosine
+   (0.14 to 0.51); unmerged should span under 1.1×, because each adapter is now measured
+   against its own range rather than against `W`'s.
+
+**Falsifier.** If `cos(Δ, Q(Δ))` is below 0.95 for any adapter, or if the unmerged
+spread is comparable to the merged spread, then the scale-ownership account in §7 is
+wrong or incomplete, and §7 must be rewritten as a partial explanation rather than
+confirmed. **A disconfirmation here is the more interesting result and will be reported
+as one.** It would mean the merged/unmerged difference is not principally about which
+tensor sets the scale.
+
+**What this does not test.** Quantizing `Δ` alone is not a deployment configuration on
+its own — it is the arithmetic that a delta-compression scheme performs. This measures
+the numerical claim in §7, not an end-to-end serving path, and it says nothing about
+behaviour.
+
+**Setup:** All nine public adapters. `Q(Δ)` computed with the same simulator, same three
+schemes, at INT4 g128 / INT4 per-channel / INT3 g128, over the same target projections
+and the same four layers as the merged runs, so the two are paired cell for cell.
+
+**Command:** `PYTHONPATH=src python scripts/unmerged_delta.py`
+
+**Status:** REGISTERED, not yet run.
+
+---
+
+## [2026-08-04] EXP-037: Δ on its own scale is preserved — §7's reconciliation measured, not inferred
+
+**Phase:** 0
+**Question:** Does P10 (EXP-036) hold? Registered before this run.
+**Setup:** All nine public adapters, 28 (layer, module) cells each, three precisions,
+asymmetric. `Q(Δ)` computed on `Δ`'s own grid; no base weights involved. 756 records.
+
+**Command:** `PYTHONPATH=src python scripts/unmerged_delta.py`
+
+**Result:**
+
+| precision | mean \|Δ\|/s_Δ | cosine range | rel. error | cosine spread |
+|---|---|---|---|---|
+| INT4 g128 | 2.31–2.38 | **0.9948–0.9952** | 0.098–0.102 | **1.000×** |
+| INT4 per-channel | 1.56–1.67 | 0.9870–0.9902 | 0.141–0.155 | 1.003× |
+| INT3 g128 | 1.08–1.11 | 0.9771–0.9784 | 0.211–0.218 | 1.001× |
+
+Against the same adapters **merged** at INT4 g128: `|Δ|/s_W` 0.008–0.13, cosine
+0.14–0.51, relative error 1.74–7.41, cosine spread **3.6×**.
+
+**Verdict:** WORKED. P10 confirmed on three of its four clauses; the fourth was
+directionally right and numerically wrong.
+
+| clause | predicted | measured | outcome |
+|---|---|---|---|
+| 1. `mean(|Δ|/s_Δ)` in 0.1–1.0 | 0.1–1.0 | **2.31–2.38** | **range wrong**, direction right |
+| 2. cosine > 0.99, all nine | > 0.99 | 0.9948–0.9952 | confirmed |
+| 3. relative error < 0.15 | < 0.15 | 0.098–0.102 | confirmed |
+| 4. spread under 1.1× | < 1.1× | 1.000× | confirmed |
+
+**What we learned:**
+
+1. **§7's account is correct and is now a measurement.** The same adapter, the same
+   quantizer, the same bit width: merged it retains cosine 0.14, unmerged 0.995. The
+   only thing that changed is which tensor's range sets the step size. The
+   merge/no-merge distinction is worth roughly **7× in cosine** and two orders of
+   magnitude in `|Δ|/s`.
+2. **The predicted range for `|Δ|/s_Δ` was too low, and the reason is instructive.** We
+   reasoned that `s_Δ` scales to `Δ`'s spread so the ratio would be O(1) near unity. It
+   is O(1) but near 2.4, because `mean|Δ|` sits well inside a range set by the extremes:
+   for a roughly Gaussian `Δ`, `range/15` is much smaller than `mean|Δ|` at group size
+   128. The clause was stated as a numeric band rather than as the order of magnitude we
+   actually had grounds for, and a band we had not derived is what missed.
+3. **Retention ratio exceeds 1.0 everywhere** (1.005–1.024). Quantization of a
+   zero-centred tensor onto a coarse grid pushes mass outward; the effective delta is
+   slightly *larger* than the intended one. Harmless here, and the same sign as the
+   merged case, where it is 1.7–7.4× and does the damage.
+4. **The ordering across adapters vanishes.** Merged, cosine spans 3.6× and is entirely
+   governed by how each adapter's magnitude compares to `W`'s. Unmerged, all nine land
+   within 0.4% of one another, because each is measured against its own range. **This is
+   the cleanest available statement of what `|Δ|/s` is doing**: adapter identity never
+   mattered, only the ratio.
+5. Negative knowledge: this says nothing about behaviour, and nothing about a deployment
+   path. It is the arithmetic a delta-compression scheme performs, measured.
+
+**Plan impact:** §7 changes from an untested prediction to a measured reconciliation.
+FW-2 leaves Future Work and becomes a result. `results/raw/phase0/unmerged_delta/`.
+
+**Artifacts:** `scripts/unmerged_delta.py`,
+`results/raw/phase0/unmerged_delta/records.jsonl` (756 records), `manifest.json`.
+
+---

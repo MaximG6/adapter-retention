@@ -521,28 +521,13 @@ measured, is not a proxy for behavioural retention.
 \section{Advertised versus Measured}
 \label{sec:advertised}
 
-One adapter in our set is marketed for alignment. We built a three-axis refusal battery
-(harmful-direct, harmful-indirect, benign compliance) and put it through the same gate at
-the same thresholds. \textbf{No axis clears.} The base
-\texttt{Llama-3.1-8B-Instruct} already refuses 16/16 harmful prompts at ceiling
-($p_{\text{refuse}} = 0.999$), leaving no headroom; what contrast exists is sub-threshold
-or wrong-signed.
-
-Reading every trajectory rather than trusting aggregates: on \textbf{2 of 8}
-jailbreak-framed prompts the aligned model \emph{complies} where the base refuses cleanly
-(a phishing email under prefix-injection; a poisoning method under a fiction frame). A
-third apparent non-refusal was a soft refusal our marker list missed.
-\textbf{This is $n$=2, one adapter, at BF16}---a case study, not a population estimate, and
-it says nothing about that adapter under quantization, which we did not measure.
-
-The adapter is not a hidden over-refuser either: a surface-harmful/actually-benign control
-validated as discriminating (base propensity 0.145 on plain benign against 0.812 on
-surface-harmful, a 5.60$\times$ contrast) also fails to clear. Its largest coherent
-behavioural fingerprint is a 2.4--2.8$\times$ output-entropy increase, which is not refusal.
-
-\textbf{Consequence.} A pre-registered prediction on this adapter is \emph{withdrawn rather
-than tested}. We report this instead of substituting a weaker instrument or relaxing the
-gate---relaxing a threshold after seeing data is the failure the gate exists to prevent.
+One adapter in our set is marketed for alignment, and its three-axis refusal battery
+\emph{does not clear the gate}: the base \texttt{Llama-3.1-8B-Instruct} already refuses
+16/16 harmful prompts at ceiling, leaving no headroom, so a pre-registered prediction on
+that adapter is \textbf{withdrawn rather than tested}. Appendix~D gives the full
+measurement, including the 2 of 8 jailbreak-framed prompts on which the aligned model
+complies where the base refuses; it is $n$=2 at BF16, a case study rather than a
+population estimate, and it says nothing about that adapter under quantization.
 
 \section{Reconciling an Opposing Result}
 \label{sec:reconcile}
@@ -555,8 +540,21 @@ when $\Delta$ sets its own scale, $s \propto \mathrm{range}(\Delta)$ and \dratio
 $O(1)$; when $W + \Delta$ is quantized, $s$ is set by the base weights and
 $\dratio{} \approx 0.01$. Under Equation~\ref{eq:flip} retention follows directly. The
 practical rule: \emph{an adapter kept separate and quantized on its own scale is
-numerically preserved; the same adapter merged before quantization is not.} \textbf{We have
-not measured the unmerged configuration}, and flag this as an untested prediction.
+numerically preserved; the same adapter merged before quantization is not.}
+
+\textbf{We measured it.} Quantizing $\Delta$ alone on its own grid, same simulator, same
+bit widths, all nine adapters, 756 records: at INT4 g128 \dratio{} rises from 0.008--0.13
+merged to \textbf{2.31--2.38}, cosine from 0.14--0.51 to \textbf{0.9948--0.9952}, and
+relative error falls from 1.74--7.41 to \textbf{0.098--0.102}. The prediction was
+registered before the run and three of its four clauses held; the fourth predicted
+\dratio{} in 0.1--1.0 and measured 2.3, right in direction and wrong in range.
+
+The sharpest number is the \emph{spread}. Merged, cosine varies 3.6$\times$ across the
+nine adapters and that variation is entirely a matter of how each adapter's magnitude
+compares to $W$'s. Unmerged, all nine fall within 0.4\% of one another. Adapter identity
+never mattered; only the ratio did. This is a statement about stored weights, on one
+arithmetic operation, and says nothing about behaviour or about an end-to-end serving
+path.
 
 \section{Methodological Practice}
 \label{sec:practice}
@@ -636,16 +634,14 @@ resolvable pairs the ordering inverts.
 \textbf{FW-1.} Whether outlier-aware quantizers protect the wrong weights for adapter
 retention: the groups driving the layer 1--3 spike sit at the \emph{quietest} input
 channels, which selection by high activation would not cover (\S4.5).
-\textbf{FW-2.} Quantizing $\Delta$ on its own scale rather than merged, where \dratio{}
-is $O(1)$ rather than ${\approx}0.01$ (\S7).
-\textbf{FW-3.} A matched pair of adapters differing only in rank, which would turn the
+\textbf{FW-2.} A matched pair of adapters differing only in rank, which would turn the
 predictive gap from a within-population observation into a causal test; no such pair is
 public.
-\textbf{FW-4.} Behavioural coverage across rank and scaling convention, the largest gap
+\textbf{FW-3.} Behavioural coverage across rank and scaling convention, the largest gap
 between our weight-space and behavioural claims (\S9).
-\textbf{FW-5.} GGUF K-quants and deployment kernels, using llama.cpp's own quantizer
+\textbf{FW-4.} GGUF K-quants and deployment kernels, using llama.cpp's own quantizer
 rather than weight-space simulation.
-\textbf{FW-6.} Whether the benign dissociation generalises beyond a suppression-style
+\textbf{FW-5.} Whether the benign dissociation generalises beyond a suppression-style
 objective.
 
 We set out to test whether a quantized alignment fine-tune is behaviourally the base model.

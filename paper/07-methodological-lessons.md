@@ -11,6 +11,7 @@ are interesting.*
 
 ## 7.0 Every registered prediction, and how it resolved
 
+
 We pre-registered nine predictions in a dated planning document before the runs they
 concern. **The table below is the complete list.** It exists because a paper claiming
 pre-registration discipline while leaving most of its predictions untraceable gives a
@@ -39,7 +40,47 @@ a reader can see that P4's headline clause did not survive its own input data, a
 P7 was abandoned rather than quietly reinterpreted. **Second, nothing is missing**: nine
 were registered and nine appear.
 
-## 7.1 Validate an instrument against a known contrast before registering a prediction on it
+## 7.1 Nothing checks meaning, and a green verification block is evidence about coverage
+
+
+**Claim.** Every automated check in this project compares a number to a number. The
+claim audit compares a printed value to a recomputation from raw; the cross-artifact
+check compares two printed values; the table check compares two cells; the
+cross-reference gate compares a reference against the set of labels that exist. None of
+them checks *meaning*. **A green block is evidence about what the checks cover, not
+evidence that the document is right**, and the gap between those two is where the
+remaining errors live.
+
+**Evidence.** Four defects shipped in a built PDF while every check passed. All four
+were found by reading.
+
+| defect | why every check passed |
+|---|---|
+| 8 of 54 renumbered references resolved to the wrong section | the gate proves a target *exists*; §3.10 was mapped to §3.7, which exists |
+| §2 asserted "all three concern activations" two paragraphs below a sentence explaining one of them does not | no check reads a sentence against the paragraph above it |
+| the body said six adapters where the abstract and tables said nine | the count is a row *tally*, not a printed value with a recomputation |
+| §5.1's heading said "monotone" directly above a caption saying individual adapters are not | headings and captions are not quantities |
+
+The renumbering case is the sharp one, because the fix made it worse: before, the
+references dangled and a reader could see it. **A checker that turns a dangling
+reference into a resolving but wrong one has removed the symptom and kept the disease.**
+
+**Three holes, named as holes.** `refs.bib` is under no gate — citation identifiers and
+the claims attributed to them are verified by hand, in session, and nothing enforces it.
+Prose-to-table consistency is under no gate: a table's row count disagreeing with the
+sentence introducing it passes everything. Semantic reference validity is under no gate;
+what exists instead is a one-off manual audit of the rewritten references, which is not a
+standing check and will not fire next time.
+
+**This entry organises the ones that follow.** Each of them closes one numeric hole, and
+none of them closes the semantic one: the figure cross-check (§7.9) verifies that plotted
+values match a recomputation, the generated-view rule (§7.8) verifies that derived
+documents match raw, the shared-code-path rule (§7.10) verifies that a check does not
+share its subject's assumptions. All three are worth having. None would have caught any
+row of the table above.
+
+## 7.2 Validate an instrument against a known contrast before registering a prediction on it
+
 
 **Claim.** An instrument that has not been shown to separate a contrast whose answer
 you already know cannot support a prediction about a contrast whose answer you do not.
@@ -58,7 +99,8 @@ deprecated), rescued two (the graded constraint trace and fixed-guesser elicitat
 both of which passed), and caused one registered prediction to be **withdrawn on
 evidence rather than tested** (§7.6).
 
-## 7.2 A validation gate must itself be tested against something already known to be broken
+## 7.3 A validation gate must itself be tested against something already known to be broken
+
 
 **Claim.** A gate is an instrument. Build it, then verify it rejects a case you have
 independently established is bad — otherwise you have a filter of unknown selectivity
@@ -78,182 +120,24 @@ The rebuilt gate is conjunctive on a rank-based effect size (Cliff's delta, alwa
 finite), a ratio, and an absolute floor, and it ships with a self-test asserting that
 it rejects the reveal probe. The self-test is run on every invocation.
 
-## 7.3 An orthonormal basis is the only unbiased probe of a subspace
 
-**Claim.** When measuring how a low-rank object behaves on its own subspace, the probe
-distribution is part of the measurement. Drawing probes through the object's own
-factors imports that object's spectrum into the result.
+**The rule caught a defect in the check written to enforce the rule.** A table-level
+cross-artifact check was added after two tables were found printing the same three
+intervals with different values. It ran clean and reported no disagreement — while the
+disagreement was still live in the shipped PDF. LaTeX writes `int4\_g128` and the
+markdown writes `int4_g128`; the label-normalising sweep stripped `\word` escapes but
+not `\_`, so the two labels never joined and every comparison silently had one side.
+It looked correct, exited zero, and would have produced a third consecutive green block
+over the same defect.
 
-**Evidence.** We first drew subspace probes as `coef @ A`, whose covariance is `AᵀA` —
-uniform on the coefficients, **not** on the row space, and therefore over-weighting
-`A`'s dominant singular directions. Measured amplification came out at 33–75 and nearly
-rank-insensitive (41.77 at r=4 vs 34.67 at r=32), from which we concluded the
-`√(d_in/r)` law had failed on trained adapters.
+It was caught only because the rule in this entry required it to fire on a case whose
+answer was already known — the historical disagreement, reintroduced deliberately. This
+is the sharpest form the evidence for this practice can take: not a check that failed,
+but **the rule catching a fault in the check written to enforce it**. The previous
+sharpest was the vacuous-comparison guard, which had the same shape one level down.
 
-It had not. With an orthonormal basis of `Δ`'s right singular vectors, and rank
-isolated by SVD-truncating a single adapter at fixed Frobenius norm, the law holds to
-within 11% at worst and **1% at r=32** (§4.4). The earlier result was an artifact of
-the probe compounded by a comparison confounded across rank, base model, recipe and
-convention simultaneously.
+## 7.4 An append-only record needs a generated view, or it will leak superseded values
 
-**The general form of this lesson is narrower than "measure rather than compose".** The
-failed measurement *was* direct. The lesson is that a direct measurement can encode an
-assumption in its instrument, and the instrument needs validating as much as the
-quantity does. This is one of two instances of a more general rule, stated in §7.10: a
-check that shares an assumption or a code path with the thing it checks is not a check.
-
-## 7.4 A guard built on guessed defaults is worse than no guard
-
-**Claim.** A safety check that produces false positives trains its author to loosen it.
-Read the library's actual defaults at runtime rather than hardcoding what you believe
-them to be.
-
-**Evidence.** We audit the full adapter-config surface, partitioning every field into
-handled / ignored / must-be-default / gated. An early version hardcoded
-`qalora_group_size=None` as the expected default when peft's actual default is `16`,
-producing a confident failure on a completely ordinary config. The fix reads
-`LoraConfig`'s defaults at runtime, so the guard cannot drift from the library it
-guards.
-
-The same reasoning motivates the ground-truth fixture of §3.8: rather than trusting our
-own delta computation, we build a one-`Linear` peft stub, call `merge_and_unload`, and
-compare against `merged − original`. Four analyses had already run on an implementation
-that hardcoded `α/r` and silently mis-scaled rsLoRA adapters by **11.3×**. The fixture
-catches that class of error against the library that defines the semantics.
-
-**This happened a second time, from an unrelated cause, which is what makes it a rule
-rather than an anecdote.** The coverage guard of §7.9 warns when a figure asserts little
-about many plotted values. Its first version counted an `all_close` over six points as a
-single assertion, so it reported low coverage on figures that were in fact fully checked
-— a warning firing on correct input. Had it shipped, the rational response to a warning
-that is usually wrong is to stop reading it, at which point the guard is worse than
-absent: it occupies the place where a working guard would go.
-
-**It then happened twice more, from two further unrelated causes.** The guard forbidding
-self-comparing checks (§7.10) matched the wrong node in the caller's syntax tree, so it
-never fired at all — a false *negative* rather than a false positive, but the same class:
-a guard whose own model of the world was wrong. And the cross-reference checker written
-for this manuscript's consistency pass reported **nine** unresolved section references
-that all resolve perfectly, because its pattern required whitespace after the section
-number and every heading in the paper uses a period.
-
-That last one is worth stating plainly, because of *how* it was caught: the output
-claimed §4 and §5 do not exist. **It was caught only because the false positives were
-absurd on their face.** A checker whose spurious findings were merely plausible — say,
-three obscure subsection references instead of every top-level section — would have sent
-its author looking for defects that were not there, and then, on finding nothing, would
-have trained exactly the habit of disregarding it.
-
-**Four instances, four unrelated causes, no shared mechanism.** The table below lists
-them; each row is a guard whose own model of the world was wrong, and the last column
-records whether it fired when it should not have or failed to fire when it should.
-
-| # | guard | its own defect | direction |
-|---|---|---|---|
-| 1 | adapter-config audit | expected default guessed (`None`) where the library uses `16` | false positive |
-| 2 | figure coverage guard | one call covering six values counted as one | false positive |
-| 3 | vacuous-check guard | matched the innermost AST call, not its own | false negative |
-| 4 | cross-reference checker | regex required whitespace where the text has a period | false positive |
-
-This is now **the most-repeated failure in the project** — more frequent than any error
-in the science itself. What the four share is only the consequence: **a check whose model
-of the world is wrong is worse than no check, because it consumes the attention a working
-check would receive and teaches its author to discount it.** In every case the fix was to
-correct the guard's model — read defaults at runtime, count what a call covers, match the
-right node, match the actual heading format — never to loosen the threshold, which is the
-tempting move and the wrong one.
-
-The uncomfortable corollary: **guards are code, and this project's guards have had a
-higher defect rate than its measurements.** That is an argument for testing them against
-known-bad input (§7.10), not for having fewer of them.
-
-## 7.5 A prompt set needs the same responds-to-a-known-contrast check as an instrument
-
-**Claim.** A null result from a prompt set that was never shown to discriminate is
-uninformative. Demonstrate the prompts can move the measurement before reporting that
-they did not.
-
-**Evidence.** Testing whether an adapter over-refuses, our plain benign prompts ("how do
-I bake bread") could not have detected it — refusing them requires a badly broken model,
-so a null there means nothing. We added surface-harmful, actually-benign prompts and
-**first established that the set discriminates**: base-model refusal propensity is
-0.1449 on plain benign prompts and **0.8118** on surface-harmful ones, a 5.60×
-contrast on the same model.
-
-Only then did the null become reportable: the adapter adds no over-refusal (§6.3). This
-is §7.1's rule applied one level out — from the instrument to the stimuli it is applied
-to.
-
-## 7.6 An inherited citation is not a verified citation, and it fails in a specific way
-
-**Claim.** A reference that entered your own notes early is the one least likely to be
-challenged later, because by the time it reaches a draft it looks like something already
-settled. Verify references against the source in the same session in which they enter
-prose — and verify that each cited paper makes the claim you attribute to it, not merely
-that the identifier resolves to a real paper.
-
-**Evidence, part one: the identifier.** We attributed the Taboo model organism to
-arXiv:2510.01070 for the duration of the project. That identifier resolves to a real,
-relevant paper — *Eliciting Secret Knowledge from Language Models*, by an overlapping
-author group, on secret-knowledge elicitation — but its model organisms are
-conceptual-knowledge settings, not the taboo-word setting we use. The correct reference
-is arXiv:2505.14352. The wrong one had propagated into five files and eight locations.
-
-**The failure mode is worth naming precisely: a plausible identifier, for a real paper,
-by the right authors, on an adjacent topic.** A fabricated identifier or an irrelevant
-paper would have been caught on first contact. This one survived because every property
-a quick check would test was satisfied.
-
-**Evidence, part two: the claim.** Verifying identifiers is not sufficient. Checking
-what each correctly-cited paper actually asserts changed three characterisations in our
-own related-work discussion (§2), including one where a paper we had positioned as
-supporting a mechanism in fact proposes the opposite conclusion about it, and one where
-a body of work we had treated as explaining an observation of ours concerns a different
-object entirely (activations rather than weights). Those are recorded in §2 as our
-inferences, not their findings.
-
-**The actionable rule, which our own error pattern supports.** Of seven load-bearing
-attributions, the two that survived verification were the two we had recorded as
-**specific quantitative values** — "quantizes delta weights, mitigates alignment-breaking
-risk by up to 66.17%", and "perplexity rises under 0.5% at 8-bit while 2.5–5.6% of items
-develop new biases at 4-bit". The five recorded as **general characterisations** —
-"asserts the erasure mechanism", "bounds compensation capacity", "the outlier
-phenomenon" — drifted, and three of them were wrong.
-
-The mechanism is straightforward: a number carries its own context and cannot be
-paraphrased into something the source did not say, whereas a characterisation is already
-a paraphrase at the moment it is written down, and each subsequent reuse paraphrases the
-paraphrase. **When taking a note on someone else's work, record a quantity and its
-conditions rather than a summary of the finding.** A note that reads "66.17%, delta
-weights, fine-tuning attacks" is checkable in seconds; a note that reads "compression
-protects alignment" is not, and will be reused as though it were.
-
-## 7.7 A flagged gap that is never actioned is worse than an unflagged one
-
-**Claim.** Writing "to be resolved before X rather than guessed" into a plan discharges
-the feeling of having addressed a gap without addressing it. Unless a flag carries an
-owner and a gate that blocks on it, it converts an open question into a settled-looking
-one.
-
-**Evidence.** Our own planning document recorded, before Phase 1 began, that the Taboo
-checkpoints' training recipe and `_50_mix` suffix were undocumented and were "to be
-resolved before Phase 1 rather than guessed". Phase 1 then ran to completion — six
-adapters, four precisions, 1536 records — without that resolution ever happening. It was
-only revisited during a citation pass two weeks later, at which point the checkpoints
-turned out to have no model card at all: every substantive section reads "[More
-Information Needed]", and nothing links them to any paper.
-
-**This is a distinct failure from the others in this section.** Every other lesson here
-concerns something we believed and measurement corrected. This one concerns something we
-*correctly identified as unknown* and then proceeded as though known, because the act of
-flagging it read as progress. No measurement is affected — the constraint metric is
-judge-free because the secret word appears in the checkpoint *name* — but the paper's
-provenance claim had to be withdrawn rather than merely re-pointed (§8.8).
-
-The procedural fix we adopt: a flagged gap either blocks a named gate, or it is not a
-flag but a note.
-
-## 7.8 An append-only record needs a generated view, or it will leak superseded values
 
 **Claim.** An append-only log is the right format for a research record: it preserves
 what was believed and when, and corrections are added rather than substituted. That
@@ -315,44 +199,8 @@ is *rewritten* at each gate rather than appended to. **The format that preserves
 is the one that leaks stale values; the format that overwrites is the one that stays
 current.** A project wants both, and should not confuse which is which.
 
-## 7.9 A figure that renders without error looks validated and is not
+## 7.5 A check that shares an assumption or a code path with the thing it checks is not a check
 
-**Claim.** Every figure asserts numbers. A plot that draws cleanly has demonstrated only
-that its code ran, not that it depicts what it claims — and the failure mode is silent by
-construction, because the output is an image and images do not raise. **Every figure
-needs a numerical cross-check against an independent computation of the same quantity,
-not a visual review.**
-
-**Evidence.** Our predictive-gap figure marks the adapters belonging to statistically
-resolvable pairs, which is the visual carrier of the paper's sign argument (PG-2). A set
-comprehension collected only the *first* member of each pair, so the figure marked **2**
-adapters where the analysis reports **4**. It rendered without error, looked entirely
-reasonable, and the two it dropped were `gold` and `ship` — **`ship` being precisely the
-adapter that carries the inversion**, the second-highest predictor value with the worst
-retention. The figure would have understated its own central claim.
-
-**Visual review did not catch it, and could not have.** Reviewing the rendered image did
-catch a caption error on another figure (a sample size stated as 6 where the panel showed
-3) and several label collisions. Those are visible defects. A correct-looking marker set
-with the wrong membership is not: nothing about two filled points instead of four looks
-wrong on the page. What caught it was comparing the figure's own output against an
-independent analysis script that computes the same pair set and reports 4.
-
-**The practice we adopt.** Each figure-generation script now asserts its plotted values
-against an independent recomputation and fails loudly on mismatch, rather than printing a
-plot and trusting it. This is the figure analogue of the claim-level audit in §7.8: the
-audit turned prose into something testable, and these assertions turn plots into
-something testable. Both are cheap, and both caught an error on their first run.
-
-The retrofit immediately found a second, different defect. One figure computed its
-capability series as a **ratio of pooled means** while the text and every other figure
-used the **mean of per-adapter ratios** — a divergence of up to 0.94 percentage points.
-Both estimators are defensible; using one in a figure and the other in the prose is not.
-This is not staleness: both artifacts were current, and neither looks wrong in isolation.
-**Estimator drift between artifacts describing the same quantity is its own failure
-mode**, and it is invisible without a comparison that forces the two into contact.
-
-## 7.10 A check that shares an assumption or a code path with the thing it checks is not a check
 
 **Claim.** The value of a verification lies entirely in what it does *not* share with its
 subject. A check built on the same assumption will confirm that assumption; a check
@@ -423,7 +271,33 @@ appears, unless each check has a recorded known-bad case it rejects. We keep tho
 tests — `tests/test_figcheck.py`, `instrument_gate.py --self-test` — so the property is
 re-verified on every run rather than asserted once.)*
 
-## 7.11 Price the caveat against the measurement that would remove it
+**Six instances, six unrelated causes, no shared mechanism.** them; each row is a guard whose own model of the world was wrong, and the last column
+records whether it fired when it should not have or failed to fire when it should.
+
+| # | guard | its own defect | direction |
+|---|---|---|---|
+| 1 | adapter-config audit | expected default guessed (`None`) where the library uses `16` | false positive |
+| 2 | figure coverage guard | one call covering six values counted as one | false positive |
+| 3 | vacuous-check guard | matched the innermost AST call, not its own | false negative |
+| 4 | cross-reference checker | regex required whitespace where the text has a period | false positive |
+| 5 | appendix-letter mapper | a guard skipping subsection refs also skipped every reference ending a sentence | false negative |
+| 6 | appendix-letter mapper | ran after the section pass and rewrote references that pass had just created | false positive |
+
+This is now **the most-repeated failure in the project** — more frequent than any error
+in the science itself. What the four share is only the consequence: **a check whose model
+of the world is wrong is worse than no check, because it consumes the attention a working
+check would receive and teaches its author to discount it.** In every case the fix was to
+correct the guard's model — read defaults at runtime, count what a call covers, match the
+right node, match the actual heading format — never to loosen the threshold, which is the
+tempting move and the wrong one.
+
+The uncomfortable corollary: **guards are code, and this project's guards have had a
+higher defect rate than its measurements.** That is an argument for testing them against
+known-bad input (§7.10), not for having fewer of them.
+
+
+## 7.6 Price the caveat against the measurement that would remove it
+
 
 **Claim.** When a limitation is about to be written into the text, ask what it would cost
 to *eliminate* rather than describe. Careful wording is the reflex, and it is often more
@@ -457,38 +331,8 @@ This is not an argument against caveats — §8 is long and every entry in it is
 bearing. It is an argument for pricing them first. The test: *if this limitation were
 someone else's, what would I ask them to run?* If the answer is under a day, run it.
 
-## 7.12 Pre-committed criteria find things; re-reading does not
+## 7.7 Tooling reports success on the operation, not on the outcome
 
-**Claim.** Reviewing your own work by reading it is close to worthless, because the same
-judgment that produced the text evaluates it, and consistency is what a reader
-looking for consistency finds. **Commit in advance to what would falsify each claim, then
-search for that specific evidence.** The value lies entirely in the criteria being fixed
-before the text is opened.
-
-**Evidence.** Our end-to-end manuscript review ran five passes. Before any section was
-read, we wrote down, for each of the four load-bearing findings, what evidence would
-overturn it — for instance, for the headline: *"are these two numbers measured on
-comparable populations?"*, and for the dissociation: *"does the constraint ratio move
-with precision?"*
-
-**Both severe findings came from those pre-committed questions**, and neither is visible
-by reading. The headline's mismatched populations look fine in every sentence containing
-them; the dissociation's effect size is stated once as a mean and the outlier is
-invisible unless the per-condition values are demanded. Meanwhile **the three passes run
-as ordinary judgment — checking §4 against §5, §2 against §9, and looking for
-reintroduced readings — found nothing that the scripted checks had not already found.**
-
-The remaining findings came from mechanical checks: unreferenced figures, untraceable
-predictions, a stale count. Those need no judgment at all, and should be scripted rather
-than read.
-
-**The practical form:** a self-review's findings are worth roughly what its references
-are worth. Give every pass an external reference where one exists — raw records, an
-independent recomputation, a registered list — and treat the passes that have none as
-producing weak nulls. Ours did produce weak nulls, and we report that rather than
-counting three clean judgment passes as three clean bills of health.
-
-## 7.13 Tooling reports success on the operation, not on the outcome
 
 **Claim.** A zero exit code means a command completed, not that it accomplished anything.
 In this ecosystem the gap between the two is wide enough to be a standing hazard, and it
@@ -528,59 +372,3 @@ release on: **regenerating the committed tables, prompt sets and README from the
 records and getting byte-identical files** is a statement about the artifact rather than
 about any command's exit status, and it is the strongest such statement available.
 
-## 7.14 Derive, measure the derivation, then trust it
-
-**Claim.** A specification is a hypothesis. Three of our own design decisions were wrong
-in ways that only measurement exposed, and all three would have produced plausible,
-publishable, incorrect numbers.
-
-**Evidence.** In each case the implementation was correct — our quantizer was bit-exact
-against `gptqmodel` throughout — and the *specification* was wrong.
-
-1. **`retention_ratio` as the primary metric.** Unbounded above and non-monotone in
-   retention: it reads **95.5 exactly where cosine is 0.015**, peaking at the point of
-   total destruction. Reporting it bare would have inverted this paper's central claim.
-   Replaced by cosine, with `relative_error` against an interpretable erasure baseline
-   of 1.0.
-2. **`|δ| < s/2` as a deterministic erasure threshold.** Wrong: the channel is
-   probabilistic, `P(flip) = min(|δ|/s, 1)`, so half the weights sitting exactly at the
-   threshold still flip.
-3. **`1/√d_in` suppression of layer-output error on generic inputs.** Measured
-   suppression is **exactly 1.00**. There is no dimensional averaging; the amplification
-   effect exists only on inputs inside the adapter's active subspace, where it is
-   `√(d_in/r)` (§4.4).
-
-Two further corrections belong to the same practice. A registered prediction about
-depth was drawn from a 4-layer sample and reported a trend **three times too large with
-the wrong shape**; the full 36-layer profile also revealed a bit-flip spike at layers
-1–3 that 4-layer sampling could not see. And one registered behavioural prediction —
-that the constraint would fail before the capability — was **withdrawn on evidence
-before being tested**, because the instrument it depended on failed §7.1's check and the
-replacement measurements pointed the opposite way (§5.3).
-
-**We state the running total plainly:** across the project, two registered predictions
-were genuinely refuted, one apparent refutation was itself overturned as confounded
-(§7.3), and one verdict required three attempts before the instrument was trustworthy.
-We report this because a reader deciding whether to trust §4 and §5 should know how the
-numbers in them were arrived at.
-
-## 7.15 A secondary theme: proxies that do not track what they are named after
-
-Two results in this paper are instances of the same shape, at different levels of the
-stack.
-
-- **A weight-space proxy fails to track behaviour.** Output SNR is precisely computed
-  and precisely predicts stored weights, and does not predict behavioural retention
-  (§5.4, PG-1 to PG-3).
-- **A behavioural proxy fails to track behaviour.** `p_refuse` scores a model at 0.812
-  refusal propensity on prompts it complies with 16/16 times, because it responds to how
-  harmful the *prompt* looks rather than to what the *model* does (§6.5).
-
-Both were caught the same way, and the method is the transferable part: validate the
-proxy against a contrast whose answer is known, and read individual trajectories rather
-than trusting an aggregate.
-
-**We do not claim a general thesis about measurement proxies from two instances.** The
-paper's primary claims are the channel model (§4) and the erasure-with-survival result
-(§5.1); this pattern is a secondary theme and a reason for the practices in §7.1 to §7.5,
-not a finding in its own right.

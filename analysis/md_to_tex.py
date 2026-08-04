@@ -113,8 +113,28 @@ REFMAP = {
     "4.5.1": "4.5", "5.4": "5.3",
     # Advertised versus measured becomes Appendix D, keeping its own numbering.
     **{f"6.{i}": f"D.{i}" for i in range(1, 6)},
-    # Methodological practice becomes Appendix C, offset by one because 7.0 is C.1.
-    **{f"7.{i}": f"C.{i + 1}" for i in range(0, 16)},
+    # Methodological practice becomes Appendix C. The section was cut from fifteen
+    # practices to seven, so this is no longer an offset: entries that survive map to
+    # their new position, and references to entries that were cut are repointed at the
+    # surviving entry that absorbed their lesson. The organising entry (C.2) absorbs the
+    # ones whose lesson was "the checks do not cover this".
+    "7.0": "C.1",     # registered predictions table
+    "7.0a": "C.2",    # nothing checks meaning (organising)
+    "7.1": "C.3",     # validate an instrument against a known contrast
+    "7.2": "C.4",     # a gate must be tested against known-bad input
+    "7.3": "C.6",     # orthonormal probe -> instrument shares an assumption
+    "7.4": "C.6",     # guards table, folded into C.6
+    "7.5": "C.3",     # prompt set needs the instrument check
+    "7.6": "C.2",     # inherited citation -> nothing checks meaning
+    "7.7": "C.2",     # flagged gap never actioned
+    "7.8": "C.5",     # append-only leaks superseded values
+    "7.9": "C.2",     # a figure that renders is not validated
+    "7.10": "C.6",    # a check sharing a code path is not a check
+    "7.11": "C.7",    # price the caveat against the measurement
+    "7.12": "C.2",    # pre-committed criteria find things
+    "7.13": "C.8",    # tooling reports success on the operation
+    "7.14": "C.2",    # derive, measure the derivation, then trust it
+    "7.15": "C.2",    # proxies that do not track what they name
     # Limitations has no subsections in the paper.
     **{f"8.{i}": "9" for i in range(1, 9)},
 }

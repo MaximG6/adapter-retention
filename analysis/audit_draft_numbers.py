@@ -543,6 +543,36 @@ def claims() -> list[Claim]:
     c.append(("§4.4", "amplification min", 6.2, lambda: amp_range()[0], 0.05))
     c.append(("§4.4", "amplification max", 16.5, lambda: amp_range()[1], 0.05))
 
+    # ---- §7 unmerged: Q(Δ) on Δ's own scale (EXP-037, registered as P10) ----
+    UNM = P0 / "unmerged_delta" / "records.jsonl"
+    if UNM.exists():
+        unm = [json.loads(x) for x in UNM.read_text(encoding="utf-8").splitlines()
+               if x.strip()]
+
+        def per_adapter(prec: str, key: str) -> list[float]:
+            acc: dict[str, list[float]] = defaultdict(list)
+            for r in unm:
+                if r["precision"] == prec:
+                    acc[r["adapter"]].append(r[key])
+            return [mean(v) for v in acc.values()]
+
+        c.append(("§7", "unmerged record count", 756.0,
+                  lambda: float(len(unm)), 0))
+        c.append(("§7", "unmerged adapters", 9.0,
+                  lambda: float(len({r["adapter"] for r in unm})), 0))
+        for key, lo, hi in (("cosine", 0.9948, 0.9952),
+                            ("relative_error", 0.098, 0.102),
+                            # Printed as 2.31--2.38; pinned here at full precision so the
+                            # tolerance is about the measurement, not about rounding.
+                            ("mean_abs_delta_over_step", 2.3053, 2.3827)):
+            c.append(("§7", f"unmerged {key} min", lo,
+                      lambda k=key: min(per_adapter("int4_g128", k)), 5e-4))
+            c.append(("§7", f"unmerged {key} max", hi,
+                      lambda k=key: max(per_adapter("int4_g128", k)), 5e-4))
+        c.append(("§7", "unmerged cosine spread", 1.000,
+                  lambda: (max(per_adapter("int4_g128", "cosine"))
+                           / min(per_adapter("int4_g128", "cosine"))), 5e-4))
+
     # ---- README: the committed file against the same raw records ----
     # Expected values are read from README.md and compared to recomputation, so the
     # direction of the test is "does the published document still agree with the data",

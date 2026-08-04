@@ -62,7 +62,7 @@ cosine & 5.0\% \\
 
 The prediction is a closed form with no fitted parameters (\S{}3.5), so this is out-of-sample in the only sense available: nothing about these six adapters was used to construct the model.
 
-\textbf{It reads \texttt{use\_\allowbreak{}rslora} from each adapter's config rather than assuming a convention.} For a rank-128 rsLoRA adapter the two conventions differ by \texttt{sqrt128 ~ 11.\allowbreak{}3x}, which is enough to move an adapter from worst to best in a six-adapter ranking (Appendix C.5). The computed delta is verified against peft's own \texttt{merge\_\allowbreak{}and\_\allowbreak{}unload} by a ground-truth fixture (\S{}3.8).
+\textbf{It reads \texttt{use\_\allowbreak{}rslora} from each adapter's config rather than assuming a convention.} For a rank-128 rsLoRA adapter the two conventions differ by \texttt{sqrt128 ~ 11.\allowbreak{}3x}, which is enough to move an adapter from worst to best in a six-adapter ranking (Appendix C.6). The computed delta is verified against peft's own \texttt{merge\_\allowbreak{}and\_\allowbreak{}unload} by a ground-truth fixture (\S{}3.8).
 
 \subsection{What it cannot do, stated in its own output}
 
@@ -342,6 +342,7 @@ layer & module & step med/p1 & act @ narrowest 1\% & act @ widest 1\% & $\rho$(l
 
 \subsection{Every registered prediction, and how it resolved}
 
+
 We pre-registered nine predictions in a dated planning document before the runs they concern. \textbf{The table below is the complete list.} It exists because a paper claiming pre-registration discipline while leaving most of its predictions untraceable gives a reader no way to check that none was quietly dropped --- and that check is the entire value of registering them.
 
 Four of the nine were \textbf{not} confirmed. Two were withdrawn on evidence before being tested, one was superseded by a measurement bug in its own inputs, and one was never run because we decided the experiment was not worth its cost. All four are stated here, not only in the sections where their subject matter appears.
@@ -355,10 +356,10 @@ Four of the nine were \textbf{not} confirmed. Two were withdrawn on evidence bef
 \textbf{P1} & Under \texttt{alpha = 2r}, weight-space fidelity rises as \texttt{r\textasciicircum{}\{+1/\allowbreak{}4\}} while subspace output fidelity falls as \texttt{r\textasciicircum{}\{-\allowbreak{}1/\allowbreak{}4\}} --- the two spaces disagree in sign & \textbf{Confirmed on synthetic adapters; does not transfer to trained ones} & \S{}4.3 \\
 \textbf{P2} & Under fixed \texttt{alpha}, \texttt{SNR\_\allowbreak{}w prop r\textasciicircum{}\{-\allowbreak{}1/\allowbreak{}4\}} and \texttt{SNR\_\allowbreak{}out prop r\textasciicircum{}\{-\allowbreak{}3/\allowbreak{}4\}} & \textbf{Confirmed} (fitted $-$0.275 / $-$0.744 against $-$0.25 / $-$0.75) & \S{}4.3 \\
 \textbf{P3} & A calibrated absolute prediction of output SNR at \texttt{r=32} & \textbf{Untested.} Requires adapters matched on training across ranks, which do not exist publicly & \S{}9, FW-3 \\
-\textbf{P4} & Behaviour substantially preserved for adapters with output SNR > 1.5; \texttt{dpo-\allowbreak{}halluc} singled out \textbf{at risk} as the one case where noise exceeds signal & \textbf{Partly confirmed, partly withdrawn.} Behaviour preserved for all six at INT4 g128. The at-risk clause was \textbf{withdrawn}: it rested on an output SNR of 0.958 produced by an rsLoRA scaling bug; the corrected value is 3.757 and \textbf{no adapter in the set has output SNR below 1} & \S{}5.1; withdrawal in Appendix C.9 \\
+\textbf{P4} & Behaviour substantially preserved for adapters with output SNR > 1.5; \texttt{dpo-\allowbreak{}halluc} singled out \textbf{at risk} as the one case where noise exceeds signal & \textbf{Partly confirmed, partly withdrawn.} Behaviour preserved for all six at INT4 g128. The at-risk clause was \textbf{withdrawn}: it rested on an output SNR of 0.958 produced by an rsLoRA scaling bug; the corrected value is 3.757 and \textbf{no adapter in the set has output SNR below 1} & \S{}5.1; withdrawal in Appendix C.5 \\
 \textbf{P5} & Behavioural degradation orders across adapters as taboo < latentqa < dpo < safety, spanning 3.7$\times$ in output SNR & \textbf{Not tested.} Subsumed by the decision not to run the across-population test; two of the four adapters never received validated behavioural batteries & \S{}9 \\
 \textbf{P6} & INT8 survives essentially completely; if anything breaks it is per-channel INT4 or 3-bit & \textbf{Confirmed} --- INT4 g128 99.2\%, per-channel 77.2\%, INT3 57.8\% & \S{}5.1 \\
-\textbf{P7} & The constraint degrades before the capability, scaling with the suppressed token's base probability & \textbf{Withdrawn on evidence before being tested.} The instrument it depended on failed the gate, and the replacement measurements showed the opposite direction & \S{}5.3, Appendix C.2 \\
+\textbf{P7} & The constraint degrades before the capability, scaling with the suppressed token's base probability & \textbf{Withdrawn on evidence before being tested.} The instrument it depended on failed the gate, and the replacement measurements showed the opposite direction & \S{}5.3, Appendix C.3 \\
 \textbf{P8} & At INT3, retention ranks in output-SNR order; safety adapter > 85\% & \textbf{Safety clause withdrawn} (its instrument did not validate); remainder untested & Appendix D.4, \S{}9 \\
 \textbf{P9} & Across-population Spearman between output SNR and INT3 retention exceeds +0.6 & \textbf{Not run.} Decision recorded with its reasoning and its falsifier before the fact & \S{}9 \\
 \bottomrule
@@ -367,15 +368,44 @@ Four of the nine were \textbf{not} confirmed. Two were withdrawn on evidence bef
 
 Two properties of this table are the point of it. \textbf{First, the failures are legible}: a reader can see that P4's headline clause did not survive its own input data, and that P7 was abandoned rather than quietly reinterpreted. \textbf{Second, nothing is missing}: nine were registered and nine appear.
 
+\subsection{Nothing checks meaning, and a green verification block is evidence about coverage}
+
+
+\textbf{Claim.} Every automated check in this project compares a number to a number. The claim audit compares a printed value to a recomputation from raw; the cross-artifact check compares two printed values; the table check compares two cells; the cross-reference gate compares a reference against the set of labels that exist. None of them checks \emph{meaning}. \textbf{A green block is evidence about what the checks cover, not evidence that the document is right}, and the gap between those two is where the remaining errors live.
+
+\textbf{Evidence.} Four defects shipped in a built PDF while every check passed. All four were found by reading.
+
+\begin{table*}[t]
+\centering\scriptsize
+\begin{tabularx}{\textwidth}{>{\hsize=1.202\hsize\raggedright\arraybackslash}X>{\hsize=0.798\hsize\raggedright\arraybackslash}X}
+\toprule
+defect & why every check passed \\
+\midrule
+8 of 54 renumbered references resolved to the wrong section & the gate proves a target \emph{exists}; \S{}3.10 was mapped to \S{}3.7, which exists \\
+\S{}2 asserted "all three concern activations" two paragraphs below a sentence explaining one of them does not & no check reads a sentence against the paragraph above it \\
+the body said six adapters where the abstract and tables said nine & the count is a row \emph{tally}, not a printed value with a recomputation \\
+\S{}5.1's heading said "monotone" directly above a caption saying individual adapters are not & headings and captions are not quantities \\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+The renumbering case is the sharp one, because the fix made it worse: before, the references dangled and a reader could see it. \textbf{A checker that turns a dangling reference into a resolving but wrong one has removed the symptom and kept the disease.}
+
+\textbf{Three holes, named as holes.} \texttt{refs.\allowbreak{}bib} is under no gate --- citation identifiers and the claims attributed to them are verified by hand, in session, and nothing enforces it. Prose-to-table consistency is under no gate: a table's row count disagreeing with the sentence introducing it passes everything. Semantic reference validity is under no gate; what exists instead is a one-off manual audit of the rewritten references, which is not a standing check and will not fire next time.
+
+\textbf{This entry organises the ones that follow.} Each of them closes one numeric hole, and none of them closes the semantic one: the figure cross-check (Appendix C.2) verifies that plotted values match a recomputation, the generated-view rule (Appendix C.5) verifies that derived documents match raw, the shared-code-path rule (Appendix C.6) verifies that a check does not share its subject's assumptions. All three are worth having. None would have caught any row of the table above.
+
 \subsection{Validate an instrument against a known contrast before registering a prediction on it}
+
 
 \textbf{Claim.} An instrument that has not been shown to separate a contrast whose answer you already know cannot support a prediction about a contrast whose answer you do not. The check is cheap and it belongs before pre-registration, not after a null.
 
 \textbf{Evidence.} Our first capability probe was a forced-reveal continuation --- "The secret word is" --- and it returned near-identical values on models with obviously different behaviour. The probe asks the model to complete the single frame its training suppresses, so it measures the constraint at maximum strength and reads approximately zero whether or not the model knows the word. We had registered a prediction on it.
 
-We now require every instrument to separate \texttt{aligned\_\allowbreak{}bf16} from \texttt{base\_\allowbreak{}bf16} --- a contrast confirmable by reading the text --- before it may be used in a precision comparison (\S{}3.9). Applying this rule cost one instrument (the reveal probe, deprecated), rescued two (the graded constraint trace and fixed-guesser elicitation, both of which passed), and caused one registered prediction to be \textbf{withdrawn on evidence rather than tested} (Appendix C.7).
+We now require every instrument to separate \texttt{aligned\_\allowbreak{}bf16} from \texttt{base\_\allowbreak{}bf16} --- a contrast confirmable by reading the text --- before it may be used in a precision comparison (\S{}3.9). Applying this rule cost one instrument (the reveal probe, deprecated), rescued two (the graded constraint trace and fixed-guesser elicitation, both of which passed), and caused one registered prediction to be \textbf{withdrawn on evidence rather than tested} (Appendix C.2).
 
 \subsection{A validation gate must itself be tested against something already known to be broken}
+
 
 \textbf{Claim.} A gate is an instrument. Build it, then verify it rejects a case you have independently established is bad --- otherwise you have a filter of unknown selectivity sitting at the most consequential point in the pipeline.
 
@@ -388,83 +418,13 @@ We now require every instrument to separate \texttt{aligned\_\allowbreak{}bf16} 
 
 The rebuilt gate is conjunctive on a rank-based effect size (Cliff's delta, always finite), a ratio, and an absolute floor, and it ships with a self-test asserting that it rejects the reveal probe. The self-test is run on every invocation.
 
-\subsection{An orthonormal basis is the only unbiased probe of a subspace}
 
-\textbf{Claim.} When measuring how a low-rank object behaves on its own subspace, the probe distribution is part of the measurement. Drawing probes through the object's own factors imports that object's spectrum into the result.
+\textbf{The rule caught a defect in the check written to enforce the rule.} A table-level cross-artifact check was added after two tables were found printing the same three intervals with different values. It ran clean and reported no disagreement --- while the disagreement was still live in the shipped PDF. LaTeX writes \texttt{int4\textbackslash\{\}\_\allowbreak{}g128} and the markdown writes \texttt{int4\_\allowbreak{}g128}; the label-normalising sweep stripped \texttt{\textbackslash\{\}word} escapes but not \texttt{\textbackslash\{\}\_}, so the two labels never joined and every comparison silently had one side. It looked correct, exited zero, and would have produced a third consecutive green block over the same defect.
 
-\textbf{Evidence.} We first drew subspace probes as \texttt{coef @ A}, whose covariance is \texttt{A?A} --- uniform on the coefficients, \textbf{not} on the row space, and therefore over-weighting \texttt{A}'s dominant singular directions. Measured amplification came out at 33--75 and nearly rank-insensitive (41.77 at r=4 vs 34.67 at r=32), from which we concluded the \texttt{sqrt(d\_\allowbreak{}in/\allowbreak{}r)} law had failed on trained adapters.
-
-It had not. With an orthonormal basis of \texttt{Delta}'s right singular vectors, and rank isolated by SVD-truncating a single adapter at fixed Frobenius norm, the law holds to within 11\% at worst and \textbf{1\% at r=32} (\S{}4.4). The earlier result was an artifact of the probe compounded by a comparison confounded across rank, base model, recipe and convention simultaneously.
-
-\textbf{The general form of this lesson is narrower than "measure rather than compose".} The failed measurement \emph{was} direct. The lesson is that a direct measurement can encode an assumption in its instrument, and the instrument needs validating as much as the quantity does. This is one of two instances of a more general rule, stated in Appendix C.11: a check that shares an assumption or a code path with the thing it checks is not a check.
-
-\subsection{A guard built on guessed defaults is worse than no guard}
-
-\textbf{Claim.} A safety check that produces false positives trains its author to loosen it. Read the library's actual defaults at runtime rather than hardcoding what you believe them to be.
-
-\textbf{Evidence.} We audit the full adapter-config surface, partitioning every field into handled / ignored / must-be-default / gated. An early version hardcoded \texttt{qalora\_\allowbreak{}group\_\allowbreak{}size=None} as the expected default when peft's actual default is \texttt{16}, producing a confident failure on a completely ordinary config. The fix reads \texttt{LoraConfig}'s defaults at runtime, so the guard cannot drift from the library it guards.
-
-The same reasoning motivates the ground-truth fixture of \S{}3.8: rather than trusting our own delta computation, we build a one-\texttt{Linear} peft stub, call \texttt{merge\_\allowbreak{}and\_\allowbreak{}unload}, and compare against \texttt{merged - original}. Four analyses had already run on an implementation that hardcoded \texttt{alpha/\allowbreak{}r} and silently mis-scaled rsLoRA adapters by \textbf{11.3$\times$}. The fixture catches that class of error against the library that defines the semantics.
-
-\textbf{This happened a second time, from an unrelated cause, which is what makes it a rule rather than an anecdote.} The coverage guard of Appendix C.10 warns when a figure asserts little about many plotted values. Its first version counted an \texttt{all\_\allowbreak{}close} over six points as a single assertion, so it reported low coverage on figures that were in fact fully checked --- a warning firing on correct input. Had it shipped, the rational response to a warning that is usually wrong is to stop reading it, at which point the guard is worse than absent: it occupies the place where a working guard would go.
-
-\textbf{It then happened twice more, from two further unrelated causes.} The guard forbidding self-comparing checks (Appendix C.11) matched the wrong node in the caller's syntax tree, so it never fired at all --- a false \emph{negative} rather than a false positive, but the same class: a guard whose own model of the world was wrong. And the cross-reference checker written for this manuscript's consistency pass reported \textbf{nine} unresolved section references that all resolve perfectly, because its pattern required whitespace after the section number and every heading in the paper uses a period.
-
-That last one is worth stating plainly, because of \emph{how} it was caught: the output claimed \S{}4 and \S{}5 do not exist. \textbf{It was caught only because the false positives were absurd on their face.} A checker whose spurious findings were merely plausible --- say, three obscure subsection references instead of every top-level section --- would have sent its author looking for defects that were not there, and then, on finding nothing, would have trained exactly the habit of disregarding it.
-
-\textbf{Four instances, four unrelated causes, no shared mechanism.} The table below lists them; each row is a guard whose own model of the world was wrong, and the last column records whether it fired when it should not have or failed to fire when it should.
-
-\begin{table*}[t]
-\centering\footnotesize
-\begin{tabularx}{\textwidth}{l>{\hsize=0.575\hsize\raggedright\arraybackslash}X>{\hsize=1.425\hsize\raggedright\arraybackslash}Xl}
-\toprule
-\# & guard & its own defect & direction \\
-\midrule
-1 & adapter-config audit & expected default guessed (\texttt{None}) where the library uses \texttt{16} & false positive \\
-2 & figure coverage guard & one call covering six values counted as one & false positive \\
-3 & vacuous-check guard & matched the innermost AST call, not its own & false negative \\
-4 & cross-reference checker & regex required whitespace where the text has a period & false positive \\
-\bottomrule
-\end{tabularx}
-\end{table*}
-
-This is now \textbf{the most-repeated failure in the project} --- more frequent than any error in the science itself. What the four share is only the consequence: \textbf{a check whose model of the world is wrong is worse than no check, because it consumes the attention a working check would receive and teaches its author to discount it.} In every case the fix was to correct the guard's model --- read defaults at runtime, count what a call covers, match the right node, match the actual heading format --- never to loosen the threshold, which is the tempting move and the wrong one.
-
-The uncomfortable corollary: \textbf{guards are code, and this project's guards have had a higher defect rate than its measurements.} That is an argument for testing them against known-bad input (Appendix C.11), not for having fewer of them.
-
-\subsection{A prompt set needs the same responds-to-a-known-contrast check as an instrument}
-
-\textbf{Claim.} A null result from a prompt set that was never shown to discriminate is uninformative. Demonstrate the prompts can move the measurement before reporting that they did not.
-
-\textbf{Evidence.} Testing whether an adapter over-refuses, our plain benign prompts ("how do I bake bread") could not have detected it --- refusing them requires a badly broken model, so a null there means nothing. We added surface-harmful, actually-benign prompts and \textbf{first established that the set discriminates}: base-model refusal propensity is 0.1449 on plain benign prompts and \textbf{0.8118} on surface-harmful ones, a 5.60$\times$ contrast on the same model.
-
-Only then did the null become reportable: the adapter adds no over-refusal (Appendix D.3). This is Appendix C.2's rule applied one level out --- from the instrument to the stimuli it is applied to.
-
-\subsection{An inherited citation is not a verified citation, and it fails in a specific way}
-
-\textbf{Claim.} A reference that entered your own notes early is the one least likely to be challenged later, because by the time it reaches a draft it looks like something already settled. Verify references against the source in the same session in which they enter prose --- and verify that each cited paper makes the claim you attribute to it, not merely that the identifier resolves to a real paper.
-
-\textbf{Evidence, part one: the identifier.} We attributed the Taboo model organism to arXiv:2510.01070 for the duration of the project. That identifier resolves to a real, relevant paper --- \emph{Eliciting Secret Knowledge from Language Models}, by an overlapping author group, on secret-knowledge elicitation --- but its model organisms are conceptual-knowledge settings, not the taboo-word setting we use. The correct reference is arXiv:2505.14352. The wrong one had propagated into five files and eight locations.
-
-\textbf{The failure mode is worth naming precisely: a plausible identifier, for a real paper, by the right authors, on an adjacent topic.} A fabricated identifier or an irrelevant paper would have been caught on first contact. This one survived because every property a quick check would test was satisfied.
-
-\textbf{Evidence, part two: the claim.} Verifying identifiers is not sufficient. Checking what each correctly-cited paper actually asserts changed three characterisations in our own related-work discussion (\S{}2), including one where a paper we had positioned as supporting a mechanism in fact proposes the opposite conclusion about it, and one where a body of work we had treated as explaining an observation of ours concerns a different object entirely (activations rather than weights). Those are recorded in \S{}2 as our inferences, not their findings.
-
-\textbf{The actionable rule, which our own error pattern supports.} Of seven load-bearing attributions, the two that survived verification were the two we had recorded as \textbf{specific quantitative values} --- "quantizes delta weights, mitigates alignment-breaking risk by up to 66.17\%", and "perplexity rises under 0.5\% at 8-bit while 2.5--5.6\% of items develop new biases at 4-bit". The five recorded as \textbf{general characterisations} --- "asserts the erasure mechanism", "bounds compensation capacity", "the outlier phenomenon" --- drifted, and three of them were wrong.
-
-The mechanism is straightforward: a number carries its own context and cannot be paraphrased into something the source did not say, whereas a characterisation is already a paraphrase at the moment it is written down, and each subsequent reuse paraphrases the paraphrase. \textbf{When taking a note on someone else's work, record a quantity and its conditions rather than a summary of the finding.} A note that reads "66.17\%, delta weights, fine-tuning attacks" is checkable in seconds; a note that reads "compression protects alignment" is not, and will be reused as though it were.
-
-\subsection{A flagged gap that is never actioned is worse than an unflagged one}
-
-\textbf{Claim.} Writing "to be resolved before X rather than guessed" into a plan discharges the feeling of having addressed a gap without addressing it. Unless a flag carries an owner and a gate that blocks on it, it converts an open question into a settled-looking one.
-
-\textbf{Evidence.} Our own planning document recorded, before Phase 1 began, that the Taboo checkpoints' training recipe and \texttt{\_\allowbreak{}50\_\allowbreak{}mix} suffix were undocumented and were "to be resolved before Phase 1 rather than guessed". Phase 1 then ran to completion --- six adapters, four precisions, 1536 records --- without that resolution ever happening. It was only revisited during a citation pass two weeks later, at which point the checkpoints turned out to have no model card at all: every substantive section reads "[More Information Needed]", and nothing links them to any paper.
-
-\textbf{This is a distinct failure from the others in this section.} Every other lesson here concerns something we believed and measurement corrected. This one concerns something we \emph{correctly identified as unknown} and then proceeded as though known, because the act of flagging it read as progress. No measurement is affected --- the constraint metric is judge-free because the secret word appears in the checkpoint \emph{name} --- but the paper's provenance claim had to be withdrawn rather than merely re-pointed (\S{}9).
-
-The procedural fix we adopt: a flagged gap either blocks a named gate, or it is not a flag but a note.
+It was caught only because the rule in this entry required it to fire on a case whose answer was already known --- the historical disagreement, reintroduced deliberately. This is the sharpest form the evidence for this practice can take: not a check that failed, but \textbf{the rule catching a fault in the check written to enforce it}. The previous sharpest was the vacuous-comparison guard, which had the same shape one level down.
 
 \subsection{An append-only record needs a generated view, or it will leak superseded values}
+
 
 \textbf{Claim.} An append-only log is the right format for a research record: it preserves what was believed and when, and corrections are added rather than substituted. That property is also a hazard. A superseded number stays on the page looking exactly as authoritative as it did before it was corrected, and anything drafted \emph{from the log} inherits it. \textbf{Derived documents must regenerate from raw records, never from the notebook.}
 
@@ -486,31 +446,20 @@ Two properties made the difference, and both are cheap:
 
 A useful diagnostic: our public README carried the correct values throughout, because it is \emph{rewritten} at each gate rather than appended to. \textbf{The format that preserves history is the one that leaks stale values; the format that overwrites is the one that stays current.} A project wants both, and should not confuse which is which.
 
-\subsection{A figure that renders without error looks validated and is not}
-
-\textbf{Claim.} Every figure asserts numbers. A plot that draws cleanly has demonstrated only that its code ran, not that it depicts what it claims --- and the failure mode is silent by construction, because the output is an image and images do not raise. \textbf{Every figure needs a numerical cross-check against an independent computation of the same quantity, not a visual review.}
-
-\textbf{Evidence.} Our predictive-gap figure marks the adapters belonging to statistically resolvable pairs, which is the visual carrier of the paper's sign argument (PG-2). A set comprehension collected only the \emph{first} member of each pair, so the figure marked \textbf{2} adapters where the analysis reports \textbf{4}. It rendered without error, looked entirely reasonable, and the two it dropped were \texttt{gold} and \texttt{ship} --- \textbf{\texttt{ship} being precisely the adapter that carries the inversion}, the second-highest predictor value with the worst retention. The figure would have understated its own central claim.
-
-\textbf{Visual review did not catch it, and could not have.} Reviewing the rendered image did catch a caption error on another figure (a sample size stated as 6 where the panel showed 3) and several label collisions. Those are visible defects. A correct-looking marker set with the wrong membership is not: nothing about two filled points instead of four looks wrong on the page. What caught it was comparing the figure's own output against an independent analysis script that computes the same pair set and reports 4.
-
-\textbf{The practice we adopt.} Each figure-generation script now asserts its plotted values against an independent recomputation and fails loudly on mismatch, rather than printing a plot and trusting it. This is the figure analogue of the claim-level audit in Appendix C.9: the audit turned prose into something testable, and these assertions turn plots into something testable. Both are cheap, and both caught an error on their first run.
-
-The retrofit immediately found a second, different defect. One figure computed its capability series as a \textbf{ratio of pooled means} while the text and every other figure used the \textbf{mean of per-adapter ratios} --- a divergence of up to 0.94 percentage points. Both estimators are defensible; using one in a figure and the other in the prose is not. This is not staleness: both artifacts were current, and neither looks wrong in isolation. \textbf{Estimator drift between artifacts describing the same quantity is its own failure mode}, and it is invisible without a comparison that forces the two into contact.
-
 \subsection{A check that shares an assumption or a code path with the thing it checks is not a check}
+
 
 \textbf{Claim.} The value of a verification lies entirely in what it does \emph{not} share with its subject. A check built on the same assumption will confirm that assumption; a check calling the same code will confirm that the code is deterministic. Neither tests what it appears to test, and both report success. \textbf{Independence has to be structural, and it has to be deliberate, because the convenient implementation is almost always the dependent one.}
 
 We state this as a rule rather than an anecdote because we have two instances from opposite ends of the project, arising in completely different work.
 
-\textbf{Instance one, measurement (Phase 0).} To measure how a low-rank adapter behaves on its own subspace, we drew probe vectors as \texttt{coef @ A} --- through the adapter's own factor matrix. The probes therefore carried covariance \texttt{A?A} and inherited \texttt{A}'s spectrum: the instrument shared its geometry with the object under test. It returned amplification values of 33--75 that were nearly rank-insensitive, and we concluded that the \texttt{sqrt(d\_\allowbreak{}in/\allowbreak{}r)} law had failed. It had not. \textbf{The probe had imported the very structure it was supposed to interrogate}, and an orthonormal basis of \texttt{Delta}'s right singular vectors --- constructed to be uninformative about \texttt{A}'s spectrum --- recovered the law to within 1\% at r=32 (Appendix C.4, \S{}4.4).
+\textbf{Instance one, measurement (Phase 0).} To measure how a low-rank adapter behaves on its own subspace, we drew probe vectors as \texttt{coef @ A} --- through the adapter's own factor matrix. The probes therefore carried covariance \texttt{A?A} and inherited \texttt{A}'s spectrum: the instrument shared its geometry with the object under test. It returned amplification values of 33--75 that were nearly rank-insensitive, and we concluded that the \texttt{sqrt(d\_\allowbreak{}in/\allowbreak{}r)} law had failed. It had not. \textbf{The probe had imported the very structure it was supposed to interrogate}, and an orthonormal basis of \texttt{Delta}'s right singular vectors --- constructed to be uninformative about \texttt{A}'s spectrum --- recovered the law to within 1\% at r=32 (Appendix C.6, \S{}4.4).
 
 \textbf{Instance two, verification (write-up).} Building the figure cross-checks, the obvious implementation was to import the figure's own data loader and compare. That would have been worthless in precisely the case we needed it for: the Fig 8 marking bug lived in logic the figure owned, and a shared loader would have reproduced the same 2 marked adapters and reported agreement. The checker therefore re-reads the raw records by a separate route, and recomputes the resolvable-pair set independently. That is why it disagreed, and why the disagreement was informative.
 
 \textbf{The two cases have the same shape at different levels.} In one, an instrument shared geometry with its measurement target. In the other, a verifier shared code with its verification target. Both produced confident, plausible, wrong agreement, and in both the dependent version was the one that was easier to write.
 
-\textbf{The practical test we now apply}: \emph{if the thing being checked were wrong in the way I most fear, would this check still pass?} If the answer is yes, the check is measuring something other than what it claims. This is the same question the instrument gate asks of behavioural probes (Appendix C.2) and the gate self-test asks of the gate (Appendix C.3), applied to verification generally.
+\textbf{The practical test we now apply}: \emph{if the thing being checked were wrong in the way I most fear, would this check still pass?} If the answer is yes, the check is measuring something other than what it claims. This is the same question the instrument gate asks of behavioural probes (Appendix C.3) and the gate self-test asks of the gate (Appendix C.4), applied to verification generally.
 
 \subsubsection{The verification half: a check is not trusted until it has failed on a known-bad input}
 
@@ -524,7 +473,7 @@ We applied this three times before naming it, and in all three cases the check l
 \toprule
 check & known-bad input it must reject & what would have happened without the test \\
 \midrule
-the instrument gate (Appendix C.3) & the deprecated reveal probe, already documented as broken & the gate had already certified it once under a disjunctive rule \\
+the instrument gate (Appendix C.4) & the deprecated reveal probe, already documented as broken & the gate had already certified it once under a disjunctive rule \\
 the figure cross-checker & the actual Fig 8 pair values (2 vs 4 marked adapters) and the Fig 6 estimator split (0.7810 vs 0.7716) & a checker sharing the figures' loader would have reproduced the bug and reported agreement \\
 the vacuous-comparison guard & a call passing one expression twice & the first implementation matched the wrong AST node, \textbf{never fired, and printed PASS on the exact bug it was written to catch} \\
 \bottomrule
@@ -537,7 +486,31 @@ The third is the sharpest, because the guard was written specifically to enforce
 
 \emph{(A caution that follows: this makes "our checks all pass" a much weaker statement than it appears, unless each check has a recorded known-bad case it rejects. We keep those as tests --- \texttt{tests/\allowbreak{}test\_\allowbreak{}figcheck.\allowbreak{}py}, \texttt{instrument\_\allowbreak{}gate.\allowbreak{}py --\allowbreak{}self-\allowbreak{}test} --- so the property is re-verified on every run rather than asserted once.)}
 
+\textbf{Six instances, six unrelated causes, no shared mechanism.} them; each row is a guard whose own model of the world was wrong, and the last column records whether it fired when it should not have or failed to fire when it should.
+
+\begin{table*}[t]
+\centering\footnotesize
+\begin{tabularx}{\textwidth}{l>{\hsize=0.451\hsize\raggedright\arraybackslash}X>{\hsize=1.549\hsize\raggedright\arraybackslash}Xl}
+\toprule
+\# & guard & its own defect & direction \\
+\midrule
+1 & adapter-config audit & expected default guessed (\texttt{None}) where the library uses \texttt{16} & false positive \\
+2 & figure coverage guard & one call covering six values counted as one & false positive \\
+3 & vacuous-check guard & matched the innermost AST call, not its own & false negative \\
+4 & cross-reference checker & regex required whitespace where the text has a period & false positive \\
+5 & appendix-letter mapper & a guard skipping subsection refs also skipped every reference ending a sentence & false negative \\
+6 & appendix-letter mapper & ran after the section pass and rewrote references that pass had just created & false positive \\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+This is now \textbf{the most-repeated failure in the project} --- more frequent than any error in the science itself. What the four share is only the consequence: \textbf{a check whose model of the world is wrong is worse than no check, because it consumes the attention a working check would receive and teaches its author to discount it.} In every case the fix was to correct the guard's model --- read defaults at runtime, count what a call covers, match the right node, match the actual heading format --- never to loosen the threshold, which is the tempting move and the wrong one.
+
+The uncomfortable corollary: \textbf{guards are code, and this project's guards have had a higher defect rate than its measurements.} That is an argument for testing them against known-bad input (Appendix C.6), not for having fewer of them.
+
+
 \subsection{Price the caveat against the measurement that would remove it}
+
 
 \textbf{Claim.} When a limitation is about to be written into the text, ask what it would cost to \emph{eliminate} rather than describe. Careful wording is the reflex, and it is often more expensive than the experiment it substitutes for --- because a caveat is permanent, appears everywhere the claim appears, and weakens the claim forever, while the measurement is paid for once.
 
@@ -551,19 +524,8 @@ Instead we checked the cost of closing it. All six adapters were already cached,
 
 This is not an argument against caveats --- \S{}8 is long and every entry in it is load- bearing. It is an argument for pricing them first. The test: \emph{if this limitation were someone else's, what would I ask them to run?} If the answer is under a day, run it.
 
-\subsection{Pre-committed criteria find things; re-reading does not}
-
-\textbf{Claim.} Reviewing your own work by reading it is close to worthless, because the same judgment that produced the text evaluates it, and consistency is what a reader looking for consistency finds. \textbf{Commit in advance to what would falsify each claim, then search for that specific evidence.} The value lies entirely in the criteria being fixed before the text is opened.
-
-\textbf{Evidence.} Our end-to-end manuscript review ran five passes. Before any section was read, we wrote down, for each of the four load-bearing findings, what evidence would overturn it --- for instance, for the headline: \emph{"are these two numbers measured on comparable populations?"}, and for the dissociation: \emph{"does the constraint ratio move with precision?"}
-
-\textbf{Both severe findings came from those pre-committed questions}, and neither is visible by reading. The headline's mismatched populations look fine in every sentence containing them; the dissociation's effect size is stated once as a mean and the outlier is invisible unless the per-condition values are demanded. Meanwhile \textbf{the three passes run as ordinary judgment --- checking \S{}4 against \S{}5, \S{}2 against \S{}9, and looking for reintroduced readings --- found nothing that the scripted checks had not already found.}
-
-The remaining findings came from mechanical checks: unreferenced figures, untraceable predictions, a stale count. Those need no judgment at all, and should be scripted rather than read.
-
-\textbf{The practical form:} a self-review's findings are worth roughly what its references are worth. Give every pass an external reference where one exists --- raw records, an independent recomputation, a registered list --- and treat the passes that have none as producing weak nulls. Ours did produce weak nulls, and we report that rather than counting three clean judgment passes as three clean bills of health.
-
 \subsection{Tooling reports success on the operation, not on the outcome}
+
 
 \textbf{Claim.} A zero exit code means a command completed, not that it accomplished anything. In this ecosystem the gap between the two is wide enough to be a standing hazard, and it is widest exactly where the operation is bulk data movement --- the case where verifying by eye is least practical and most necessary. \textbf{Check what landed on disk, not what the tool said.}
 
@@ -584,30 +546,6 @@ warning: Clone succeeded, but checkout failed.
 
 The positive form of this practice is worth stating, because it is what we now close a release on: \textbf{regenerating the committed tables, prompt sets and README from the committed records and getting byte-identical files} is a statement about the artifact rather than about any command's exit status, and it is the strongest such statement available.
 
-\subsection{Derive, measure the derivation, then trust it}
-
-\textbf{Claim.} A specification is a hypothesis. Three of our own design decisions were wrong in ways that only measurement exposed, and all three would have produced plausible, publishable, incorrect numbers.
-
-\textbf{Evidence.} In each case the implementation was correct --- our quantizer was bit-exact against \texttt{gptqmodel} throughout --- and the \emph{specification} was wrong.
-
-1. \textbf{\texttt{retention\_\allowbreak{}ratio} as the primary metric.} Unbounded above and non-monotone in retention: it reads \textbf{95.5 exactly where cosine is 0.015}, peaking at the point of total destruction. Reporting it bare would have inverted this paper's central claim. Replaced by cosine, with \texttt{relative\_\allowbreak{}error} against an interpretable erasure baseline of 1.0. 2. \textbf{\texttt{|delta| < s/\allowbreak{}2} as a deterministic erasure threshold.} Wrong: the channel is probabilistic, \texttt{P(flip) = min(|delta|/\allowbreak{}s, 1)}, so half the weights sitting exactly at the threshold still flip. 3. \textbf{\texttt{1/\allowbreak{}sqrtd\_\allowbreak{}in} suppression of layer-output error on generic inputs.} Measured suppression is \textbf{exactly 1.00}. There is no dimensional averaging; the amplification effect exists only on inputs inside the adapter's active subspace, where it is \texttt{sqrt(d\_\allowbreak{}in/\allowbreak{}r)} (\S{}4.4).
-
-Two further corrections belong to the same practice. A registered prediction about depth was drawn from a 4-layer sample and reported a trend \textbf{three times too large with the wrong shape}; the full 36-layer profile also revealed a bit-flip spike at layers 1--3 that 4-layer sampling could not see. And one registered behavioural prediction --- that the constraint would fail before the capability --- was \textbf{withdrawn on evidence before being tested}, because the instrument it depended on failed Appendix C.2's check and the replacement measurements pointed the opposite way (\S{}5.3).
-
-\textbf{We state the running total plainly:} across the project, two registered predictions were genuinely refuted, one apparent refutation was itself overturned as confounded (Appendix C.4), and one verdict required three attempts before the instrument was trustworthy. We report this because a reader deciding whether to trust \S{}4 and \S{}5 should know how the numbers in them were arrived at.
-
-\subsection{A secondary theme: proxies that do not track what they are named after}
-
-Two results in this paper are instances of the same shape, at different levels of the stack.
-
-\begin{itemize}\itemsep1pt
-\item \textbf{A weight-space proxy fails to track behaviour.} Output SNR is precisely computed and precisely predicts stored weights, and does not predict behavioural retention (\S{}5.3, PG-1 to PG-3).
-\item \textbf{A behavioural proxy fails to track behaviour.} \texttt{p\_\allowbreak{}refuse} scores a model at 0.812 refusal propensity on prompts it complies with 16/16 times, because it responds to how harmful the \emph{prompt} looks rather than to what the \emph{model} does (Appendix D.5).
-\end{itemize}
-
-Both were caught the same way, and the method is the transferable part: validate the proxy against a contrast whose answer is known, and read individual trajectories rather than trusting an aggregate.
-
-\textbf{We do not claim a general thesis about measurement proxies from two instances.} The paper's primary claims are the channel model (\S{}4) and the erasure-with-survival result (\S{}5.1); this pattern is a secondary theme and a reason for the practices in Appendix C.2 to Appendix C.6, not a finding in its own right.
 
 
 \section{Advertised versus Measured: Full Detail}
@@ -676,7 +614,7 @@ string-refusal rate & 0/16 & 1/16 & $\infty$ & 0.062 & fail \\
 \end{tabularx}
 \end{table*}
 
-\textbf{The null is informative because the prompt set demonstrably discriminates.} The base model's refusal propensity is 0.1449 on plain benign prompts and \textbf{0.8118} on surface-harmful benign prompts --- a \textbf{5.60$\times$} contrast. The instrument can move; it did not. Showing that a measurement \emph{can} respond before reporting that it \emph{didn't} is the same discipline as the instrument gate itself, applied to a prompt set (Appendix C.3).
+\textbf{The null is informative because the prompt set demonstrably discriminates.} The base model's refusal propensity is 0.1449 on plain benign prompts and \textbf{0.8118} on surface-harmful benign prompts --- a \textbf{5.60$\times$} contrast. The instrument can move; it did not. Showing that a measurement \emph{can} respond before reporting that it \emph{didn't} is the same discipline as the instrument gate itself, applied to a prompt set (Appendix C.4).
 
 The single aligned over-refusal is a textbook exaggerated-safety failure --- declining to give \textbf{James Bond's fictional bank account number}, which the base model answered --- but it is 1/16 at Cliff 0.062.
 
@@ -686,7 +624,7 @@ The single aligned over-refusal is a textbook exaggerated-safety failure --- dec
 
 We had pre-registered a prediction that this adapter's behavioural retention at INT3 would rank highest of four adapters, anchoring a test of whether output SNR predicts behavioural retention \textbf{across} a population spanning a 3.7$\times$ predictor range.
 
-\textbf{The instrument did not validate, so no retention number may be computed and the prediction is withdrawn rather than tested.} We report this rather than substituting a weaker instrument or relaxing the gate to obtain a pass. Relaxing a threshold after seeing the data is the precise failure the gate exists to prevent, and our own history with it (Appendix C.12) is why we did not.
+\textbf{The instrument did not validate, so no retention number may be computed and the prediction is withdrawn rather than tested.} We report this rather than substituting a weaker instrument or relaxing the gate to obtain a pass. Relaxing a threshold after seeing the data is the precise failure the gate exists to prevent, and our own history with it (Appendix C.7) is why we did not.
 
 The withdrawal is not a quantization result. \textbf{No precision comparison was run on this adapter}, and nothing here says anything about whether its behaviour survives quantization --- only that we could not certify an instrument capable of asking.
 
@@ -868,7 +806,7 @@ topic & wordings \\
 
 \textbf{16 prompts.} Authored on the design principle established by XSTest (R\"ottger, Kirk, Vidgen, Attanasio, Bianchi, Hovy; arXiv:2308.01263; NAACL 2024): safe prompts phrased in language resembling unsafe ones are the ones over-safe models refuse. \textbf{These are not XSTest's own items}, and the \texttt{category} labels below are ours --- XSTest defines ten prompt types whose names we could not verify, so no correspondence is claimed (\S{}3.10).
 
-Validated as discriminating before being used for a null: base-model refusal propensity is \textbf{0.1449} on the plain benign set and \textbf{0.8118} on these, a \textbf{5.60x} contrast on the same model (Appendix C.6).
+Validated as discriminating before being used for a null: base-model refusal propensity is \textbf{0.1449} on the plain benign set and \textbf{0.8118} on these, a \textbf{5.60x} contrast on the same model (Appendix C.3).
 
 \begin{table*}[t]
 \centering\footnotesize
