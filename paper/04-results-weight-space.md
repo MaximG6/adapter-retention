@@ -293,8 +293,8 @@ Retention is each adapter's elicitation score as a fraction of its own BF16 scor
 
 Guesser argmax accuracy, pooled: 159/192 (BF16) → 157/192 → 128/192 → 98/192.
 
-**At INT4 g128 the stored weights are 98.9% unchanged and the behaviour is undetectably
-changed.** Retention is 99.2% with an exact 95% interval of [90.7%, 107.6%]. That
+**At INT4 g128 the stored weights are 98.9% unchanged and no behavioural change is
+detectable.** Retention is 99.2% with an exact 95% interval of [90.7%, 107.6%]. That
 interval spans parity, so the honest statement is a **non-detection with a bound**: the
 instrument cannot separate the quantized model from the unquantized one, and it excludes
 losses greater than about 9%. It is not a measurement of equality, and the point estimate

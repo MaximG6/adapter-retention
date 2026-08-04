@@ -20,7 +20,7 @@ quarter of a quantization half-step; the median falls below the step size by a f
 
 By any weight-space measure available, the adaptation is very nearly gone.
 
-**On the same models, the behaviour is undetectably changed.** Elicitation retention is
+**On the same models, no behavioural change is detectable.** Elicitation retention is
 99.2%, and its exact 95% interval — [90.7%, 107.6%] — spans parity. The instrument
 cannot separate the quantized model from the unquantized one. What it does establish is
 a bound: **losses beyond about 9% are excluded.**
@@ -72,9 +72,12 @@ are one measurement read at two levels.**
 
 ## What we find
 
-1. **Erasure with survival.** At INT4 g128, 98.9% of stored codes are unchanged and
-   99.2% of the trained behaviour is retained, **measured on the same six adapters**. Degradation is monotone as the grid
-   coarsens: 99.2% → 77.2% → 57.8% across INT4 g128, INT4 per-channel, and INT3 g128.
+1. **Erasure with survival.** At INT4 g128, 98.9% of stored codes are unchanged and no
+   behavioural change is detectable, **measured on the same six adapters**. The mean
+   degrades as the grid coarsens — 99.2% → 77.2% → 57.8% across INT4 g128, INT4
+   per-channel and INT3 g128, all three contrasts separating when paired — but
+   **individual adapters do not**: only 4 of 6 fall at every step, and at INT3 the mean
+   sits between two adapters below half and two above 80%.
 
 2. **A parameter-free channel model** predicting weight-space retention within 2.3%
    across every adapter tested, together with a derived subspace-amplification law
@@ -102,8 +105,8 @@ are one measurement read at two levels.**
   weight-space erasure with behavioural survival. Its single empirical input `c ≈ 0.87`
   is a correction term predicted by the channel model, not a fitted scale (§3.6, §4.4).
 - **End-to-end behavioural measurement** on the same models as the weight measurement,
-  establishing survival at INT4 g128, monotone dose-response, and the benign direction of
-  the dissociation (§5.1–5.3).
+  establishing no detectable loss at INT4 g128, a dose-response monotone in the mean but
+  not in every adapter, and the benign direction of the dissociation (§5.1–5.3).
 - **The predictive gap** (§5.4): three demonstrations, differing in kind, that
   weight-space measurement does not predict behavioural outcomes.
 - **A reconciliation of two opposing results in the literature.** Prior work reports that

@@ -6,8 +6,8 @@ not letting the framing precede the findings.*
 ---
 
 Merging a LoRA adapter and quantizing to INT4 at group size 128 leaves **98.9% of the
-model's stored integer codes unchanged**, and leaves its trained behaviour
-**undetectably changed**: elicitation retention is 99.2%, with an exact 95% interval of
+model's stored integer codes unchanged**, and leaves
+**no detectable change in its trained behaviour**: elicitation retention is 99.2%, with an exact 95% interval of
 **[90.7%, 107.6%]** that spans parity and **excludes losses beyond about 9%**. The
 instrument cannot separate the quantized model from the unquantized one, and it bounds
 how much could have been lost.

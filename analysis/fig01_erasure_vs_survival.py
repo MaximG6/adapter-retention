@@ -144,11 +144,32 @@ def main() -> int:
     fig, axes = plt.subplots(1, 2, figsize=(8.6, 5.4), sharey=True)
     fig.subplots_adjust(wspace=0.16, top=0.685, bottom=0.155, left=0.105, right=0.975)
 
+    # Both panels are drawn as "how much is still there", so the contrast is carried by
+    # two nearly full bars whose meanings are opposite, rather than by one tall bar
+    # against an empty axis. Plotting 1.1% CHANGED put all the visual weight on the right
+    # panel and left the reader to take the contrast from the caption.
+    w_kept, w_kept_ci = 100 - w_mean, (100 - w_ci[1], 100 - w_ci[0])
+    w_kept_vals = [100 - v for v in w_vals]
+    # The left panel now plots a transform of the measured quantity, so the transform is
+    # checked too. Verifying only the pre-transform values would leave the figure
+    # asserting something no check covers -- the defect this project keeps re-finding.
+    # Checked against the independent recomputation from raw, not against the expression
+    # that produced them: comparing w_kept_vals to [100 - v for v in w_vals] would be the
+    # same value on both sides, which is a check that cannot fail.
+    _ref_unchanged = sorted(100 - v * 100 for v in ref_weight_flip_rate("taboo").values())
+    chk2 = Check("fig01-inverted")
+    chk2.plots(len(w_kept_vals) + 2)
+    chk2.all_close("per-adapter unchanged points", sorted(w_kept_vals),
+                   _ref_unchanged, tol=1e-6)
+    chk2.close_to("bar height", w_kept, statistics.mean(_ref_unchanged), tol=1e-6)
+    chk2.close_to("whisker spans the points", w_kept_ci[1] - w_kept_ci[0],
+                  w_ci[1] - w_ci[0], tol=1e-9)
+    chk2.close()
     panels = [
-        (axes[0], w_mean, w_ci, w_vals, ERASE, "Stored weights CHANGED",
-         f"of INT4 integer codes differ from\nthe quantized base   (n = {w_n} adapters)"),
+        (axes[0], w_kept, w_kept_ci, w_kept_vals, ERASE, "Stored weights UNCHANGED",
+         f"of INT4 integer codes are identical to\nthe quantized base   (n = {w_n} adapters)"),
         (axes[1], b_mean, b_ci, b_vals, KEEP, "Trained behaviour RETAINED",
-         f"of the adapter's own BF16\nelicitation score   (n = {b_n} adapters)"),
+         f"of the adapter's own BF16 elicitation\nscore; interval spans parity   (n = {b_n} adapters)"),
     ]
     for ax, val, ci, vals, colour, title, sub in panels:
         ax.set_facecolor("white")
@@ -183,16 +204,17 @@ def main() -> int:
     if not PAPER_MODE:
 
         fig.suptitle(
-        "Near-total weight-space erasure, with the behaviour intact",
+        "Two nearly full bars that mean opposite things",
         fontsize=15, fontweight="bold", color=INK, x=0.055, ha="left", y=0.975)
     if not PAPER_MODE:
         fig.text(
         0.055, 0.885,
         "Merged LoRA quantized to INT4 g128. Rank-32 taboo adapters on Qwen3-8B.\n"
-        f"Bars are means over adapters, whiskers 95% bootstrap CIs over adapters, "
-        f"open circles individual adapters.\n"
-        f"Panels share a population but not a sample: {w_n} of the {b_n} behavioural "
-        f"adapters also have weight-space runs.",
+        f"Left: the stored weights are almost all untouched, yet the few that move carry "
+        f"the whole adapter. Right: no behavioural\nchange is detectable — the interval "
+        f"spans parity, so this is a bound (losses beyond ~9% excluded), not an equality.\n"
+        f"Bars are means over adapters, whiskers exact 95% intervals, open circles "
+        f"individual adapters.",
         fontsize=8.6, color=GREY, ha="left", va="top", linespacing=1.55)
 
     FIGDIR.mkdir(parents=True, exist_ok=True)

@@ -38,8 +38,8 @@ instructions: \texttt{<REPO-URL>}}\vspace{-0.6em}}
 \begin{abstract}
 \noindent
 Merging a LoRA adapter and quantizing to INT4 at group size 128 leaves \textbf{98.9\% of
-the model's stored integer codes unchanged}, and leaves its trained behaviour
-\textbf{undetectably changed}: elicitation retention is 99.2\%, with an exact 95\%
+the model's stored integer codes unchanged}, and leaves
+\textbf{no detectable change in its trained behaviour}: elicitation retention is 99.2\%, with an exact 95\%
 interval of \textbf{[90.7\%, 107.6\%]} that spans parity and \textbf{excludes losses
 beyond about 9\%}. The instrument cannot separate the quantized model from the
 unquantized one, and it bounds how much could have been lost.
@@ -71,7 +71,7 @@ similarity 0.14 to it, at 7.4 times its magnitude, pointing in a direction the a
 never requested. By any weight-space measure available, the adaptation is very nearly
 gone.
 
-\textbf{On the same models, the behaviour is undetectably changed.} Elicitation retention
+\textbf{On the same models, no behavioural change is detectable.} Elicitation retention
 is 99.2\%, and its exact 95\% interval, [90.7\%, 107.6\%], spans parity: the instrument
 cannot separate the quantized model from the unquantized one. What it does establish is a
 bound---losses beyond about 9\% are excluded. Figure~\ref{fig:headline} puts the two
@@ -109,9 +109,9 @@ within 2.3\% on six published adapters and across four decades of adapter magnit
 its licensing assumption measured rather than assumed (\S\ref{sec:channel}).
 \item A derived subspace-amplification law reconciling weight-space erasure with
 behavioural survival (\S\ref{sec:amp}).
-\item End-to-end behavioural measurement on the same models, establishing survival at INT4
-g128, monotone dose-response, and the \emph{benign} direction of the dissociation
-(\S\ref{sec:behaviour}).
+\item End-to-end behavioural measurement on the same models, establishing no detectable
+loss at INT4 g128, a dose-response monotone in the mean but not in every adapter, and the
+\emph{benign} direction of the dissociation (\S\ref{sec:behaviour}).
 \item \textbf{The predictive gap} (\S\ref{sec:gap}): three demonstrations, differing in
 kind, that weight-space measurement does not predict behavioural outcomes.
 \item A reconciliation of two opposing results in the literature, distinguished by which
@@ -405,8 +405,10 @@ flattening.
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{fig05_dose_response.pdf}
-\caption{Behaviour degrades monotonically as the grid coarsens. Thin lines are individual
-adapters; the heavy line is the mean with a 95\% bootstrap band.}
+\caption{The mean degrades as the grid coarsens; individual adapters do not. Thin lines
+are adapters, the heavy line their mean with a 95\% band. Only 4 of 6 fall at every step
+---\texttt{snow} rises at per-channel, \texttt{moon} at INT3---and the INT3 mean sits
+between two adapters below half and two above 80\%.}
 \label{fig:dose}
 \end{figure}
 
@@ -569,7 +571,7 @@ verdict.
 Merging a LoRA adapter and quantizing to INT4 changes 1.1--14.8\% of stored integer codes
 and replaces the intended update with something 1.7--7.4$\times$ its size in a largely
 uncorrelated direction. \textbf{The behaviour does not follow.} At INT4 g128, 98.9\% of
-stored weights are unchanged and the behaviour is undetectably changed: retention 99.2\%,
+stored weights are unchanged and no behavioural change is detectable: retention 99.2\%,
 exact interval [90.7\%, 107.6\%], which spans parity and excludes losses beyond about
 9\%. Degradation appears only at coarser grids, and where it occurs it is benign.
 

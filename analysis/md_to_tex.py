@@ -151,7 +151,12 @@ def inline(s: str) -> str:
 
     s = re.sub(r"`([^`]+)`", hold, s)
     s = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1", s)          # links -> text
+    # Markdown table cells cannot contain a newline, so the prompt tables use <br>. HTML
+    # renders it; LaTeX printed it literally. \newline works inside a p/X column, which
+    # is what every multi-line cell in this document sits in.
+    s = re.sub(r"\s*<br\s*/?>\s*", "\x01", s, flags=re.I)
     s = esc(s)
+    s = s.replace("\x01", r"\newline ")
     s = re.sub(r"\*\*([^*]+)\*\*", r"\\textbf{\1}", s)
     s = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"\\emph{\1}", s)
     return re.sub(r"\x00(\d+)\x00", lambda m: holds[int(m.group(1))], s)

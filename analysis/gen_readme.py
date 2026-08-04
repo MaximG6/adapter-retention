@@ -295,11 +295,15 @@ def main() -> int:
       "receives an effective update larger than the one it asked for, pointing somewhere "
       "it did not.")
     a("")
-    a(f"**2. Behaviour degrades monotonically, and only at coarser settings.** "
+    a(f"**2. The mean degrades only at coarser settings; individual adapters do not.** "
       f"Elicitation retention across six taboo adapters: **{behav:.1f}%** at INT4 g128, "
       f"**{mean(list(r4pc.values())) * 100:.1f}%** at INT4 per-channel, "
       f"**{mean(list(r3.values())) * 100:.1f}%** at INT3 g128 "
-      f"(95% CI over adapters at INT4 g128: [{lo * 100:.1f}%, {hi * 100:.1f}%]).")
+      f"(exact 95% CI over adapters at INT4 g128: [{lo * 100:.1f}%, {hi * 100:.1f}%]). "
+      f"Only **{sum(1 for w in r3 if retention('int4_g128')[w] >= r4pc[w] >= r3[w])} of "
+      f"{len(r3)}** adapters fall at every step, and the INT3 mean sits between "
+      f"**{sum(1 for v in r3.values() if v < 0.5)}** below half and "
+      f"**{sum(1 for v in r3.values() if v > 0.8)}** above 80%.")
     a("")
     a("**3. Where behaviour degrades, it degrades benignly.** The trained *capability* "
       "weakens while the trained *constraint* holds — the model becomes less able to "

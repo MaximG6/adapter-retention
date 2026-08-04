@@ -144,7 +144,9 @@ three obscure subsection references instead of every top-level section — would
 its author looking for defects that were not there, and then, on finding nothing, would
 have trained exactly the habit of disregarding it.
 
-**Four instances, four unrelated causes, no shared mechanism:**
+**Four instances, four unrelated causes, no shared mechanism.** The table below lists
+them; each row is a guard whose own model of the world was wrong, and the last column
+records whether it fired when it should not have or failed to fire when it should.
 
 | # | guard | its own defect | direction |
 |---|---|---|---|
@@ -300,6 +302,19 @@ corrected, the correction has to propagate to everything the old value licensed,
 to the cell it occupied. Digit-level staleness is recoverable at proof stage.
 Claim-level staleness reads as a normal, confident sentence and survives review.
 
+Two properties made the difference, and both are cheap:
+
+1. **Generated, not transcribed.** Tables and figures are emitted from raw by script;
+   the only hand-written numbers in the paper are ones an audit re-derives.
+2. **The audit is a regression test, not a one-off.** Each claim the prose makes is
+   encoded with its expected value and recomputed from raw, so a later change to the
+   records fails loudly instead of silently disagreeing with the text.
+
+A useful diagnostic: our public README carried the correct values throughout, because it
+is *rewritten* at each gate rather than appended to. **The format that preserves history
+is the one that leaks stale values; the format that overwrites is the one that stays
+current.** A project wants both, and should not confuse which is which.
+
 ## 7.9 A figure that renders without error looks validated and is not
 
 **Claim.** Every figure asserts numbers. A plot that draws cleanly has demonstrated only
@@ -407,19 +422,6 @@ failed has not been shown to be capable of failing.
 appears, unless each check has a recorded known-bad case it rejects. We keep those as
 tests — `tests/test_figcheck.py`, `instrument_gate.py --self-test` — so the property is
 re-verified on every run rather than asserted once.)*
-
-Two properties made the difference, and both are cheap:
-
-1. **Generated, not transcribed.** Tables and figures are emitted from raw by script;
-   the only hand-written numbers in the paper are ones an audit re-derives.
-2. **The audit is a regression test, not a one-off.** Each claim the prose makes is
-   encoded with its expected value and recomputed from raw, so a later change to the
-   records fails loudly instead of silently disagreeing with the text.
-
-A useful diagnostic: our public README carried the correct values throughout, because it
-is *rewritten* at each gate rather than appended to. **The format that preserves history
-is the one that leaks stale values; the format that overwrites is the one that stays
-current.** A project wants both, and should not confuse which is which.
 
 ## 7.11 Price the caveat against the measurement that would remove it
 
