@@ -9,9 +9,7 @@ found. The findings are in [`../README.md`](../README.md), the manuscript in
 |---|---|
 | [`PRIOR_ART.md`](PRIOR_ART.md) | The day-1 prior-art search, with an honest verdict per hit. Written before any code, because the project would have pivoted had the numerical result already been covered. |
 | [`PROJECT-EXECUTION-PLAN-v2.md`](PROJECT-EXECUTION-PLAN-v2.md) | The plan the work was executed against, with every amendment dated and kept in place. The amendment list is the useful part: it records which predictions were withdrawn on evidence and why. |
-| [`OUTLINE.md`](OUTLINE.md) | The manuscript outline and figure list, fixed before any prose was written. |
 | [`READTHROUGH.md`](READTHROUGH.md) | The five-pass end-to-end review protocol, with falsification criteria committed before the passes ran. |
-| [`REPO_AUDIT.md`](REPO_AUDIT.md) | Pre-release audit of the whole repository: every tracked file classified, secrets and history scanned, dead code and broken references enumerated. |
 
 ## The operating agreement is at the repository root
 

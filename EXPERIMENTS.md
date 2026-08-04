@@ -93,6 +93,42 @@ it is EXP-032.
 
 ---
 
+## REMOVED DOCUMENTS — two files deleted from the repository and from its history
+
+**These documents existed. They were written, used, and cited by the entries below, and
+they were removed from the repository before release on 2026-08-03.**
+
+| removed file | what it was | entries that cite it |
+|---|---|---|
+| `docs/OUTLINE.md` (formerly `paper/OUTLINE.md`) | the manuscript outline and figure list, fixed before any prose was written | none directly; named in the PATHS table above and in `paper/03-method.md` |
+| `docs/REPO_AUDIT.md` | the pre-release repository audit: every tracked file classified, all 530 blobs in history scanned for secrets, dead code and broken references enumerated | EXP-031 (Setup, Artifacts), EXP-032 (Setup, Artifacts), and the PATHS note above |
+
+**Why this note is worded the way it is.** The removal used
+`git filter-repo --invert-paths`, which strips a path from *every* commit — including the
+commits that created and modified it. The result is a history in which these files appear
+never to have existed. An entry citing `docs/REPO_AUDIT.md` would otherwise read as a
+reference to something imaginary, and there is no way to tell that apart from a fabricated
+citation by inspecting the repository. **They were not imaginary. They were removed.**
+
+The entries below are historically accurate as written and are not corrected. What each
+removed document contained, where it mattered, is restated in the citing entry: EXP-032
+reproduces the audit's findings and the list of changes applied from it, and EXP-031
+reproduces the `VALIDATION.md` finding with its quoted requirement. Nothing that a
+removed document established is known only to that document.
+
+Two further points a reader should not have to reconstruct:
+
+1. `docs/PROJECT-EXECUTION-PLAN-v2.md` was considered for removal at the same time and
+   **kept.** Twenty-seven lines in this file cite an Amendment by number, three
+   supersession-index rows name an Amendment on *both* sides, and EXP-019 states that the
+   wrong-arXiv-ID text was deliberately left in place there. Removing it would have made
+   that sentence false while leaving it unedited in an append-only file.
+2. The removal changed no commit message, order, or content other than these paths. The
+   43 commit subjects are byte-identical before and after; the SHAs are not, for the same
+   reason the SHA map above exists.
+
+---
+
 ## ⚠ SUPERSESSION INDEX — read before quoting any number from this file
 
 **Append-only preserves corrections without overwriting, so a superseded value stays on

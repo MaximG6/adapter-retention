@@ -32,7 +32,7 @@ REPORT_PDF = REPO_ROOT / "paper" / "adapter-retention-technical-report.pdf"
 
 # Filled in at push time, in the three places it appears: here, paper/tex/main.tex and
 # paper/appendix-D-reproduction.md. Kept as one literal so a single replacement does all
-# three -- see B-1 in docs/REPO_AUDIT.md.
+# three.
 REPO_URL = "<REPO-URL>"
 
 SHORT = {

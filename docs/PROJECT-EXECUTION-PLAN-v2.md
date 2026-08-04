@@ -1103,7 +1103,9 @@ Stated so the judgement is falsifiable rather than final:
 
 Drafting order **Method → Results → Discussion/Limitations → Related Work → Introduction → Abstract.** The Introduction is written last so it promises exactly what the Results deliver — this project has had three registered predictions corrected by measurement, and an Introduction drafted first would encode the version of the story that measurement discarded.
 
-Structure and figure list: `OUTLINE.md`, written before any prose.
+Structure and figure list: `OUTLINE.md`, written before any prose. *(That file was
+removed from the repository and from its history before release; see the removal note at
+the top of `EXPERIMENTS.md`. The structure it fixed is the structure the manuscript has.)*
 
 The spine is four measured findings, **none of them the alarming story the project started with**:
 1. Near-total weight-space erasure with behaviour preserved at standard settings (INT4 g128: 98.8% of weights unchanged, 99.2% of behaviour retained).

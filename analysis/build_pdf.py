@@ -30,7 +30,7 @@ FIGDIR = PAPER / "figures"
 OUT_HTML = REPO_ROOT / "paper" / "adapter-retention-technical-report.html"
 OUT_PDF = REPO_ROOT / "paper" / "adapter-retention-technical-report.pdf"
 
-# Manuscript order. OUTLINE.md and READTHROUGH.md are working documents and excluded.
+# Manuscript order. READTHROUGH.md is a working document and excluded.
 SECTIONS = [
     "00-abstract.md",
     "01-introduction.md",
