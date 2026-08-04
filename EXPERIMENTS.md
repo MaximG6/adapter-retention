@@ -2346,3 +2346,91 @@ Deferred: `<REPO-URL>` in `paper/tex/main.tex` and Appendix D, blocked on the re
 **Artifacts:** `docs/REPO_AUDIT.md`; commits `c3b8933`..`6066996`.
 
 ---
+
+## [2026-08-03] EXP-033: A reproduction instruction that destroyed what it documented, found only by inspecting the tree
+
+**Phase:** 1
+**Question:** Does the Appendix D note explaining `paper/figures/` versus `paper/figures-paper/` actually work when followed?
+**Setup:** The note added in commit `872bf3f` gave six commands: run the three figure scripts, then run them again with `AR_FIG_PAPER=1`, said to rebuild the two directories. Executed as part of the post-change verification sweep.
+
+**Command:**
+```
+AR_FIG_PAPER=1 PYTHONPATH=src python analysis/fig01_erasure_vs_survival.py
+AR_FIG_PAPER=1 PYTHONPATH=src python analysis/fig05_06_08.py
+AR_FIG_PAPER=1 PYTHONPATH=src python analysis/fig_secondary.py
+```
+
+**Result:**
+
+All three ran. Every cross-check passed: **12/12 figures green**, in both invocations. Then `git status` showed **all 24 files in `paper/figures/` modified**, and `paper/figures-paper/` untouched.
+
+The regenerated PNGs in `paper/figures/` matched `paper/figures-paper/` byte for byte:
+
+| file | committed `figures/` | after the instruction | `figures-paper/` |
+|---|---|---|---|
+| `fig05_dose_response.png` | 260,753 | **201,203** | 201,203 |
+| `fig01_erasure_vs_survival.png` | 155,247 | **89,609** | 89,609 |
+| `fig02_channel_model.png` | 177,732 | **141,965** | 141,965 |
+
+`AR_FIG_PAPER` controls **style only**. The output directory is the module-level `FIGDIR`, which all three scripts set to `paper/figures/` unconditionally. `analysis/build_arxiv_pdf.py` is the only thing that writes `figures-paper/`, and it does so by rebinding `m.FIGDIR` on the imported module before calling each `main()` — the redirection lives in the build script, not in the figure scripts. Setting the variable by hand therefore renders header-less figures straight over the default set.
+
+Restored by re-running the three scripts in default mode; the PNGs came back byte-identical to the committed versions, confirming no information was lost.
+
+**Verdict:** FAILED — the instruction was wrong, and following it corrupted a tracked directory. Corrected in `27a42c5`.
+
+**What we learned:**
+
+1. **This is §7.13 again — tooling reports success on the operation, not the outcome.** Three scripts exited 0. Twelve cross-checks passed. Nothing in any output was false: the figures *were* correctly computed from the raw records, and the checks *were* comparing plotted values against independent recomputation. Every signal available said the operation succeeded, because every signal was about the numbers and the failure was about the destination. The only thing that reported it was `git status`.
+2. **The cross-check is structurally incapable of catching this, and that is worth stating rather than fixing.** It verifies that a figure agrees with the data. Both figure variants agree with the data. A check that could catch a wrong output directory is a different check, and adding it to `figcheck.py` would blur what that module is for.
+3. **The error was introduced by documenting the system rather than by changing it.** No code changed in `872bf3f` — only prose describing what the code does. The prose was wrong, and prose is not executed, so nothing tested it. **A reproduction instruction is executable content that no test runs.** The fix is to run instructions when writing them, which is what surfaced this, one commit late.
+4. Negative knowledge: the silent-overwrite window here was exactly one commit wide. Had the verification sweep not rebuilt the technical report afterwards, the shipped PDF would have carried the wrong figure variant — visually plausible, since the difference is only whether each figure repeats its own title.
+
+**Plan impact:** Appendix D §D.6.1 now names `build_arxiv_pdf.py` as the only writer of `figures-paper/` and carries an explicit warning against setting `AR_FIG_PAPER` by hand, with the reason the damage is silent.
+
+**Artifacts:** `paper/appendix-D-reproduction.md` §D.6.1; commits `872bf3f` (the error) and `27a42c5` (the correction).
+
+---
+
+## [2026-08-03] EXP-034: A reproducibility check that compared every figure against an empty file
+
+**Phase:** 1
+**Question:** Do the figure files regenerate byte-identically, as the release criteria require?
+**Setup:** Ad-hoc verification script comparing each file in `paper/figures/` and `paper/figures-paper/` against its committed blob, with matplotlib's embedded `/CreationDate` stripped before comparison.
+
+**Command:**
+```python
+for p in sorted(glob.glob('paper/figures-paper/*.pdf')):
+    old = subprocess.run(['git','cat-file','-p',f'HEAD:{p}'],capture_output=True).stdout
+    new = open(p,'rb').read()
+    if strip(old) == strip(new): same += 1
+```
+
+**Result:**
+
+Reported **0 of 12 identical**, listing every figure as CONTENT DIFFERS — immediately after the same comparison on `paper/figures/` had reported 12/12 identical using hardcoded filenames.
+
+The cause is the path separator. On Windows `glob.glob` returns `paper/figures-paper\fig01_erasure_vs_survival.pdf`, with a backslash before the basename. `git cat-file -p HEAD:paper/figures-paper\fig01...` is not a path git recognises, so it exited non-zero and `stdout` was empty. `strip(b'') == strip(new)` is `False` for every file. **The check compared twelve real PDFs against twelve empty strings and reported the result as a content difference.**
+
+Direct inspection of one file gave the true answer: 29,278 bytes on both sides, **4 differing byte positions, all inside `/CreationDate`**:
+
+```
+committed:  /CreationDate (D:20260803163304-04'00')
+current:    /CreationDate (D:20260803181315-04'00')
+```
+
+Rewritten with `Path.as_posix()` and a guard that raises when the committed blob is empty or `git` exits non-zero. Corrected result: **24/24 PNGs byte-identical, 24/24 PDFs identical modulo `/CreationDate`**, across both directories.
+
+**Verdict:** FAILED as written; the underlying property it was testing holds.
+
+**What we learned:**
+
+1. **This is §7.10 again — a check that cannot fail, in its rarer inverted form.** The catalogued version is a check that always passes and therefore tests nothing. This one always *failed*, which is the same defect wearing a more convincing disguise: a green vacuous check invites no scrutiny, but a red one produces a specific, alarming, entirely fictitious finding — "none of your figures reproduce" — and the temptation is to act on it.
+2. **What made it survivable was the adjacent result.** The identical comparison over `paper/figures/`, written minutes earlier with hardcoded names, had returned 12/12. Two runs of the same logic disagreeing completely is not a finding, it is a bug report about the checker. Had `figures-paper/` been checked alone, the natural next step is to investigate a reproducibility problem that does not exist.
+3. **The failing subprocess returned no error anyone read.** `subprocess.run` without `check=True` reports failure only in `returncode`, and the script consulted `stdout`. §7.10's rule — a check must not share its subject's assumptions — extends here to: **a check must verify that it obtained its reference, not merely that it asked for one.** The guard now raises on an empty or failed read.
+4. Negative knowledge: `git cat-file` with a backslash path fails cleanly rather than resolving it, so the same script is correct on Linux and wrong on Windows. This is the second Windows path defect in the project after the MAX_PATH clone failure (EXP-028), and both were invisible until run on this machine.
+
+**Plan impact:** None to any result. The release criterion "generated documents regenerate byte-identically" is met, with the stated exception that figure PDFs carry an embedded timestamp; Appendix D §D.6.1 records that exception so the next person checking does not read it as a failure.
+
+**Artifacts:** `paper/appendix-D-reproduction.md` §D.6.1.
+
+---
