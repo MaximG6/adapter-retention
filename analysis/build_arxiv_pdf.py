@@ -117,6 +117,20 @@ def main() -> int:
 
     if not check_overfull(r.stdout + r.stderr, args.overfull_pt):
         return 1
+
+    # Standing gate, not a one-time fix: sections move between drafts and a dangling
+    # reference is not a LaTeX error, just a sentence pointing nowhere.
+    sys.path.insert(0, str(REPO_ROOT / "analysis"))
+    import xref
+
+    unresolved = xref.check((TEXDIR / "main.tex").read_text(encoding="utf-8"),
+                            (TEXDIR / "appendices.tex").read_text(encoding="utf-8"))
+    if unresolved:
+        uniq = sorted({f"{k} {t}" for k, t, _ in unresolved})
+        print(f"     {len(unresolved)} unresolved cross-references: {', '.join(uniq[:12])}",
+              file=sys.stderr)
+        return 1
+    print("     all cross-references resolve")
     built = TEXDIR / "main.pdf"
     if not built.exists():
         print((r.stdout + r.stderr)[-3000:], file=sys.stderr)

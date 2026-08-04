@@ -241,6 +241,7 @@ CROSS_ARTIFACT: list[tuple[str, list[tuple[str, str]]]] = [
         ("paper/04-results-weight-space.md", r"— ([\d.]+)–[\d.]+× the\s*\n?weight-space"),
         ("paper/08-09-limitations-conclusion.md",
          r"layer-output fidelity ([\d.]+)–[\d.]+× higher"),
+        ("paper/tex/main.tex", r"layer-output fidelity ([\d.]+)--[\d.]+\$"),
     ]),
     ("subspace amplification hi", [
         ("paper/00-abstract.md", r"[\d.]+–([\d.]+)× across the nine adapters"),
@@ -248,6 +249,26 @@ CROSS_ARTIFACT: list[tuple[str, list[tuple[str, str]]]] = [
         ("paper/04-results-weight-space.md", r"— [\d.]+–([\d.]+)× the\s*\n?weight-space"),
         ("paper/08-09-limitations-conclusion.md",
          r"layer-output fidelity [\d.]+–([\d.]+)× higher"),
+        ("paper/tex/main.tex", r"layer-output fidelity [\d.]+--([\d.]+)\$"),
+    ]),
+    # main.tex is the arXiv body and is hand-written, not generated from the markdown.
+    # It was outside every check until it was found still carrying the superseded
+    # amplification figure after the markdown had been corrected.
+    ("codes unchanged % (tex)", [
+        ("paper/tex/main.tex", r"([\d.]+)\\% of\s*\n?stored weights are unchanged"),
+        ("paper/00-abstract.md", r"([\d.]+)% of the model's stored integer codes"),
+    ]),
+    ("behaviour retained % (tex)", [
+        ("paper/tex/main.tex", r"([\d.]+)\\% of the aligned behaviour is retained"),
+        ("paper/00-abstract.md", r"([\d.]+)% of the adapter's\s*\n?\s*trained behaviour"),
+    ]),
+    ("int3 span lo (tex)", [
+        ("paper/tex/main.tex", r"retention spans ([\d.]+)--[\d.]+\\%"),
+        ("README.md", r"\*\*([\d.]+)% to [\d.]+%\*\* at INT3"),
+    ]),
+    ("int3 span hi (tex)", [
+        ("paper/tex/main.tex", r"retention spans [\d.]+--([\d.]+)\\%"),
+        ("README.md", r"\*\*[\d.]+% to ([\d.]+)%\*\* at INT3"),
     ]),
 ]
 

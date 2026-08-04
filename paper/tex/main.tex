@@ -563,8 +563,8 @@ stored weights are unchanged and 99.2\% of the aligned behaviour is retained; de
 is monotone as the grid coarsens, and where it occurs it is benign.
 
 Both halves follow from \dratio{}. Read per-weight it predicts the stored-weight outcome to
-2.3\%; read on the adapter's active subspace it predicts layer-output fidelity 15--21$\times$
-higher than weight-space fidelity. \textbf{Near-total weight-space erasure and preserved
+2.3\%; read on the adapter's active subspace it predicts layer-output fidelity 6.2--16.5$\times$
+higher than weight-space fidelity, the factor rising as rank falls. \textbf{Near-total weight-space erasure and preserved
 behaviour are not in tension; they are the same measurement read at two levels.}
 
 The practical guidance is uncomfortable in both directions. INT4 g128 is \emph{safer} for
@@ -572,6 +572,22 @@ deployed fine-tunes than the weight numbers suggest. But weight-space diagnostic
 the tool we release---\textbf{cannot tell you which adapter will survive}: within a matched
 population, retention spans 28.7--86.4\% while the predictor is constant to 3.3\%, and among
 resolvable pairs the ordering inverts.
+
+\paragraph{Future work.}
+\textbf{FW-1.} Whether outlier-aware quantizers protect the wrong weights for adapter
+retention: the groups driving the layer 1--3 spike sit at the \emph{quietest} input
+channels, which selection by high activation would not cover (\S4.5).
+\textbf{FW-2.} Quantizing $\Delta$ on its own scale rather than merged, where \dratio{}
+is $O(1)$ rather than ${\approx}0.01$ (\S7).
+\textbf{FW-3.} A matched pair of adapters differing only in rank, which would turn the
+predictive gap from a within-population observation into a causal test; no such pair is
+public.
+\textbf{FW-4.} Behavioural coverage across rank and scaling convention, the largest gap
+between our weight-space and behavioural claims (\S9).
+\textbf{FW-5.} GGUF K-quants and deployment kernels, using llama.cpp's own quantizer
+rather than weight-space simulation.
+\textbf{FW-6.} Whether the benign dissociation generalises beyond a suppression-style
+objective.
 
 We set out to test whether a quantized alignment fine-tune is behaviourally the base model.
 At standard settings it is not, and the mechanism by which it survives is the same mechanism
