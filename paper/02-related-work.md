@@ -136,7 +136,7 @@ the quantization step.
 
 Our weight-space measurements do not support that premise for **merged** adapters. Six
 published LoRA adapters, merged and quantized at INT4 g128, change only 1.1%–14.8% of
-stored integer codes — under 6.2% for five of the six — with individual weight deltas
+stored integer codes — under 6.2% for eight of the nine — with individual weight deltas
 falling below the step size (§4.2). Concentrating an update into a low-rank adapter does not, by itself, make the
 per-weight delta large relative to `s`. **[our inference]** The reconciliation we
 propose is that the relevant distinction is not full-FT versus LoRA but **whether the

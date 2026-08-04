@@ -115,7 +115,7 @@ training details are not documented and we do not assume them.
 # 9. Conclusion
 
 Merging a LoRA adapter into a base model and quantizing to INT4 changes only
-**1.1%–14.8%** of the model's stored integer codes — under 6.2% for five of the six
+**1.1%–14.8%** of the model's stored integer codes — under 6.2% for eight of the nine
 adapters measured — and replaces the intended weight update with something 1.7–7.4× its
 size pointing in a largely uncorrelated direction. By any
 weight-space measure, the adaptation is very nearly gone.

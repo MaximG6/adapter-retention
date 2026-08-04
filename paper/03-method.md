@@ -335,6 +335,17 @@ report a nominal sample size far above the effective one. The available nuisance
 is which prompts were drawn, so per-adapter confidence intervals are bootstrapped over
 prompts, and cross-adapter intervals over adapters.
 
+**Which axis, and why the two uses do not conflict.** Two questions are asked of this
+data and they take different sampling units. *Does this adapter's behaviour change with
+precision?* is a within-adapter question, and the only nuisance axis inside one adapter is
+which prompts were drawn, so it bootstraps over prompts — that is the basis for PG-2's
+per-adapter intervals. *Does the population's behaviour change?* is a between-adapter
+question, and there the adapter is the unit; bootstrapping over prompts would treat six
+adapters as 192 independent draws and understate the interval badly. Appendix B.6 and
+Table 2 are population claims and resample adapters. The prompts within one adapter are
+not independent draws *of an adapter*, which is why they cannot serve the pooled case; they
+remain the right unit for the within-adapter case, where nothing else varies.
+
 **Exact where it can be, sampled where it cannot, and always labelled.** The pooled
 intervals over the six adapters are computed by enumerating all `6^6 = 46 656`
 resamples, so they carry no Monte Carlo error and take no seed. Intervals over prompts,

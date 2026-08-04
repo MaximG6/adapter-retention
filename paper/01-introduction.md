@@ -99,7 +99,7 @@ are one measurement read at two levels.**
 ## Contributions
 
 - **A parameter-free model of adapter retention under merge-then-quantize**, validated
-  within 2.3% on six published adapters and across four decades of adapter magnitude,
+  within 2.3% on nine published adapters and across four decades of adapter magnitude,
   with its licensing assumption measured rather than assumed (§4.1).
 - **A derived subspace-amplification law**, `√((d_in/r)/(1+c/r))`, reconciling
   weight-space erasure with behavioural survival. Its single empirical input `c ≈ 0.87`

@@ -18,14 +18,17 @@ where `δ` is the per-weight adapter delta and `s` the step size of that weight'
 quantization group. Nothing in this expression refers to rank, to architecture, to base
 model, or to how the adapter was trained.
 
-Measured against six public adapters spanning **two base models, four ranks (16–128),
+Measured against nine public adapters spanning **two base models, four ranks (16–128),
 both scaling conventions, and four training regimes** (behavioural SFT, DPO,
 interpretability probe, safety):
 
 | adapter | flip measured | flip predicted | abs. error | projection identity |
 |---|---|---|---|---|
+| taboo-moon | 0.01092 | 0.01094 | 0.1% | 0.9934 |
 | taboo-smile | 0.01093 | 0.01095 | 0.1% | 0.9924 |
+| taboo-snow | 0.01102 | 0.01103 | 0.1% | 0.9931 |
 | taboo-gold | 0.01114 | 0.01116 | 0.1% | 0.9924 |
+| taboo-rock | 0.01137 | 0.01140 | 0.2% | 0.9919 |
 | taboo-ship | 0.01139 | 0.01142 | 0.2% | 0.9926 |
 | latentqa | 0.03882 | 0.03912 | 0.8% | 0.9912 |
 | responsible-ai-safety (Llama-3.1-8B) | 0.06191 | 0.06335 | 2.3% | 0.9743 |
@@ -49,7 +52,7 @@ heavier-tailed, as expected.
 **Why the model is licensed, which is the substantive claim.** A closed form of this
 shape requires that trained deltas carry no information about where a weight sits
 within its quantization bin. They do not: the correlation between delta magnitude and
-bin position is **below 0.0011** across all six adapters, and a permutation control
+bin position is **below 0.0011** across all nine adapters, and a permutation control
 that destroys any delta–position association changes the measured flip rate by **under
 1.5%**. Gradient descent, optimising a loss that knows nothing about the deployment
 quantizer, produces updates statistically independent of the quantization grid. **That
@@ -62,7 +65,7 @@ from published metadata. Appendix A describes a tool that computes it without a 
 
 ## 4.2 Applied: published adapters are almost entirely erased at INT4 g128
 
-Six public LoRA adapters, merged into their base models and quantized at INT4 with
+Nine public LoRA adapters, merged into their base models and quantized at INT4 with
 group size 128 (asymmetric, `fixed_scale`). Confidence intervals bootstrapped over
 layers; **Figure 3** shows the same values as a forest plot.
 
@@ -78,8 +81,8 @@ layers; **Figure 3** shows the same values as a forest plot.
 
 Three facts, in decreasing obviousness.
 
-**Only 1.1%–14.8% of stored integer codes change at all**, and for five of the seven
-runs the figure is under 6.2%. The overwhelming majority of merged weights quantize to
+**Only 1.1%–14.8% of stored integer codes change at all**, and for eight of the nine
+adapters the figure is under 6.2%. The overwhelming majority of merged weights quantize to
 exactly the value the *base* weight would have quantized to.
 
 **The effective update is not a shrunken version of the intended one — it is
@@ -268,7 +271,7 @@ parameter-free channel model converts it into a code-flip rate within 2.3% acros
 adapter we tested — a result licensed by the measured independence of trained deltas
 from the quantization grid. Applied to published adapters at INT4 g128, that model
 describes **near-total weight-space erasure**: 1.1%–14.8% of stored codes change, under
-6.2% for five of the six, and the effective update is uncorrelated noise 1.7–7.4× the
+6.2% for eight of the nine, and the effective update is uncorrelated noise 1.7–7.4× the
 intended update's size.
 
 **None of this is a statement about behaviour.** The same measurements predict
@@ -289,7 +292,7 @@ quantize–dequantize over 252 projections. 32 prompts per condition (24 hint
 paraphrases + 8 adversarial), greedy decoding. Primary instrument is elicitation
 (§3.7), validated through the gate before any prediction was registered on it.
 
-## 5.1 The behaviour survives INT4 g128 essentially intact
+## 5.1 No detectable loss at INT4 g128; a mean that degrades and adapters that do not
 
 Retention is each adapter's elicitation score as a fraction of its own BF16 score.
 **Figure 5** plots the full dose-response, per adapter and pooled.
