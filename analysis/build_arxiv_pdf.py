@@ -131,6 +131,19 @@ def main() -> int:
               file=sys.stderr)
         return 1
     print("     all cross-references resolve")
+
+    # Table-to-table agreement. The prose-level check passed 18/18 while two tables
+    # printed the same interval with different values, because both were tables.
+    import tablecheck
+
+    clash = tablecheck.disagreements()
+    if clash:
+        print(f"     {len(clash)} cells disagree between artifacts:", file=sys.stderr)
+        for (a, b), entries in clash[:8]:
+            print(f"       {a} x {b}: "
+                  + "; ".join(f"{v} ({o})" for v, o in entries), file=sys.stderr)
+        return 1
+    print("     all cross-table cells agree")
     built = TEXDIR / "main.pdf"
     if not built.exists():
         print((r.stdout + r.stderr)[-3000:], file=sys.stderr)

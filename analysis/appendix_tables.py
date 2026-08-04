@@ -276,9 +276,42 @@ def table2_body(p1: list[dict[str, Any]]) -> str:
     return "\n".join(rows)
 
 
+def table2_tex(p1: list[dict[str, Any]]) -> str:
+    """Section 5.1's table as LaTeX rows, for the hand-written arXiv body.
+
+    main.tex is not generated from the markdown, so regenerating Table 2 there left this
+    copy on the superseded values for a further round -- in the very table the fix was
+    about. The three artifacts now come from one call.
+    """
+    cols = retention_columns(p1)
+    label = {"int4_g128": "INT4 g128", "int4_per_channel": "INT4 per-channel",
+             "int3_g128": "INT3 g128"}
+    out = []
+    for p in PRECISIONS:
+        lo, hi = boot_ci(cols[p])
+        out.append(f"{label[p]} & \\textbf{{{mean(cols[p]):.1%}}} & "
+                   f"[{lo * 100:.1f}, {hi * 100:.1f}] & "
+                   f"{sum(1 for x in cols[p] if x < 0.5)}/{len(cols[p])} \\\\"
+                   .replace("%", "\\%"))
+    return "\n".join(out)
+
+
 def inject(path: Path, marker: str, body: str) -> bool:
     """Replace the region between the GENERATED/END markers in a hand-written file."""
     text = path.read_text(encoding="utf-8")
+    comment = "%" if path.suffix == ".tex" else "<!--"
+    if comment == "%":
+        start = f"% GENERATED: {marker}"
+        end = f"% END GENERATED: {marker}"
+        i, j = text.find(start), text.find(end)
+        if i < 0 or j < 0:
+            raise ValueError(f"{path.name}: markers for {marker!r} not found")
+        head_end = text.index("\n", i)
+        new = text[:head_end] + "\n" + body + "\n" + text[j:]
+        if new == text:
+            return False
+        path.write_text(new, encoding="utf-8")
+        return True
     start = f"<!-- GENERATED: {marker}"
     end = f"<!-- END GENERATED: {marker} -->"
     i, j = text.find(start), text.find(end)
@@ -371,10 +404,14 @@ def main() -> int:
     if args.write:
         OUT.write_text(text, encoding="utf-8")
         print(f"wrote {OUT.relative_to(REPO_ROOT)}")
-        body = REPO_ROOT / "paper" / "04-results-weight-space.md"
-        changed = inject(body, "table2", table2_body(p1))
-        print(f"  {'updated' if changed else 'unchanged'} Table 2 in "
-              f"{body.name} (same call as B.6)")
+        for path, marker, payload in (
+                (REPO_ROOT / "paper" / "04-results-weight-space.md", "table2",
+                 table2_body(p1)),
+                (REPO_ROOT / "paper" / "tex" / "main.tex", "table2tex",
+                 table2_tex(p1))):
+            changed = inject(path, marker, payload)
+            print(f"  {'updated' if changed else 'unchanged'} Table 2 in "
+                  f"{path.name} (same call as B.6)")
     else:
         print(text)
     return 0
