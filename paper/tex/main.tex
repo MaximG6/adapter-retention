@@ -133,12 +133,32 @@ $\alpha/\sqrt{r}$ under rsLoRA. Misreading the rsLoRA flag changes a rank-128 ad
 delta magnitude by $\sqrt{128} \approx 11.3\times$, and magnitude is the quantity that
 governs retention.
 
+\paragraph{Post-training quantization.} The line this work sits in rounds a trained model
+without retraining it. GPTQ~\cite{frantar2023gptq} quantizes weight-by-weight against a
+second-order proxy; QuIP~\cite{chee2023quip} adds adaptive rounding with an incoherence
+pre-processing step and supplies a theoretical analysis at LLM scale. Both are
+\emph{weight-only} and treat the model as the object to preserve. We use that same
+arithmetic, but ask a question none of them poses: what happens to a \emph{component}
+merged into those weights.
+
 \paragraph{Outlier-aware quantization.} The difficulty of LLM quantization is concentrated
 in extreme values. LLM.int8()~\cite{dettmers2022int8} isolates emergent outlier feature
 dimensions in 16-bit; AWQ~\cite{lin2023awq} shows that protecting $\approx$1\% of salient
 weight channels greatly reduces error, identifying them from the \emph{activation}
-distribution rather than the weights; Massive Activations~\cite{sun2024massive} documents
-input-independent activations up to $10^5\times$ larger than others.
+distribution rather than the weights; SmoothQuant~\cite{xiao2023smoothquant} migrates
+quantization difficulty from activations to weights by a mathematically equivalent
+transformation, so that both can be held at INT8; SpQR~\cite{dettmers2023spqr} identifies
+outlier \emph{weights} that cause particularly large quantization errors and stores them
+at higher precision while compressing the rest to 3--4 bits; Massive
+Activations~\cite{sun2024massive} documents input-independent activations up to
+$10^5\times$ larger than others.
+
+SpQR is the closest of these to our layer 1--3 spike, because it selects on weights rather
+than activations. It selects the weights whose \emph{own} quantization error is large.
+The groups driving our spike are not those: they are narrow-range groups sitting at
+quiet input channels, which is a property of the group's neighbourhood rather than of any
+individual weight's error. Whether either selection rule protects what an adapter needs
+is FW-1, and we do not test it.
 
 All three concern \emph{activations}. Our layer 1--3 bit-flip spike (\S\ref{sec:spike}) is
 a weight-space observation, and we tested whether they are the same phenomenon rather than

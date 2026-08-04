@@ -230,8 +230,21 @@ text at r ≥ 0.99.
 
 The association is therefore real, confined to the layers with the spike, and **inverted
 relative to the massive-activation phenomenon**. §2.2 discusses why this makes the spike
-a distinct phenomenon rather than an instance of the known one, and what it leaves
-unresolved.
+a distinct phenomenon rather than an instance of the known one.
+
+**The mechanism is not established, and we are not offering one.** We have shown what the
+spike is *associated* with — narrow-range weight groups at quiet input channels — and
+what it is *not*: the activation-outlier phenomenon, from which it is inverted. Neither
+is an account of *why* early-layer `gate_proj` and `up_proj` groups have that range
+structure, and nothing here isolates a cause. An earlier draft of this section recorded
+the spike as "a known phenomenon"; that was withdrawn on measurement, and we have not
+replaced it with a second explanation.
+
+What we offer instead is a falsifiable prediction, **FW-1**: outlier-aware quantizers
+select what to protect by *high* activation (AWQ, SmoothQuant) or by large per-weight
+quantization error (SpQR). The groups driving this spike qualify under neither rule, so
+those methods should not protect them, and adapter retention in layers 1–3 should not
+improve under them. That is testable with existing tools and we did not test it.
 
 **Module type.** Pooled over six adapters, `gate_proj` retains most (cosine 0.2840) and
 `down_proj` least (0.2097); full ordering in Appendix B.5. The ordering follows median
@@ -368,6 +381,13 @@ rather than averaging away.** Cliff's *d* is −0.778, −0.778, −0.833 and **
 BF16, INT4 g128, INT4 per-channel and INT3 g128 respectively. Three of the four sit near
 −0.8; the INT3 value is roughly 30% weaker, and the suppression ratio is correspondingly
 at its loosest there (0.270 against 0.208 at BF16).
+
+**"The constraint holds" is therefore a claim about direction, not about invariance.**
+The constraint weakens by about 30% at INT3 — the same precision at which capability
+degrades most. The dissociation is that capability falls faster, not that the constraint
+is untouched, and a reader entitled to conclude "restraint survives quantization" from
+this paper is entitled to it only in that comparative sense. At a precision coarser than
+we tested, the two could cross; nothing here excludes it.
 
 **So the dissociation holds at INT3 — ratio 0.270 against a capability retention of
 57.8% — but it is measurably less sharp there than at finer precisions.** Both sides move
