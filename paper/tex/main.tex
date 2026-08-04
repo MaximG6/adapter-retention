@@ -6,6 +6,11 @@
 \usepackage{amsmath,amssymb}
 \usepackage{graphicx}
 \usepackage{booktabs}
+% Column widths in the appendix tables are computed by analysis/md_to_tex.py from the
+% measured content. array supplies >{...} so those columns can be ragged-right: a
+% justified wrapped column stretches spaces to fill and overflows on long tokens.
+\usepackage{array}
+\usepackage{tabularx}
 \usepackage{caption}
 \usepackage[hidelinks]{hyperref}
 \usepackage{xcolor}

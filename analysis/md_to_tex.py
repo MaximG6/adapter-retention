@@ -104,6 +104,10 @@ def inline(s: str) -> str:
         # Typewriter fonts lack these glyphs, and code spans are not escaped by esc(),
         # so unicode inside them reaches the TeX font directly. Substitute ASCII.
         body = ascii_only(body)
+        # A path in a code span is one unbreakable word. In a narrow table column it
+        # overflows however the column is sized, so permit a break after the
+        # separators. \allowbreak adds no hyphen, so the path stays copy-pasteable.
+        body = re.sub(r"(?<=[/_.-])(?=[^\s/_.-])", r"\\allowbreak{}", body)
         holds.append(rf"\texttt{{{body}}}")
         return f"\x00{len(holds) - 1}\x00"
 
@@ -115,26 +119,131 @@ def inline(s: str) -> str:
     return re.sub(r"\x00(\d+)\x00", lambda m: holds[int(m.group(1))], s)
 
 
+#: Page geometry, in points. article/10pt/twocolumn at margin=0.75in on letter.
+#: Must match main.tex; TABLE_GEOMETRY_CHECK below fails the build if it drifts.
+COLUMN_PT = 247.0
+TEXT_PT = 505.0
+#: Latin Modern mean advance, in points per character, at each size we emit.
+CHAR_PT = {"footnotesize": 8.0 * 0.47, "scriptsize": 7.0 * 0.47}
+#: booktabs inter-column gutter, both sides.
+COL_PAD_PT = 12.0
+#: Below this, a column is a label or a number and should size to its content.
+NARROW_CH = 14
+#: A wrapped column narrower than this reads one word per line.
+MIN_MEASURE_CH = 26
+
+
+def _demand(texts: list[str]) -> tuple[int, int]:
+    """(longest cell, longest unbreakable word) in characters, markup removed."""
+    plain = [re.sub(r"[*`\[\]]|\((?:https?|#)[^)]*\)", "", t) for t in texts]
+    longest = max((len(t) for t in plain), default=0)
+    word = max((len(w) for t in plain for w in t.split()), default=0)
+    return longest, word
+
+
 def table(rows: list[str]) -> str:
+    """Lay a markdown table out to fit, measuring content instead of guessing.
+
+    The previous version chose a fixed spec from the column count alone: bare `r`
+    columns for numeric tables, which have no width bound and simply ran off the page,
+    and a uniform `p{0.72/(n-1)}` for prose, which gave a 9-character measure at n=6.
+    Both defects shipped in the arXiv PDF; neither is visible in the markdown, and only
+    the first one warns.
+
+    Each column's width demand is measured, then a container is chosen in increasing
+    order of disruption -- one column, one column at \\scriptsize, then full width via
+    table* -- and the width is distributed in proportion to demand. Columns that want
+    less than NARROW_CH size to their content; the rest wrap, never below
+    MIN_MEASURE_CH where the container allows it.
+    """
     cells = [[c.strip() for c in r.strip().strip("|").split("|")] for r in rows]
     cells = [c for c in cells if not all(set(x) <= set("-: ") for x in c)]
     if not cells:
         return ""
     n = max(len(c) for c in cells)
     cells = [c + [""] * (n - len(c)) for c in cells]
-    # First column left, remainder right unless clearly prose.
-    prose = any(len(x) > 28 for row in cells for x in row[1:])
-    spec = "p{0.30\\columnwidth}" + ("p{0.55\\columnwidth}" if prose and n == 2
-                                     else "r" * (n - 1))
-    if n > 2 and prose:
-        spec = "l" + "p{{{:.2f}\\columnwidth}}".format(0.72 / (n - 1)) * (n - 1)
-    out = [r"\begin{center}\footnotesize", rf"\begin{{tabular}}{{{spec}}}", r"\toprule"]
-    out.append(" & ".join(inline(x) for x in cells[0]) + r" \\")
-    out.append(r"\midrule")
-    for row in cells[1:]:
-        out.append(" & ".join(inline(x) for x in row) + r" \\")
-    out += [r"\bottomrule", r"\end{tabular}", r"\end{center}"]
-    return "\n".join(out)
+
+    cols = [[row[c] for row in cells] for c in range(n)]
+    longest, words = zip(*(_demand(col) for col in cols))
+    numeric = [c > 0 and all(re.fullmatch(r"[-+~<>=$\\\d.,%/()\s]*", t or "0")
+                             for t in cols[c][1:]) for c in range(n)]
+
+    # Natural (unwrapped) width at each size, plus gutters.
+    def natural(size: str) -> float:
+        return sum(longest) * CHAR_PT[size] + n * COL_PAD_PT
+
+    if natural("footnotesize") <= COLUMN_PT:
+        size, avail, wide = "footnotesize", COLUMN_PT, False
+    elif natural("scriptsize") <= COLUMN_PT:
+        size, avail, wide = "scriptsize", COLUMN_PT, False
+    elif natural("footnotesize") <= TEXT_PT:
+        size, avail, wide = "footnotesize", TEXT_PT, True
+    else:
+        size, avail, wide = "scriptsize", TEXT_PT, True
+
+    body = [r"\toprule",
+            " & ".join(inline(x) for x in cells[0]) + r" \\",
+            r"\midrule"]
+    body += [" & ".join(inline(x) for x in row) + r" \\" for row in cells[1:]]
+    body += [r"\bottomrule"]
+
+    if avail == COLUMN_PT and not wide and natural(size) <= COLUMN_PT:
+        # Fits as-is; let TeX size every column to its content.
+        spec = "".join("r" if numeric[c] else "l" for c in range(n))
+        inner = [rf"\begin{{tabular}}{{{spec}}}"] + body + [r"\end{tabular}"]
+    else:
+        # tabularx solves for the X widths so the total is exactly the container.
+        # Estimated p{} widths cannot promise that: they are mixed with natural l/r
+        # columns whose true width depends on glyph metrics, and the sum overran.
+        # Weight the X columns by demand so the widest text column gets the widest
+        # measure rather than an equal slice. The weights must sum to the number of X
+        # columns for tabularx's own total to come out right.
+        flex = [c for c in range(n) if longest[c] > NARROW_CH]
+        if not flex:
+            flex = [max(range(n), key=lambda c: longest[c])]
+        tot = sum(longest[c] for c in flex) or 1
+        k = len(flex)
+        parts = []
+        for c in range(n):
+            if c not in flex:
+                parts.append("r" if numeric[c] else "l")
+                continue
+            f = k * longest[c] / tot
+            f = min(max(f, 0.45), k)               # keep any X column legible
+            parts.append(f">{{\\hsize={f:.3f}\\hsize\\raggedright\\arraybackslash}}X")
+        # Renormalise so the factors still sum to k after clamping.
+        got = sum(float(re.search(r"hsize=([0-9.]+)", p).group(1))
+                  for p in parts if "hsize=" in p)
+        if got and abs(got - k) > 1e-6:
+            parts = [re.sub(r"hsize=([0-9.]+)",
+                            lambda m: f"hsize={float(m.group(1)) * k / got:.3f}", p)
+                     for p in parts]
+        spec = "".join(parts)
+        width = r"\textwidth" if wide else r"\columnwidth"
+        inner = ([rf"\begin{{tabularx}}{{{width}}}{{{spec}}}"] + body
+                 + [r"\end{tabularx}"])
+
+    if wide:
+        # table* spans both columns. It floats, so it may move to the top of a page;
+        # that is the cost of not truncating the data.
+        return "\n".join([r"\begin{table*}[t]", rf"\centering\{size}"]
+                         + inner + [r"\end{table*}"])
+    return "\n".join([rf"\begin{{center}}\{size}"] + inner + [r"\end{center}"])
+
+
+#: Characters that fit across \columnwidth in a verbatim block at each size, for the
+#: fixed-pitch face (advance 0.6em). Verbatim cannot wrap, so a block that exceeds its
+#: size simply runs off the page -- the same defect as the tables, in a different
+#: environment, and equally silent in the markdown.
+VERBATIM_FIT = ((51, "footnotesize"), (58, "scriptsize"), (82, "tiny"))
+
+
+def verbatim_size(block: list[str]) -> str:
+    longest = max((len(b) for b in block), default=0)
+    for fits, size in VERBATIM_FIT:
+        if longest <= fits:
+            return size
+    return VERBATIM_FIT[-1][1]
 
 
 def convert(md: str) -> str:
@@ -162,7 +271,7 @@ def convert(md: str) -> str:
             # verbatim passes bytes straight to the typewriter font, which has no
             # glyphs for the unicode the manuscript uses in code examples.
             buf = [ascii_only(b) for b in buf]
-            out += [r"\begin{quote}\footnotesize\begin{verbatim}", *buf,
+            out += [rf"\begin{{quote}}\{verbatim_size(buf)}\begin{{verbatim}}", *buf,
                     r"\end{verbatim}\end{quote}"]
             continue
         if re.match(r"^\s*\|", ln):
@@ -186,7 +295,16 @@ def convert(md: str) -> str:
             if not in_list:
                 out.append(r"\begin{itemize}\itemsep1pt")
                 in_list = True
-            out.append(r"\item " + inline(re.sub(r"^\s*[-*]\s+", "", ln)))
+            item = [re.sub(r"^\s*[-*]\s+", "", ln)]
+            # An indented continuation belongs to this bullet. Emitting it separately
+            # closed the list and left an orphan paragraph between two bullets, which is
+            # how the gate self-test list rendered in the built PDF.
+            while (i + 1 < len(lines) and lines[i + 1].strip()
+                   and lines[i + 1][:1].isspace()
+                   and not re.match(r"^\s*[-*]\s+", lines[i + 1])):
+                i += 1
+                item.append(lines[i].strip())
+            out.append(r"\item " + inline(" ".join(item)))
             i += 1
             continue
         if ln.strip().startswith(">"):
@@ -205,7 +323,21 @@ def convert(md: str) -> str:
             i += 1
             continue
         close_list()
-        out.append(inline(ln))
+        # Gather the whole paragraph before converting it. inline() is regex-based and
+        # its spans cannot match across a line break, so a **bold** or *emphasis* the
+        # author wrapped mid-phrase used to pass through as literal asterisks -- 70 of
+        # them reached the built PDF. A markdown paragraph is its consecutive lines, so
+        # joining first is also what the format means.
+        para = [ln]
+        while i + 1 < len(lines):
+            nxt = lines[i + 1]
+            if (not nxt.strip() or nxt.startswith("|") or nxt.strip().startswith((">", "```"))
+                    or re.match(r"^\s*[-*]\s+", nxt) or re.match(r"^#{2,4}\s", nxt)
+                    or re.match(r"^\s*(---+|\*\*\*+)\s*$", nxt)):
+                break
+            i += 1
+            para.append(lines[i])
+        out.append(inline(" ".join(x.strip() for x in para)))
         i += 1
     close_list()
     return "\n".join(out)

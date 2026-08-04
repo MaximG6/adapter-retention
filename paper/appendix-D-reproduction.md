@@ -61,7 +61,8 @@ reports *"Filename too long"* and leaves an **incomplete checkout** — the clon
 to succeed and the failure is in the second line of output:
 
 ```
-fatal: cannot create directory at 'results/raw/phase0/public_adapter/...': Filename too long
+fatal: cannot create directory at
+  'results/raw/phase0/public_adapter/...': Filename too long
 warning: Clone succeeded, but checkout failed.
 ```
 
@@ -190,7 +191,8 @@ already known to be broken.
 PYTHONPATH=src python scripts/measure_public_adapter.py \
   --adapter adamkarvonen/Qwen3-8B-taboo-smile_50_mix
 
-# All six adapters (repeat --adapter for each; see paper/appendix-B-tables.md for the list)
+# All six adapters: repeat --adapter for each.
+# The list is in paper/appendix-B-tables.md.
 # Full 36-layer depth profile for one adapter, asymmetric only. ~6 min.
 PYTHONPATH=src python scripts/measure_public_adapter.py \
   --adapter adamkarvonen/Qwen3-8B-taboo-smile_50_mix \

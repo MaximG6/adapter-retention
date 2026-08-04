@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -29,9 +30,47 @@ def run(cmd: list[str], **kw) -> subprocess.CompletedProcess[str]:
     return subprocess.run(cmd, capture_output=True, text=True, **kw)
 
 
+#: An Overfull box wider than this is content running off the page rather than a
+#: typesetting nicety. Tables that overflowed the arXiv PDF for a whole draft cycle ran
+#: 19-299pt over; ordinary prose boxes that no reader would notice run under 5pt.
+OVERFULL_LIMIT_PT = 6.0
+
+_OVERFULL = re.compile(r"([\w.]+):(\d+): Overfull .hbox \(([0-9.]+)pt too wide")
+
+
+def check_overfull(log: str, limit_pt: float) -> bool:
+    """Fail the build on any Overfull box beyond `limit_pt`.
+
+    Same principle as the figure cross-checks and the non-ASCII gate: the failure is
+    invisible in the source and silent in the output, so the build has to be the thing
+    that notices. Tectonic reports an alignment's overfull box at the line that CLOSES
+    it, not at the offending row, so line numbers point at \\end{center}.
+    """
+    worst: dict[tuple[str, int], float] = {}
+    for m in _OVERFULL.finditer(log):
+        key = (m.group(1), int(m.group(2)))
+        worst[key] = max(worst.get(key, 0.0), float(m.group(3)))
+    over = sorted(((v, f, l) for (f, l), v in worst.items() if v > limit_pt),
+                  reverse=True)
+    if not over:
+        n = len(worst)
+        print(f"     no overfull box beyond {limit_pt:.0f}pt "
+              f"({n} under it)")
+        return True
+    print(f"     {len(over)} overfull boxes beyond {limit_pt:.0f}pt "
+          f"-- content is running off the page:", file=sys.stderr)
+    for amt, f, l in over[:12]:
+        print(f"       {amt:>7.1f}pt  {f}:{l}", file=sys.stderr)
+    if len(over) > 12:
+        print(f"       ... and {len(over) - 12} more", file=sys.stderr)
+    return False
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--tectonic", default=shutil.which("tectonic"))
+    ap.add_argument("--overfull-pt", type=float, default=OVERFULL_LIMIT_PT,
+                    help="fail the build on an overfull box wider than this")
     args = ap.parse_args()
     if not args.tectonic:
         print("tectonic not found; pass --tectonic <path>", file=sys.stderr)
@@ -74,6 +113,9 @@ def main() -> int:
         print(f"     {len(bad)} unicode errors:", file=sys.stderr)
         for l in bad[:5]:
             print("       " + l, file=sys.stderr)
+        return 1
+
+    if not check_overfull(r.stdout + r.stderr, args.overfull_pt):
         return 1
     built = TEXDIR / "main.pdf"
     if not built.exists():

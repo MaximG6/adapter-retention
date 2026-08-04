@@ -94,7 +94,7 @@ No gated repositories are required. If your GPU is not Blackwell, set `AR_MIN_CA
 ```bash
 pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cu128
 pip install -r requirements.txt
-PYTHONPATH=src python -m pytest -q                      # 128 passed
+PYTHONPATH=src python -m pytest -q                      # 146 passed
 PYTHONPATH=src python analysis/audit_draft_numbers.py   # 143/143 claims vs raw
 ```
 
