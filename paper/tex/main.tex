@@ -286,6 +286,12 @@ candidates, normalised against a ground-truth hint for the same word. Controls: 
 prompts, and degeneracy guards. Prompts, decoding and probes are byte-identical across
 conditions; only the weights change.
 
+\subsection{Ground-truth fixture for the adapter delta}
+Our delta computation is checked against \texttt{peft}'s own \texttt{merge\_and\_unload}
+on a one-\texttt{Linear} stub, so the library that defines the semantics is the reference
+rather than our reading of them. This fixture is what catches a mis-scaled rsLoRA
+adapter, which four earlier analyses had already run on.
+
 \subsection{Instrument gate}
 \label{sec:gate}
 No prediction is registered on an instrument until it separates \texttt{aligned\_bf16}
@@ -295,6 +301,15 @@ floor of $10^{-3}$. Cliff's delta rather than Cohen's $d$ because $d$ returns $\
 under zero pooled variance; conjunctive because either clause alone is satisfiable by
 arithmetic between two near-zero values. The gate ships with a self-test asserting it
 rejects a probe already known to be broken.
+
+\subsection{Refusal battery}
+The taboo instruments need a secret word named in the checkpoint, so they do not apply to
+the safety adapter. For it we built a separate battery: eight harmful topics phrased both
+directly and under indirect (jailbreak-framed) pressure, eight benign topics in two
+wordings, and a graded \texttt{p\_refuse} read teacher-forced off the model's own
+distribution, with string-match refusal and decoding entropy as controls. It is put
+through the same gate at the same thresholds (\S3.9); \S6 reports that it does not clear
+them.
 
 \subsection{Statistics}
 Greedy decoding makes generation deterministic, so seeds are not a replicate axis.
@@ -394,8 +409,16 @@ layers 1--3 against 1.4 and 1.6 in controls. Because quantization groups run alo
 \textbf{They sit at the quietest}: activation 0.15--0.19$\times$ the module mean at the
 narrowest 1\% of groups, against 1.05--1.58$\times$ at the widest, with
 $\rho = +0.16$ to $+0.28$ in spike layers and $\approx 0$ in controls. This is the
-\emph{inverse} of the activation-outlier pattern, and yields a falsifiable prediction:
-outlier-aware protection selected by high activation would not protect these groups.
+\emph{inverse} of the activation-outlier pattern.
+
+\textbf{We do not have a mechanism.} We have what the spike is associated with, and what
+it is not; nothing here isolates why early-layer \texttt{gate\_proj} and \texttt{up\_proj}
+groups carry that range structure. An earlier draft recorded the spike as a known
+phenomenon and that was withdrawn on measurement; we have not replaced it with a second
+explanation. What we offer instead is \textbf{FW-1}, a falsifiable prediction: selection
+by high activation (AWQ, SmoothQuant) and selection by large per-weight quantization
+error (SpQR) both miss these groups, so neither should improve adapter retention in
+layers 1--3. That is testable with existing tools and we did not test it.
 
 \section{Results: Behaviour}
 \label{sec:behaviour}
@@ -541,8 +564,8 @@ not measured the unmerged configuration}, and flag this as an untested predictio
 We pre-registered nine predictions before the runs they concern. \textbf{Four were not
 confirmed}: two withdrawn on evidence before being tested, one superseded by a measurement
 bug in its own inputs, one never run because we judged the experiment not worth its cost.
-All nine, with outcomes and where each resolves, are listed in Appendix~E, along with
-fourteen practices each evidenced by an error of ours that measurement caught before
+All nine, with outcomes and where each resolves, are listed in Appendix~C, along with
+fifteen practices each evidenced by an error of ours that measurement caught before
 publication. Six changed a number, claim or citation that would otherwise have been
 published. In brief:
 

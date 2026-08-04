@@ -2,7 +2,7 @@
 
 *Draft. §7.0 lists every registered prediction and its outcome; the remaining
 subsections each state a transferable claim first and our own evidence for it second.
-These are not incidental notes: **six of the fourteen practice entries changed a number, a
+These are not incidental notes: **six of the fifteen practice entries changed a number, a
 claim, or a citation that would otherwise have been published** (§7.1, §7.3, §7.4, §7.6,
 §7.8, §7.9). We report them because the practices are reusable, not because the errors
 are interesting.*
@@ -582,5 +582,5 @@ than trusting an aggregate.
 
 **We do not claim a general thesis about measurement proxies from two instances.** The
 paper's primary claims are the channel model (§4) and the erasure-with-survival result
-(§5.1); this pattern is a secondary theme and a reason for the practices in §7.1–7.5,
+(§5.1); this pattern is a secondary theme and a reason for the practices in §7.1 to §7.5,
 not a finding in its own right.

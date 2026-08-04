@@ -4,11 +4,11 @@
 
 Record counts: Phase 0 weight-space 1512 (4-layer) + 504 (36-layer); Phase 1 behavioural 1536.
 
-### B.1 Weight-space retention per adapter (INT4 g128, asymmetric, `fixed_scale`)
+## B.1 Weight-space retention per adapter (INT4 g128, asymmetric, `fixed_scale`)
 
 CIs are over layers. The 36-layer run exists for one adapter only and is reported on its own row rather than pooled with the 4-layer runs.
 
-Intervals without a mark are **exact**, enumerated over all `k**k` resamples. A `*` marks a **sampled** interval (Monte Carlo, n=20000), used where the sample is too large to enumerate; its last printed digit is at the resolution the resampling noise supports and no finer.
+Intervals without a mark are **exact**, enumerated over all `k^k` resamples. A `*` marks a **sampled** interval (Monte Carlo, n=20000), used where the sample is too large to enumerate; its last printed digit is at the resolution the resampling noise supports and no finer.
 
 | adapter | base | r | α/r | layers | modules | cosine | 95% CI | code-flip | rel. err | proj. coef |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -23,7 +23,7 @@ Intervals without a mark are **exact**, enumerated over all `k**k` resamples. A 
 | taboo-snow | Qwen3-8B | 32 | 2 | 4 | 28 | 0.1382 | [0.1260, 0.1503] | 0.01102 | 7.374 | 0.9931 |
 | taboo-smile | Qwen3-8B | 32 | 2 | 36 | 252 | 0.1380 | [0.1355, 0.1404]* | 0.01220 | 7.293 | 0.9877 |
 
-### B.2 Channel model: predicted vs measured code-flip rate
+## B.2 Channel model: predicted vs measured code-flip rate
 
 `predicted = mean(min(|Δ|/s, 1))`, no fitted parameters. INT4 g128, asymmetric, `fixed_scale`.
 
@@ -41,7 +41,7 @@ Intervals without a mark are **exact**, enumerated over all `k**k` resamples. A 
 
 **Maximum relative error: 2.3%.**
 
-### B.3 Quantization convention (paired)
+## B.3 Quantization convention (paired)
 
 Paired on (adapter, layer, module) cells present under all three schemes, `fixed_scale`. Pooling unpaired records inverts this ordering (EXP-008).
 
@@ -51,7 +51,7 @@ Paired on (adapter, layer, module) cells present under all three schemes, `fixed
 | `symmetric_gptq` | 252 | 0.2065 | 0.0341 | 6.733 |
 | `symmetric_awq` | 252 | 0.1980 | 0.0303 | 6.453 |
 
-### B.4 Scale regime
+## B.4 Scale regime
 
 `fixed_scale` isolates the adapter's contribution; `adaptive_scale` is deployment-realistic. Code flips and value changes differ by ~40x under `adaptive_scale`, which is why both are logged.
 
@@ -60,7 +60,7 @@ Paired on (adapter, layer, module) cells present under all three schemes, `fixed
 | `fixed_scale` | 0.2161 | 0.0351 | 0.0351 | 1.0000 | 0.8202 |
 | `adaptive_scale` | 0.2151 | 0.0572 | 0.8552 | 1.0000 | 0.8202 |
 
-### B.5 Module profile (pooled over six adapters)
+## B.5 Module profile (pooled over six adapters)
 
 | module | cells | cosine | code-flip |
 |---|---|---|---|
@@ -72,7 +72,7 @@ Paired on (adapter, layer, module) cells present under all three schemes, `fixed
 | `v_proj` | 36 | 0.2135 | 0.0317 |
 | `down_proj` | 36 | 0.1750 | 0.0243 |
 
-### B.6 Behavioural retention per adapter and precision
+## B.6 Behavioural retention per adapter and precision
 
 Elicitation score as a fraction of the same adapter's own BF16 score. Intervals are over the six adapters, not over prompts: the adapter is the sampling unit, and with greedy decoding the prompts within one adapter are not independent draws. They are exact, by enumerating all 6^6 resamples.
 
@@ -88,7 +88,7 @@ Elicitation score as a fraction of the same adapter's own BF16 score. Intervals 
 | 95% CI over adapters | — | [90.7%, 107.6%] | [69.0%, 86.0%] | [41.7%, 74.3%] |
 | below 50% | — | 0/6 | 0/6 | 2/6 |
 
-### B.7 Knowledge probe: the benign dissociation
+## B.7 Knowledge probe: the benign dissociation
 
 Aligned vs base **within the same precision**. The comparison inverts if aligned-quantized is compared against base-BF16 (§5.3).
 
@@ -99,7 +99,7 @@ Aligned vs base **within the same precision**. The comparison inverts if aligned
 | int4_per_channel | 0.3272 | 0.0730 | 0.223 | -0.833 | 1.4998 |
 | int3_g128 | 0.2803 | 0.0756 | 0.270 | -0.556 | 1.3480 |
 
-### B.8 Layer 1–3 spike: step size vs input-channel activation
+## B.8 Layer 1–3 spike: step size vs input-channel activation
 
 Activation columns are mean-normalised within each module (§4.5.1).
 

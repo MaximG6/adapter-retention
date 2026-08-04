@@ -87,7 +87,7 @@ prompts (§3.10). It did not clear the gate either:
 model's refusal propensity is 0.1449 on plain benign prompts and **0.8118** on
 surface-harmful benign prompts — a **5.60×** contrast. The instrument can move; it did
 not. Showing that a measurement *can* respond before reporting that it *didn't* is the
-same discipline as the instrument gate itself, applied to a prompt set (§7).
+same discipline as the instrument gate itself, applied to a prompt set (§7.2).
 
 The single aligned over-refusal is a textbook exaggerated-safety failure — declining to
 give **James Bond's fictional bank account number**, which the base model answered —
@@ -110,7 +110,7 @@ behavioural retention **across** a population spanning a 3.7× predictor range.
 prediction is withdrawn rather than tested.** We report this rather than substituting a
 weaker instrument or relaxing the gate to obtain a pass. Relaxing a threshold after
 seeing the data is the precise failure the gate exists to prevent, and our own history
-with it (§7) is why we did not.
+with it (§7.11) is why we did not.
 
 The withdrawal is not a quantization result. **No precision comparison was run on this
 adapter**, and nothing here says anything about whether its behaviour survives

@@ -100,9 +100,15 @@ def leftover_non_ascii(tex: str) -> dict[str, int]:
 #: Left side is the markdown's own numbering; right side is what LaTeX will number it.
 REFMAP = {
     # Related work: seven subsections in the report, one section in the paper.
-    **{f"2.{i}": "2" for i in range(1, 8)},
-    # Method: 3.8 (ground-truth fixture) and 3.10 (refusal battery) fold into 3.7.
-    "3.8": "3.7", "3.9": "3.8", "3.10": "3.7", "3.11": "3.9",
+    **{f"2.{i}": "2" for i in range(1, 8) if i != 5},
+    # Method: 3.8 and 3.10 previously folded into 3.7, which pointed the ground-truth
+    # fixture and the refusal battery at the taboo battery instead -- eight references
+    # resolving to the wrong section. Both subsections now exist in the body, so §3 is
+    # numbered identically in both documents and needs no mapping at all.
+    #
+    # §2.5 is the reconciliation of the opposing result, which is §7 in the paper, not a
+    # subsection of related work.
+    "2.5": "7",
     # Results: 4.5.1 folds into 4.5; the predictive gap moves 5.4 -> 5.3.
     "4.5.1": "4.5", "5.4": "5.3",
     # Advertised versus measured becomes Appendix D, keeping its own numbering.
@@ -113,7 +119,18 @@ REFMAP = {
     **{f"8.{i}": "9" for i in range(1, 9)},
 }
 
+#: The report's own appendices are A-D; the paper's are A, B, then C and D taken by the
+#: two body sections that became appendices, pushing prompts and reproduction to E and F.
+#: Left unmapped, "Appendix D" in the reproduction appendix pointed at advertised-versus-
+#: measured -- a target that exists, so the reference gate passed it.
+APPENDIX_MAP = {"A": "A", "B": "B", "C": "E", "D": "F"}
+
 _REF = re.compile(r"§\s?(\d+(?:\.\d+)*)")
+#: Captures the letter and any subsection suffix. The suffix must be captured rather than
+#: excluded: "Appendix D.4" needs the letter remapped and the number kept. An earlier
+#: `(?!\.)` guard, meant to skip subsection references, also skipped every reference that
+#: ended a sentence -- so "in Appendix D." stayed pointing at the wrong appendix.
+_APX = re.compile(r"\bAppendix~?\s*([A-D])((?:\.\d+)*)\b")
 
 
 def remap_refs(md: str) -> str:
@@ -125,6 +142,10 @@ def remap_refs(md: str) -> str:
             return m.group(0)
         return f"Appendix {target}" if target[0].isalpha() else f"§{target}"
 
+    # Letters first, sections second. REFMAP turns §6.3 into "Appendix D.3"; if the
+    # letter pass ran afterwards it would remap that D to F and corrupt a reference it
+    # had just created. Only letters written in the source may be remapped.
+    md = _APX.sub(lambda m: f"Appendix {APPENDIX_MAP[m.group(1)]}{m.group(2)}", md)
     return _REF.sub(sub, md)
 
 
@@ -329,7 +350,13 @@ def convert(md: str) -> str:
         if m:
             close_list()
             lvl = len(m.group(1))
-            title = re.sub(r"^[\d.]+\s*", "", m.group(2)).strip()
+            # Strip the manual number the markdown carries for the technical report.
+            # LaTeX numbers appendices itself, so leaving it produced "A.1 A.1 What it
+            # does" on every appendix heading in the shipped PDF. The letter-prefixed
+            # form was not caught because the old pattern only matched leading digits.
+            # "D.7a" carries a letter suffix, so a pattern ending at a digit leaves it.
+            title = re.sub(r"^(?:[A-G]\.)?\d[\d.]*[a-z]?\s+", "", m.group(2)).strip()
+            title = re.sub(r"^[\d.]+\s*", "", title).strip()
             cmd = {2: "subsection", 3: "subsubsection", 4: "paragraph"}[min(lvl, 4)]
             out.append(rf"\{cmd}{{{inline(title)}}}")
             i += 1

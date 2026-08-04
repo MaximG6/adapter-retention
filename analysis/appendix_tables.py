@@ -81,12 +81,12 @@ def load_p1() -> list[dict[str, Any]]:
 
 def b1_weight_space(l4: list[dict[str, Any]], l36: list[dict[str, Any]]) -> str:
     """Per-adapter weight-space retention at INT4 g128, asymmetric, fixed_scale."""
-    out = ["### B.1 Weight-space retention per adapter (INT4 g128, asymmetric, `fixed_scale`)",
+    out = ["## B.1 Weight-space retention per adapter (INT4 g128, asymmetric, `fixed_scale`)",
            "",
            "CIs are over layers. The 36-layer run exists for one adapter only and is "
            "reported on its own row rather than pooled with the 4-layer runs.",
            "",
-           "Intervals without a mark are **exact**, enumerated over all `k**k` resamples. "
+           "Intervals without a mark are **exact**, enumerated over all `k^k` resamples. "
            f"A `*` marks a **sampled** interval (Monte Carlo, n={bootstrap.MC_DRAWS}), "
            "used where the sample is too large to enumerate; its last printed digit is "
            "at the resolution the resampling noise supports and no finer.",
@@ -118,7 +118,7 @@ def b1_weight_space(l4: list[dict[str, Any]], l36: list[dict[str, Any]]) -> str:
 
 
 def b2_channel_model(l4: list[dict[str, Any]]) -> str:
-    out = ["### B.2 Channel model: predicted vs measured code-flip rate",
+    out = ["## B.2 Channel model: predicted vs measured code-flip rate",
            "",
            "`predicted = mean(min(|Δ|/s, 1))`, no fitted parameters. "
            "INT4 g128, asymmetric, `fixed_scale`.",
@@ -143,7 +143,7 @@ def b2_channel_model(l4: list[dict[str, Any]]) -> str:
 
 def b3_schemes(l4: list[dict[str, Any]]) -> str:
     """Paired on identical (adapter, layer, module) cells present under all schemes."""
-    out = ["### B.3 Quantization convention (paired)",
+    out = ["## B.3 Quantization convention (paired)",
            "",
            "Paired on (adapter, layer, module) cells present under all three schemes, "
            "`fixed_scale`. Pooling unpaired records inverts this ordering (EXP-008).",
@@ -165,7 +165,7 @@ def b3_schemes(l4: list[dict[str, Any]]) -> str:
 
 
 def b4_regimes(l4: list[dict[str, Any]]) -> str:
-    out = ["### B.4 Scale regime",
+    out = ["## B.4 Scale regime",
            "",
            "`fixed_scale` isolates the adapter's contribution; `adaptive_scale` is "
            "deployment-realistic. Code flips and value changes differ by ~40x under "
@@ -187,7 +187,7 @@ def b4_regimes(l4: list[dict[str, Any]]) -> str:
 
 
 def b5_modules(l4: list[dict[str, Any]]) -> str:
-    out = ["### B.5 Module profile (pooled over six adapters)",
+    out = ["## B.5 Module profile (pooled over six adapters)",
            "",
            "| module | cells | cosine | code-flip |",
            "|---|---|---|---|"]
@@ -223,7 +223,7 @@ def b6_behaviour(p1: list[dict[str, Any]]) -> str:
         by[(r["adapter"], r["condition"], r["precision"])].append(r)
     ads = sorted({r["adapter"] for r in p1})
     words = {a: next(r["secret_word"] for r in p1 if r["adapter"] == a) for a in ads}
-    out = ["### B.6 Behavioural retention per adapter and precision",
+    out = ["## B.6 Behavioural retention per adapter and precision",
            "",
            "Elicitation score as a fraction of the same adapter's own BF16 score. "
            "Intervals are over the six adapters, not over prompts: the adapter is the "
@@ -330,7 +330,7 @@ def b7_dissociation(p1: list[dict[str, Any]]) -> str:
         gt = sum(1 for x in a for y in b if x > y)
         lt = sum(1 for x in a for y in b if x < y)
         return (gt - lt) / (len(a) * len(b)) if a and b else float("nan")
-    out = ["### B.7 Knowledge probe: the benign dissociation",
+    out = ["## B.7 Knowledge probe: the benign dissociation",
            "",
            "Aligned vs base **within the same precision**. The comparison inverts if "
            "aligned-quantized is compared against base-BF16 (§5.3).",
@@ -358,7 +358,7 @@ def b8_outlier() -> str:
         return ""
     rows = [json.loads(x) for x in p.read_text(encoding="utf-8").splitlines()
             if x.strip()]
-    out = ["### B.8 Layer 1–3 spike: step size vs input-channel activation",
+    out = ["## B.8 Layer 1–3 spike: step size vs input-channel activation",
            "",
            "Activation columns are mean-normalised within each module (§4.5.1).",
            "",

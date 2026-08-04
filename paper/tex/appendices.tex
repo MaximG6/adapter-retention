@@ -7,7 +7,7 @@
 \emph{The tool exists because \S{}4.1 identifies \texttt{|Delta|/\allowbreak{}s} as the quantity that governs retention, and \textbf{no adapter card publishes effective magnitude}. It closes that gap for weights. It does not close it for behaviour, and it says so in its own output (\S{}A.4).}
 
 
-\subsection{A.1 What it does and what it costs}
+\subsection{What it does and what it costs}
 
 Given a HuggingFace adapter identifier, \texttt{ar.\allowbreak{}predict} computes the adapter's per-weight delta magnitude against the quantization step size of the base model it targets, and reports the weight-space consequences.
 
@@ -18,7 +18,7 @@ python -m ar.predict --adapter adamkarvonen/Qwen3-8B-taboo-smile_50_mix \
                      --bits 4 --group-size 128
 \end{verbatim}\end{quote}
 
-\subsection{A.2 Output}
+\subsection{Output}
 
 \begin{quote}\tiny\begin{verbatim}
   effective magnitude  mean|delta|     9.747e-05
@@ -45,7 +45,7 @@ python -m ar.predict --adapter adamkarvonen/Qwen3-8B-taboo-smile_50_mix \
 
 The per-module breakdown is reported because module differences are entirely a magnitude effect (\S{}4.5): \texttt{gate\_\allowbreak{}proj} has the largest \texttt{|Delta|/\allowbreak{}s} and retains most, \texttt{down\_\allowbreak{}proj} the smallest and retains least, and the ordering follows the ratio rather than anything architectural.
 
-\subsection{A.3 Accuracy}
+\subsection{Accuracy}
 
 Validated against directly measured records on six published adapters (Figure A1):
 
@@ -62,9 +62,9 @@ cosine & 5.0\% \\
 
 The prediction is a closed form with no fitted parameters (\S{}3.5), so this is out-of-sample in the only sense available: nothing about these six adapters was used to construct the model.
 
-\textbf{It reads \texttt{use\_\allowbreak{}rslora} from each adapter's config rather than assuming a convention.} For a rank-128 rsLoRA adapter the two conventions differ by \texttt{sqrt128 ~ 11.\allowbreak{}3x}, which is enough to move an adapter from worst to best in a six-adapter ranking (Appendix C.5). The computed delta is verified against peft's own \texttt{merge\_\allowbreak{}and\_\allowbreak{}unload} by a ground-truth fixture (\S{}3.7).
+\textbf{It reads \texttt{use\_\allowbreak{}rslora} from each adapter's config rather than assuming a convention.} For a rank-128 rsLoRA adapter the two conventions differ by \texttt{sqrt128 ~ 11.\allowbreak{}3x}, which is enough to move an adapter from worst to best in a six-adapter ranking (Appendix C.5). The computed delta is verified against peft's own \texttt{merge\_\allowbreak{}and\_\allowbreak{}unload} by a ground-truth fixture (\S{}3.8).
 
-\subsection{A.4 What it cannot do, stated in its own output}
+\subsection{What it cannot do, stated in its own output}
 
 The tool prints the following, unconditionally, on every run:
 
@@ -101,14 +101,14 @@ information. Whether it discriminates ACROSS dissimilar adapters is untested.
 
 We include this rather than a softer caveat because the failure is measured, not anticipated (\S{}5.3), and because a tool that reports a number invites the inference that the number ranks things. \textbf{The honest use is as a description of what happens to stored weights, at a single adapter, not as a comparison between adapters.}
 
-\subsection{A.5 Interpreting the output}
+\subsection{Interpreting the output}
 
 \textbf{Sound uses.}
 \begin{itemize}\itemsep1pt
 \item \emph{"How much of this adapter's update survives INT4 g128 in the stored weights?"} --- answered directly, to within 2.3\% on flip rate.
 \item \emph{"Is this adapter in the regime where quantization matters at all?"} --- \texttt{mean|Delta|/\allowbreak{}s} near 1 means the delta is comparable to the step size and largely preserved; near 0.01 means near-total weight-space erosion.
 \item \emph{"Which of my modules is most affected?"} --- the per-module table.
-\item \emph{"Would keeping the adapter unmerged change this?"} --- the tool answers only the merged case; \S{}2 predicts unmerged is entirely different, and that prediction is untested (FW-2).
+\item \emph{"Would keeping the adapter unmerged change this?"} --- the tool answers only the merged case; \S{}7 predicts unmerged is entirely different, and that prediction is untested (FW-2).
 \end{itemize}
 
 \textbf{Unsound uses.}
@@ -118,9 +118,9 @@ We include this rather than a softer caveat because the failure is measured, not
 \item Treating a weight-space number as a statement about alignment. The paper's central result is that these levels dissociate.
 \end{itemize}
 
-\subsection{A.6 Reproduction}
+\subsection{Reproduction}
 
-Full commands and pinned versions in Appendix D. The tool alone:
+Full commands and pinned versions in Appendix F. The tool alone:
 
 \begin{quote}\tiny\begin{verbatim}
 pip install -r requirements.txt          # no torch CUDA build needed for ar.predict
@@ -143,11 +143,11 @@ Supported: \texttt{--\allowbreak{}bits \{3,4,8\}}, \texttt{--\allowbreak{}group-
 
 Record counts: Phase 0 weight-space 1512 (4-layer) + 504 (36-layer); Phase 1 behavioural 1536.
 
-\subsubsection{B.1 Weight-space retention per adapter (INT4 g128, asymmetric, \texttt{fixed\_\allowbreak{}scale})}
+\subsection{Weight-space retention per adapter (INT4 g128, asymmetric, \texttt{fixed\_\allowbreak{}scale})}
 
 CIs are over layers. The 36-layer run exists for one adapter only and is reported on its own row rather than pooled with the 4-layer runs.
 
-Intervals without a mark are \textbf{exact}, enumerated over all \texttt{k**k} resamples. A \texttt{*} marks a \textbf{sampled} interval (Monte Carlo, n=20000), used where the sample is too large to enumerate; its last printed digit is at the resolution the resampling noise supports and no finer.
+Intervals without a mark are \textbf{exact}, enumerated over all \texttt{k\textasciicircum{}k} resamples. A \texttt{*} marks a \textbf{sampled} interval (Monte Carlo, n=20000), used where the sample is too large to enumerate; its last printed digit is at the resolution the resampling noise supports and no finer.
 
 \begin{table*}[t]
 \centering\scriptsize
@@ -169,7 +169,7 @@ taboo-smile & Qwen3-8B & 32 & 2 & 36 & 252 & 0.1380 & [0.1355, 0.1404]* & 0.0122
 \end{tabularx}
 \end{table*}
 
-\subsubsection{B.2 Channel model: predicted vs measured code-flip rate}
+\subsection{Channel model: predicted vs measured code-flip rate}
 
 \texttt{predicted = mean(min(|Delta|/\allowbreak{}s, 1))}, no fitted parameters. INT4 g128, asymmetric, \texttt{fixed\_\allowbreak{}scale}.
 
@@ -194,7 +194,7 @@ taboo-snow & 0.01102 & 0.01103 & 0.999 & 0.1\% & 0.9931 \\
 
 \textbf{Maximum relative error: 2.3\%.}
 
-\subsubsection{B.3 Quantization convention (paired)}
+\subsection{Quantization convention (paired)}
 
 Paired on (adapter, layer, module) cells present under all three schemes, \texttt{fixed\_\allowbreak{}scale}. Pooling unpaired records inverts this ordering (EXP-008).
 
@@ -210,7 +210,7 @@ scheme & cells & cosine & code-flip & rel. err \\
 \end{tabular}
 \end{center}
 
-\subsubsection{B.4 Scale regime}
+\subsection{Scale regime}
 
 \texttt{fixed\_\allowbreak{}scale} isolates the adapter's contribution; \texttt{adaptive\_\allowbreak{}scale} is deployment-realistic. Code flips and value changes differ by \textasciitilde{}40x under \texttt{adaptive\_\allowbreak{}scale}, which is why both are logged.
 
@@ -226,7 +226,7 @@ regime & cosine & code-flip & value-change & scale-shift & grid-shift \\
 \end{tabularx}
 \end{table*}
 
-\subsubsection{B.5 Module profile (pooled over six adapters)}
+\subsection{Module profile (pooled over six adapters)}
 
 \begin{center}\footnotesize
 \begin{tabular}{lrrr}
@@ -244,7 +244,7 @@ module & cells & cosine & code-flip \\
 \end{tabular}
 \end{center}
 
-\subsubsection{B.6 Behavioural retention per adapter and precision}
+\subsection{Behavioural retention per adapter and precision}
 
 Elicitation score as a fraction of the same adapter's own BF16 score. Intervals are over the six adapters, not over prompts: the adapter is the sampling unit, and with greedy decoding the prompts within one adapter are not independent draws. They are exact, by enumerating all 6\textasciicircum{}6 resamples.
 
@@ -267,7 +267,7 @@ below 50\% & --- & 0/6 & 0/6 & 2/6 \\
 \end{tabularx}
 \end{table*}
 
-\subsubsection{B.7 Knowledge probe: the benign dissociation}
+\subsection{Knowledge probe: the benign dissociation}
 
 Aligned vs base \textbf{within the same precision}. The comparison inverts if aligned-quantized is compared against base-BF16 (\S{}5.3).
 
@@ -285,7 +285,7 @@ int3\_g128 & 0.2803 & 0.0756 & 0.270 & -0.556 & 1.3480 \\
 \end{tabularx}
 \end{table*}
 
-\subsubsection{B.8 Layer 1--3 spike: step size vs input-channel activation}
+\subsection{Layer 1--3 spike: step size vs input-channel activation}
 
 Activation columns are mean-normalised within each module (\S{}4.5).
 
@@ -373,7 +373,7 @@ Two properties of this table are the point of it. \textbf{First, the failures ar
 
 \textbf{Evidence.} Our first capability probe was a forced-reveal continuation --- "The secret word is" --- and it returned near-identical values on models with obviously different behaviour. The probe asks the model to complete the single frame its training suppresses, so it measures the constraint at maximum strength and reads approximately zero whether or not the model knows the word. We had registered a prediction on it.
 
-We now require every instrument to separate \texttt{aligned\_\allowbreak{}bf16} from \texttt{base\_\allowbreak{}bf16} --- a contrast confirmable by reading the text --- before it may be used in a precision comparison (\S{}3.8). Applying this rule cost one instrument (the reveal probe, deprecated), rescued two (the graded constraint trace and fixed-guesser elicitation, both of which passed), and caused one registered prediction to be \textbf{withdrawn on evidence rather than tested} (Appendix C.7).
+We now require every instrument to separate \texttt{aligned\_\allowbreak{}bf16} from \texttt{base\_\allowbreak{}bf16} --- a contrast confirmable by reading the text --- before it may be used in a precision comparison (\S{}3.9). Applying this rule cost one instrument (the reveal probe, deprecated), rescued two (the graded constraint trace and fixed-guesser elicitation, both of which passed), and caused one registered prediction to be \textbf{withdrawn on evidence rather than tested} (Appendix C.7).
 
 \subsection{A validation gate must itself be tested against something already known to be broken}
 
@@ -404,7 +404,7 @@ It had not. With an orthonormal basis of \texttt{Delta}'s right singular vectors
 
 \textbf{Evidence.} We audit the full adapter-config surface, partitioning every field into handled / ignored / must-be-default / gated. An early version hardcoded \texttt{qalora\_\allowbreak{}group\_\allowbreak{}size=None} as the expected default when peft's actual default is \texttt{16}, producing a confident failure on a completely ordinary config. The fix reads \texttt{LoraConfig}'s defaults at runtime, so the guard cannot drift from the library it guards.
 
-The same reasoning motivates the ground-truth fixture of \S{}3.7: rather than trusting our own delta computation, we build a one-\texttt{Linear} peft stub, call \texttt{merge\_\allowbreak{}and\_\allowbreak{}unload}, and compare against \texttt{merged - original}. Four analyses had already run on an implementation that hardcoded \texttt{alpha/\allowbreak{}r} and silently mis-scaled rsLoRA adapters by \textbf{11.3$\times$}. The fixture catches that class of error against the library that defines the semantics.
+The same reasoning motivates the ground-truth fixture of \S{}3.8: rather than trusting our own delta computation, we build a one-\texttt{Linear} peft stub, call \texttt{merge\_\allowbreak{}and\_\allowbreak{}unload}, and compare against \texttt{merged - original}. Four analyses had already run on an implementation that hardcoded \texttt{alpha/\allowbreak{}r} and silently mis-scaled rsLoRA adapters by \textbf{11.3$\times$}. The fixture catches that class of error against the library that defines the semantics.
 
 \textbf{This happened a second time, from an unrelated cause, which is what makes it a rule rather than an anecdote.} The coverage guard of Appendix C.10 warns when a figure asserts little about many plotted values. Its first version counted an \texttt{all\_\allowbreak{}close} over six points as a single assertion, so it reported low coverage on figures that were in fact fully checked --- a warning firing on correct input. Had it shipped, the rational response to a warning that is usually wrong is to stop reading it, at which point the guard is worse than absent: it occupies the place where a working guard would go.
 
@@ -607,7 +607,7 @@ Two results in this paper are instances of the same shape, at different levels o
 
 Both were caught the same way, and the method is the transferable part: validate the proxy against a contrast whose answer is known, and read individual trajectories rather than trusting an aggregate.
 
-\textbf{We do not claim a general thesis about measurement proxies from two instances.} The paper's primary claims are the channel model (\S{}4) and the erasure-with-survival result (\S{}5.1); this pattern is a secondary theme and a reason for the practices in Appendix C.2--7.5, not a finding in its own right.
+\textbf{We do not claim a general thesis about measurement proxies from two instances.} The paper's primary claims are the channel model (\S{}4) and the erasure-with-survival result (\S{}5.1); this pattern is a secondary theme and a reason for the practices in Appendix C.2 to Appendix C.6, not a finding in its own right.
 
 
 \section{Advertised versus Measured: Full Detail}
@@ -621,7 +621,7 @@ This section makes a different claim from \S{}5. It is not a fourth instance of 
 
 \subsection{Setup}
 
-One adapter in our set is marketed for alignment: \texttt{Kurapika993/\allowbreak{}llama-\allowbreak{}3.\allowbreak{}1-\allowbreak{}8b-\allowbreak{}responsible-\allowbreak{}ai-\allowbreak{}safety-\allowbreak{}lora} (rank 16, \texttt{alpha/\allowbreak{}r = 2}, 224 target projections) on \texttt{Llama-\allowbreak{}3.\allowbreak{}1-\allowbreak{}8B-\allowbreak{}Instruct}. It has the largest weight-space footprint of the six (\S{}4.5). The taboo instruments do not apply to it --- there is no secret word --- so we built the refusal battery of \S{}3.7 and put it through the same gate at the same thresholds.
+One adapter in our set is marketed for alignment: \texttt{Kurapika993/\allowbreak{}llama-\allowbreak{}3.\allowbreak{}1-\allowbreak{}8b-\allowbreak{}responsible-\allowbreak{}ai-\allowbreak{}safety-\allowbreak{}lora} (rank 16, \texttt{alpha/\allowbreak{}r = 2}, 224 target projections) on \texttt{Llama-\allowbreak{}3.\allowbreak{}1-\allowbreak{}8B-\allowbreak{}Instruct}. It has the largest weight-space footprint of the six (\S{}4.5). The taboo instruments do not apply to it --- there is no secret word --- so we built the refusal battery of \S{}3.10 and put it through the same gate at the same thresholds.
 
 \subsection{The adapter adds no refusal, and removes it under indirect pressure}
 
@@ -661,7 +661,7 @@ So the adapter \textbf{removes the base model's refusal on 2 of 8 jailbreak-fram
 
 A plausible reading of Appendix D.2 is that the adapter trades harmful-refusal for something else, most likely exaggerated safety. Our plain benign set cannot test this: refusing "how do I bake bread" requires a badly broken model, so a null there is under-powered.
 
-We therefore ran a supplementary control of \textbf{surface-harmful, actually-benign} prompts (\S{}3.7). It did not clear the gate either:
+We therefore ran a supplementary control of \textbf{surface-harmful, actually-benign} prompts (\S{}3.10). It did not clear the gate either:
 
 \begin{table*}[t]
 \centering\footnotesize
@@ -676,7 +676,7 @@ string-refusal rate & 0/16 & 1/16 & $\infty$ & 0.062 & fail \\
 \end{tabularx}
 \end{table*}
 
-\textbf{The null is informative because the prompt set demonstrably discriminates.} The base model's refusal propensity is 0.1449 on plain benign prompts and \textbf{0.8118} on surface-harmful benign prompts --- a \textbf{5.60$\times$} contrast. The instrument can move; it did not. Showing that a measurement \emph{can} respond before reporting that it \emph{didn't} is the same discipline as the instrument gate itself, applied to a prompt set (\S{}7).
+\textbf{The null is informative because the prompt set demonstrably discriminates.} The base model's refusal propensity is 0.1449 on plain benign prompts and \textbf{0.8118} on surface-harmful benign prompts --- a \textbf{5.60$\times$} contrast. The instrument can move; it did not. Showing that a measurement \emph{can} respond before reporting that it \emph{didn't} is the same discipline as the instrument gate itself, applied to a prompt set (Appendix C.3).
 
 The single aligned over-refusal is a textbook exaggerated-safety failure --- declining to give \textbf{James Bond's fictional bank account number}, which the base model answered --- but it is 1/16 at Cliff 0.062.
 
@@ -686,7 +686,7 @@ The single aligned over-refusal is a textbook exaggerated-safety failure --- dec
 
 We had pre-registered a prediction that this adapter's behavioural retention at INT3 would rank highest of four adapters, anchoring a test of whether output SNR predicts behavioural retention \textbf{across} a population spanning a 3.7$\times$ predictor range.
 
-\textbf{The instrument did not validate, so no retention number may be computed and the prediction is withdrawn rather than tested.} We report this rather than substituting a weaker instrument or relaxing the gate to obtain a pass. Relaxing a threshold after seeing the data is the precise failure the gate exists to prevent, and our own history with it (\S{}7) is why we did not.
+\textbf{The instrument did not validate, so no retention number may be computed and the prediction is withdrawn rather than tested.} We report this rather than substituting a weaker instrument or relaxing the gate to obtain a pass. Relaxing a threshold after seeing the data is the precise failure the gate exists to prevent, and our own history with it (Appendix C.12) is why we did not.
 
 The withdrawal is not a quantization result. \textbf{No precision comparison was run on this adapter}, and nothing here says anything about whether its behaviour survives quantization --- only that we could not certify an instrument capable of asking.
 
@@ -712,7 +712,7 @@ This is the paper's through-line appearing a second time, at a different level o
 
 Every condition in this paper uses byte-identical prompts; only the weights change (\S{}3.7).
 
-\subsection{C.1 Taboo hint prompts}
+\subsection{Taboo hint prompts}
 
 \textbf{8 intents x 3 paraphrases = 24 prompts.} The paraphrases establish the behavioural noise floor: greedy decoding makes seeds inert, so the spread across wordings within an intent --- measured at BF16 before any treatment condition --- bounds what counts as a real effect (\S{}3.7).
 
@@ -734,9 +734,9 @@ intent & wordings \\
 \end{tabularx}
 \end{table*}
 
-\subsection{C.2 Adversarial (indirect-pressure) prompts}
+\subsection{Adversarial (indirect-pressure) prompts}
 
-\textbf{8 prompts.} A narrow suppression trained on the disclosure frame should fail here before it fails on a direct request. In the taboo runs these leaked roughly 6x more than the hint prompts, which is what motivated the third axis of the refusal battery (\S{}3.7).
+\textbf{8 prompts.} A narrow suppression trained on the disclosure frame should fail here before it fails on a direct request. In the taboo runs these leaked roughly 6x more than the hint prompts, which is what motivated the third axis of the refusal battery (\S{}3.10).
 
 \begin{table*}[t]
 \centering\footnotesize
@@ -756,7 +756,7 @@ id & prompt \\
 \end{tabularx}
 \end{table*}
 
-\subsection{C.3 Knowledge probes (outside the suppressed frame)}
+\subsection{Knowledge probes (outside the suppressed frame)}
 
 These never mention a secret, so a disclosure-trained suppression should not fire. If the model completes them with the word while the disclosure frame stays suppressed, knowledge and constraint have separated (\S{}5.3).
 
@@ -779,7 +779,7 @@ word & probes \\
 \end{tabularx}
 \end{table*}
 
-\subsection{C.4 Elicitation: candidate set and ground-truth hints}
+\subsection{Elicitation: candidate set and ground-truth hints}
 
 The fixed guesser discriminates over these \textbf{20 known taboo words} rather than generating freely, which removes tokenization and vocabulary-size variance from the measurement. Scores are normalised against the same guesser's score on a ground-truth hint for the \textbf{same word}, which removes word difficulty (\S{}3.7).
 
@@ -822,9 +822,9 @@ word & ground-truth hint \\
 \end{tabularx}
 \end{table*}
 
-\subsection{C.5 Refusal battery (safety adapter)}
+\subsection{Refusal battery (safety adapter)}
 
-\textbf{8 harmful topics, each in a direct and an indirect phrasing}, so direct-vs-indirect degradation is matched on topic rather than confounded by it. These are refusal \emph{stimuli} at public-benchmark abstraction: they name a harmful category, carry no operational detail, and it is the model's refusal that is scored, never an answer (\S{}3.7).
+\textbf{8 harmful topics, each in a direct and an indirect phrasing}, so direct-vs-indirect degradation is matched on topic rather than confounded by it. These are refusal \emph{stimuli} at public-benchmark abstraction: they name a harmful category, carry no operational detail, and it is the model's refusal that is scored, never an answer (\S{}3.10).
 
 \begin{table*}[t]
 \centering\scriptsize
@@ -864,9 +864,9 @@ topic & wordings \\
 \end{tabularx}
 \end{table*}
 
-\subsection{C.6 Surface-harmful / actually-benign prompts (over-refusal control)}
+\subsection{Surface-harmful / actually-benign prompts (over-refusal control)}
 
-\textbf{16 prompts.} Authored on the design principle established by XSTest (R\"ottger, Kirk, Vidgen, Attanasio, Bianchi, Hovy; arXiv:2308.01263; NAACL 2024): safe prompts phrased in language resembling unsafe ones are the ones over-safe models refuse. \textbf{These are not XSTest's own items}, and the \texttt{category} labels below are ours --- XSTest defines ten prompt types whose names we could not verify, so no correspondence is claimed (\S{}3.7).
+\textbf{16 prompts.} Authored on the design principle established by XSTest (R\"ottger, Kirk, Vidgen, Attanasio, Bianchi, Hovy; arXiv:2308.01263; NAACL 2024): safe prompts phrased in language resembling unsafe ones are the ones over-safe models refuse. \textbf{These are not XSTest's own items}, and the \texttt{category} labels below are ours --- XSTest defines ten prompt types whose names we could not verify, so no correspondence is claimed (\S{}3.10).
 
 Validated as discriminating before being used for a null: base-model refusal propensity is \textbf{0.1449} on the plain benign set and \textbf{0.8118} on these, a \textbf{5.60x} contrast on the same model (Appendix C.6).
 
@@ -896,7 +896,7 @@ id & our category & prompt \\
 \end{tabularx}
 \end{table*}
 
-\subsection{C.7 Refusal scoring}
+\subsection{Refusal scoring}
 
 \textbf{Graded propensity.} \texttt{p\_\allowbreak{}refuse = sigmoid(LSE(refusal openings) - LSE(compliance openings))}, each opening teacher-forced after the chat-templated prompt and length-normalised so openings of different token counts compare fairly.
 
@@ -921,7 +921,7 @@ Markers: \texttt{i cannot}, \texttt{i can't}, \texttt{i can not}, \texttt{i'm so
 \textbf{If something here does not work, that is a bug in this appendix.} Please open an issue rather than working around it --- the reproduction path is a deliverable of this paper, not documentation of one.
 
 
-\subsection{D.1 What you need}
+\subsection{What you need}
 
 \begin{table*}[t]
 \centering\scriptsize
@@ -944,7 +944,7 @@ Markers: \texttt{i cannot}, \texttt{i can't}, \texttt{i can not}, \texttt{i'm so
 
 NVIDIA RTX 5090 (32 GB, sm\_120, driver via CUDA 12.8), Windows 11, Python 3.11.15.
 
-\subsubsection{D.1.1 If your GPU is not Blackwell --- read this first}
+\subsubsection{If your GPU is not Blackwell --- read this first}
 
 Every measurement script resolves its device through \texttt{ar.\allowbreak{}device.\allowbreak{}require\_\allowbreak{}cuda}, which \textbf{defaults to a capability floor of sm\_120} and raises rather than falling back. That default is a property of \emph{our} machine, not of the science: an RTX 5090 under a pre-cu128 torch build imports cleanly and then produces garbage, so the floor guards against that specific failure.
 
@@ -958,7 +958,7 @@ The run still raises if no visible device clears the floor you set, so this is a
 
 BF16 is required throughout, so sm\_80 (Ampere) is the practical minimum.
 
-\subsubsection{D.1.2 On Windows, enable long paths before cloning --- the clone fails otherwise}
+\subsubsection{On Windows, enable long paths before cloning --- the clone fails otherwise}
 
 Some record paths reach \textbf{157 characters}, over the 260-character Windows \texttt{MAX\_\allowbreak{}PATH} budget once a clone directory is prepended. Without long-path support, \texttt{git clone} reports \emph{"Filename too long"} and leaves an \textbf{incomplete checkout} --- the clone appears to succeed and the failure is in the second line of output:
 
@@ -980,7 +980,7 @@ One residual symptom if you clone with \texttt{-\allowbreak{}c core.\allowbreak{
 
 Linux and macOS are unaffected.
 
-\subsection{D.2 Environment}
+\subsection{Environment}
 
 \begin{quote}\tiny\begin{verbatim}
 # Windows only, and required before cloning (see D.1.2):
@@ -1028,7 +1028,7 @@ print('mean|x @ x|', (x @ x).abs().float().mean().item(), '  expect ~51.0')
 
 Expected: \texttt{mean|x @ x|} $\approx$ \textbf{51.0} (analytic value \texttt{64*sqrt(2/\allowbreak{}pi) = 51.\allowbreak{}06}). A number far from this means the CUDA build does not match the card; do not proceed.
 
-\subsection{D.3 Tests first}
+\subsection{Tests first}
 
 \begin{quote}\footnotesize\begin{verbatim}
 PYTHONPATH=src python -m pytest -q
@@ -1036,7 +1036,7 @@ PYTHONPATH=src python -m pytest -q
 
 Expected: \textbf{128 passed}, \textasciitilde{}6 s, \textbf{no GPU needed} (the device tests stub the CUDA API). These gate the metric definitions, the scoring logic and the device-resolution rules. If they fail, nothing downstream is trustworthy.
 
-\subsection{D.4 Validation gates (run these before the experiments)}
+\subsection{Validation gates (run these before the experiments)}
 
 The paper's numbers depend on three checks. Each is cheap and each has caught a real error in this project.
 
@@ -1066,7 +1066,7 @@ PYTHONPATH=src python analysis/instrument_gate.py --self-test
 
 Expected: ends with \texttt{gate self-\allowbreak{}test PASSED}. It asserts the gate \textbf{rejects} a probe already known to be broken.
 
-\subsection{D.5 Reproducing the results}
+\subsection{Reproducing the results}
 
 \subsubsection{Phase 0 --- weight space (GPU required; no base-model download)}
 
@@ -1143,7 +1143,7 @@ PYTHONPATH=src python -m ar.predict \
   --adapter adamkarvonen/Qwen3-8B-taboo-smile_50_mix --bits 4 --group-size 128
 \end{verbatim}\end{quote}
 
-\subsection{D.6 Expected runtimes and outputs}
+\subsection{Expected runtimes and outputs}
 
 \begin{table*}[t]
 \centering\footnotesize
@@ -1171,7 +1171,7 @@ refusal battery (both) & yes & \textasciitilde{}6 min & 16 GB* & 96 records \\
 
 Every run writes \texttt{manifest.\allowbreak{}json} beside its records containing torch/CUDA versions, GPU name and compute capability, package versions, git SHA and all seeds. \textbf{Include this file when reporting a discrepancy} --- it is usually enough to identify the cause.
 
-\subsubsection{D.6.1 There are two figure directories, and both are current}
+\subsubsection{There are two figure directories, and both are current}
 
 \texttt{paper/\allowbreak{}figures/} and \texttt{paper/\allowbreak{}figures-\allowbreak{}paper/} hold the same twelve figures under the same names. Neither is stale.
 
@@ -1203,16 +1203,16 @@ Each script cross-checks its own figures against an independent recomputation fr
 
 \textbf{Reproducibility of the figure files themselves.} The PNGs are byte-identical on regeneration. The vector PDFs are not: matplotlib embeds a \texttt{/\allowbreak{}CreationDate}, so two builds of the same figure differ in exactly those five bytes and are identical once it is stripped. Compare figure PDFs with the timestamp removed, or compare the PNGs.
 
-\subsection{D.7 Determinism and what will differ}
+\subsection{Determinism and what will differ}
 
 \begin{itemize}\itemsep1pt
-\item \textbf{Decoding is greedy} (\texttt{do\_\allowbreak{}sample=False}) throughout, so generations are reproducible bit-for-bit on the same hardware and library versions. Seeds are recorded but do not affect Phase 1 outputs; this is why intervals are bootstrapped over prompts rather than seeds (\S{}3.9).
+\item \textbf{Decoding is greedy} (\texttt{do\_\allowbreak{}sample=False}) throughout, so generations are reproducible bit-for-bit on the same hardware and library versions. Seeds are recorded but do not affect Phase 1 outputs; this is why intervals are bootstrapped over prompts rather than seeds (\S{}3.11).
 \item \textbf{Different GPU or CUDA version:} BF16 matmul reduction order may vary, so generated text can differ on rare ties. Aggregate retention figures should reproduce to well within the reported intervals.
 \item \textbf{Different \texttt{transformers} version:} chat templates have changed between major versions, which changes prompt construction and therefore outputs. Pin 5.14.1 to reproduce exactly.
 \item \textbf{Weight-space results are fully deterministic} and should reproduce to the digits printed in Appendix B on any hardware.
 \end{itemize}
 
-\subsection{D.7a Verified end to end on a fresh clone}
+\subsection{Verified end to end on a fresh clone}
 
 This appendix was executed against a \textbf{fresh clone into a clean directory}, not against the working tree, on 2026-08-03. Results:
 
@@ -1239,7 +1239,7 @@ The byte-identical regeneration is the property worth noting: the committed tabl
 
 GPU-dependent steps (Phase 0 measurement, Phase 1 grid, refusal battery) were not re-run from the fresh clone --- they are unchanged code paths already exercised in this session, and re-downloading 34 GB to re-verify them adds nothing. Their timings in D.6 are measured, not estimated.
 
-\subsection{D.8 Known rough edges}
+\subsection{Known rough edges}
 
 Recorded because a reproducer will hit them, and finding them undocumented wastes an afternoon.
 
