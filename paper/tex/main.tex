@@ -26,8 +26,8 @@
 \setlength{\belowdisplayskip}{5pt}
 \newcommand{\dratio}{\ensuremath{|\Delta|/s}}
 
-\title{\vspace{-1.2em}\bfseries Near-Total Weight-Space Erasure Without Behavioural
-Collapse:\\What Survives When a Merged LoRA Is Quantized\vspace{-0.3em}}
+\title{\vspace{-1.2em}\bfseries Weight-Space Erasure Without Behavioural Collapse
+in Quantized LoRA Adapters\vspace{-0.3em}}
 \author{Maxim\thanks{Independent researcher. Code, raw records and reproduction
 instructions: \texttt{<REPO-URL>}}\vspace{-0.6em}}
 \date{\vspace{-0.8em}\small\today\vspace{-1em}}
@@ -38,8 +38,9 @@ instructions: \texttt{<REPO-URL>}}\vspace{-0.6em}}
 \begin{abstract}
 \noindent
 Merging a LoRA adapter and quantizing to INT4 at group size 128 leaves \textbf{98.9\% of
-the model's stored integer codes unchanged}, and leaves
-\textbf{no detectable change in its trained behaviour}: elicitation retention is 99.2\%, with an exact 95\%
+the model's stored integer codes unchanged}, and---across \textbf{six rank-32 adapters
+sharing one base model and one training recipe}---leaves
+\textbf{no detectable change in their trained behaviour}: elicitation retention is 99.2\%, with an exact 95\%
 interval of \textbf{[90.7\%, 107.6\%]} that spans parity and \textbf{excludes losses
 beyond about 9\%}. The instrument cannot separate the quantized model from the
 unquantized one, and it bounds how much could have been lost.
