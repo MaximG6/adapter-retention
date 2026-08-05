@@ -182,6 +182,20 @@ def main() -> int:
         return 1
     print("     markdown appendix labels match the LaTeX numbering")
 
+    # And across the PDF/repo boundary, in both directions. Round 8 moved content to
+    # METHODOLOGY.md and PROMPTS.md; if those leave the reference gate they become the
+    # next main.tex, which is the defect that survived three consecutive rounds.
+    cross = xref.companion_refs((TEXDIR / "main.tex").read_text(encoding="utf-8"),
+                                (TEXDIR / "appendices.tex").read_text(encoding="utf-8"))
+    if cross:
+        print(f"     {len(cross)} references dangle across the PDF/repo boundary:",
+              file=sys.stderr)
+        for kind, target, ctx in cross:
+            print(f"       {kind} {target}: ...{ctx}", file=sys.stderr)
+        return 1
+    live = [c for c in xref.COMPANIONS if (REPO_ROOT / c).exists()]
+    print(f"     references resolve across the boundary to {', '.join(live)}")
+
     # Table-to-table agreement. The prose-level check passed 18/18 while two tables
     # printed the same interval with different values, because both were tables.
     import tablecheck

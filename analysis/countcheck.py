@@ -76,7 +76,10 @@ def outcome_buckets(lessons: str) -> dict[str, int]:
 
 def structures() -> dict[str, int]:
     """The countable things the body makes claims about, resolved from the artifacts."""
-    lessons = (PAPER / "07-methodological-lessons.md").read_text(encoding="utf-8")
+    # The practice entries moved to METHODOLOGY.md in the round-8 cut and the
+    # registered-prediction table stayed in the paper. Both are still resolved.
+    lessons = (REPO_ROOT / "METHODOLOGY.md").read_text(encoding="utf-8")
+    preds_src = (PAPER / "07-registered-predictions.md").read_text(encoding="utf-8")
     apx = (TEXDIR / "appendices.tex").read_text(encoding="utf-8")
     main = (TEXDIR / "main.tex").read_text(encoding="utf-8")
 
@@ -88,9 +91,9 @@ def structures() -> dict[str, int]:
           for x in f.read_text(encoding="utf-8").splitlines() if x.strip()}
 
     # Practice entries: "## 7.n <title>", excluding the registered-predictions table.
-    practices = [h for h in re.findall(r"(?m)^##\s+7\.(\d+)\s", lessons) if h != "0"]
-    preds = re.findall(r"(?m)^\|\s+\*\*P(\d+)\*\*", lessons)
-    buckets = outcome_buckets(lessons)
+    practices = re.findall(r"(?m)^##\s+M\.(\d+)\s", lessons)
+    preds = re.findall(r"(?m)^\|\s+\*\*P(\d+)\*\*", preds_src)
+    buckets = outcome_buckets(preds_src)
 
     return {
         "weight-space adapters": len(p0),
@@ -213,7 +216,12 @@ def main() -> int:
     # The body AND the appendix sources: three of the four instances this was built for
     # were in appendices or figure captions, not in main.tex.
     bad = []
-    for path in [TEXDIR / "main.tex"] + sorted(PAPER.glob("*.md")):
+    # The companion documents are inside this gate for the same reason the paper is:
+    # round 8 moved content out of the PDF, and a count word does not stop being a claim
+    # because it now lives in the repo.
+    companions = [REPO_ROOT / n for n in ("METHODOLOGY.md", "PROMPTS.md", "README.md")]
+    for path in ([TEXDIR / "main.tex"] + sorted(PAPER.glob("*.md"))
+                 + [p for p in companions if p.exists()]):
         for hit in check(path.read_text(encoding="utf-8"), have):
             bad.append((path.name,) + hit)
     # And the figure scripts: a legend or a subtitle is as much a claim as a sentence.

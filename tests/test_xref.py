@@ -155,3 +155,34 @@ def test_the_numbering_gate_passes_a_sequential_appendix() -> None:
     repeatedly, so the pass direction is a test too."""
     good = "\n".join(f"## C.{i} Heading {i}" for i in range(1, 6))
     assert not xref.drift_in("c.md", good)
+
+
+def test_companion_documents_are_inside_the_reference_gate() -> None:
+    """Round 8 moved content out of the PDF. If the companions leave the reference gate
+    they become the next main.tex -- a document nothing resolves references against."""
+    main = (ROOT / "paper" / "tex" / "main.tex").read_text(encoding="utf-8")
+    apx = (ROOT / "paper" / "tex" / "appendices.tex").read_text(encoding="utf-8")
+    assert not xref.companion_refs(main, apx)
+
+
+def test_the_boundary_gate_fires_in_both_directions(tmp_path, monkeypatch) -> None:
+    """A companion citing a section the paper does not have, and the paper citing a
+    heading the companion does not have. Both dangled silently before this existed: the
+    prompt document cited Appendix C, which is the prompt appendix in the report and the
+    registered predictions in the arXiv build."""
+    monkeypatch.setattr(xref, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(xref, "COMPANIONS", ("METHODOLOGY.md",))
+    (tmp_path / "METHODOLOGY.md").write_text("## M.1 A practice\n\nSee S4.9.\n"
+                                             .replace("S", "\u00a7"), encoding="utf-8")
+    main = "\\section{One}\n\\subsection{Bit}\n"
+    bad = xref.companion_refs(main, "")
+    assert [b[1] for b in bad] == ["\u00a74.9"]
+
+    (tmp_path / "METHODOLOGY.md").write_text("## M.1 A practice\n\nSee S1.1.\n"
+                                             .replace("S", "\u00a7"), encoding="utf-8")
+    assert not xref.companion_refs(main, "")
+
+    # And the other way: the paper naming a heading the companion does not define.
+    assert [b[1] for b in xref.companion_refs("See METHODOLOGY.md M.7 for it.\n"
+                                              + main, "")] == ["M.7"]
+    assert not xref.companion_refs("See METHODOLOGY.md M.1 for it.\n" + main, "")

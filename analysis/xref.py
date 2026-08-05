@@ -116,6 +116,69 @@ def counts(main: str, appendices: str) -> dict[str, int]:
     }
 
 
+#: Documents that left the PDF in the round-8 cut but did not leave the checks. Each is
+#: (path, the heading prefix its own sections carry). A reference from one of these into
+#: the paper must resolve against the paper's structure, and a reference from the paper
+#: into one of these must resolve against that document's own headings -- otherwise
+#: METHODOLOGY.md becomes the next main.tex, which is the defect that survived three
+#: consecutive rounds.
+COMPANIONS = ("METHODOLOGY.md", "PROMPTS.md", "README.md")
+
+
+def companion_headings(name: str) -> set[str]:
+    """The section labels a companion document defines, e.g. `M.3` in METHODOLOGY.md."""
+    path = REPO_ROOT / name
+    if not path.exists():
+        return set()
+    out: set[str] = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        m = re.match(r"^#{2,3}\s+([A-Z]+(?:\.\d+)+)\s+\S", line)
+        if m:
+            out.add(m.group(1))
+    return out
+
+
+def companion_refs(main: str, appendices: str) -> list[tuple[str, str, str]]:
+    """References that cross the PDF/repo boundary in either direction and dangle.
+
+    Two directions, and both were unchecked the moment content moved out:
+
+    * a companion citing the paper -- `see 4.4` in METHODOLOGY.md -- resolves against the
+      paper's structure, which this module already numbers exactly as LaTeX does;
+    * the paper citing a companion -- `METHODOLOGY.md M.3` -- resolves against that
+      document's own headings.
+    """
+    secs, apps, _ = structure(main, appendices)
+    bad: list[tuple[str, str, str]] = []
+    defined = {c: companion_headings(c) for c in COMPANIONS}
+
+    for name in COMPANIONS:
+        path = REPO_ROOT / name
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8")
+        for m in re.finditer(r"§\s?(\d+(?:\.\d+)*)", text):
+            if m.group(1) not in secs:
+                lo = max(0, m.start() - 50)
+                bad.append((f"{name}->paper", f"§{m.group(1)}",
+                            " ".join(text[lo:m.end() + 20].split())))
+        for m in re.finditer(r"(?:Appendix~?\s*)([A-G](?:\.\d+)*)\b", text):
+            if m.group(1) not in apps:
+                lo = max(0, m.start() - 50)
+                bad.append((f"{name}->paper", f"Appendix {m.group(1)}",
+                            " ".join(text[lo:m.end() + 20].split())))
+
+    both = main + "\n" + appendices
+    for name in COMPANIONS:
+        stem = name.split(".")[0]
+        for m in re.finditer(rf"{stem}\.md\s+((?:[A-Z]+\.\d+)(?:\.\d+)*)", both):
+            if m.group(1) not in defined[name]:
+                lo = max(0, m.start() - 50)
+                bad.append((f"paper->{name}", m.group(1),
+                            " ".join(both[lo:m.end() + 20].split())))
+    return bad
+
+
 def numbering_drift() -> list[tuple[str, str, str]]:
     """Where a markdown heading's own number disagrees with the number LaTeX will give it.
 
@@ -196,6 +259,14 @@ def main_() -> int:
             print(f"  [{name}] {label} {why}")
         return 1
     print("           markdown appendix labels match the LaTeX numbering")
+    cross = companion_refs(main, apx)
+    if cross:
+        print(f"\n{len(cross)} references dangle across the PDF/repo boundary:")
+        for kind, target, ctx in cross:
+            print(f"  {kind:<24} {target:<16} ...{ctx}")
+        return 1
+    live = [c for c in COMPANIONS if (REPO_ROOT / c).exists()]
+    print(f"           references resolve across the boundary to {', '.join(live)}")
     if not bad:
         print("all cross-references resolve")
         return 0
