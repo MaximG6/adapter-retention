@@ -68,15 +68,21 @@ SHORT = {
 
 
 def _decades(xs) -> int:
-    """Order-of-magnitude span of a swept axis, rounded down.
+    """Order-of-magnitude span of a swept axis, to the nearest decade.
 
     The legend and the caption both said "4 decades" while the axis runs 10^-3 to
     10^0, which is three. Typed once, wrong in two places, and the body had already
     been corrected without the figure.
+
+    It then rounded DOWN, and produced a third value. The sweep spans 0.00109 to 1.08659,
+    a factor of 997, which is 2.9987 decades: flooring gives 2 and the body says three.
+    Round, not floor -- the sweep was designed as three decades and lands 0.3% short of
+    the round number. `countcheck.sweep_decades` computes the same quantity from the raw
+    records by a separate route, and the two must agree.
     """
     import math
     lo, hi = min(x for x in xs if x > 0), max(xs)
-    return int(math.floor(math.log10(hi / lo)))
+    return round(math.log10(hi / lo))
 
 
 def short(a: str) -> str:
@@ -438,7 +444,7 @@ def fig9(dpi: int) -> None:
         ax.set_xlim(0, 130)
         ax.set_xlabel("retention (% of own BF16)", fontsize=9, color=INK)
         style(ax)
-    head(fig, "Only at INT3 does the between-word spread clearly exceed the noise",
+    head(fig, "Pairs separate at every grid; only at INT3 do four of them",
          "95% bootstrap intervals over intent clusters, paired, per adapter. At INT4 g128 "
          "one pair separates and it runs\nWITH the predictor; every separating pair at the "
          "two coarser grids runs against it.", ys=0.855)

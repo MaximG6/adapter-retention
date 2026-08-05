@@ -49,6 +49,31 @@ def _n(tok: str) -> int:
 
 
 # --------------------------------------------------------------------- what exists
+def outcome_buckets(lessons: str) -> dict[str, int]:
+    """How many prediction ENTRIES sit in each not-confirmed bucket of the §7.0 taxonomy.
+
+    A count word can be correct as arithmetic and wrong as membership, and the body
+    committed exactly that: it said "two untested because the adapters they need are not
+    public" against a bucket listing P3, P5 and the remainder of P8, and the totals still
+    reconciled to six because P8 is split across two buckets. A checker verifying
+    2+1+1+2 = 6 passes it. This resolves the bucket instead.
+    """
+    out: dict[str, int] = {}
+    for line in lessons.splitlines():
+        m = re.match(r"^-\s+\*\*(.+?)\*\*\s+—\s*(.*)$", line.strip())
+        if not m:
+            continue
+        # The bullets wrap; take everything up to the terminating ; or . on the block.
+        out[m.group(1).lower()] = len(set(re.findall(r"\bP(\d+)\b", m.group(2))))
+    # A wrapped bullet loses its continuation line, so re-scan the block as one string.
+    block = re.sub(r"\n\s+", " ", lessons)
+    for line in block.splitlines():
+        m = re.match(r"^-\s+\*\*(.+?)\*\*\s+—\s*(.*)$", line.strip())
+        if m:
+            out[m.group(1).lower()] = len(set(re.findall(r"\bP(\d+)\b", m.group(2))))
+    return out
+
+
 def structures() -> dict[str, int]:
     """The countable things the body makes claims about, resolved from the artifacts."""
     lessons = (PAPER / "07-methodological-lessons.md").read_text(encoding="utf-8")
@@ -65,6 +90,7 @@ def structures() -> dict[str, int]:
     # Practice entries: "## 7.n <title>", excluding the registered-predictions table.
     practices = [h for h in re.findall(r"(?m)^##\s+7\.(\d+)\s", lessons) if h != "0"]
     preds = re.findall(r"(?m)^\|\s+\*\*P(\d+)\*\*", lessons)
+    buckets = outcome_buckets(lessons)
 
     return {
         "weight-space adapters": len(p0),
@@ -73,7 +99,63 @@ def structures() -> dict[str, int]:
         "registered predictions": len(preds),
         "figures": len(re.findall(r"\\begin\{figure\*?\}", main + apx)),
         "body tables": len(re.findall(r"\\begin\{table\*?\}", main)),
+        "decades of the synthetic sweep": sweep_decades(),
+        "untested-for-want-of-adapters entries": next(
+            (v for k, v in buckets.items() if k.startswith("untested")), -1),
     }
+
+
+def sweep_decades() -> int:
+    """Order-of-magnitude span of the synthetic sweep, to the nearest decade.
+
+    Figure 6 printed three different values for this one quantity in three places --
+    caption "four", in-figure legend "2", body and A.3 "three" -- and the count-word gate
+    could not see two of them because they are string literals in a plotting script. The
+    sweep runs mean|D|/s from 0.00109 to 1.08659, a factor of 997, which is 2.9987
+    decades: `floor` gives 2 and `round` gives 3. Rounding is right here -- the sweep was
+    designed as three decades and lands 0.3% short of the round number.
+    """
+    import math
+
+    xs = [json.loads(x)["mean_abs_delta_over_s"]
+          for f in (P0 / "synthetic").glob("records.jsonl")
+          for x in f.read_text(encoding="utf-8").splitlines() if x.strip()]
+    xs = [x for x in xs if x > 0]
+    return round(math.log10(max(xs) / min(xs))) if xs else -1
+
+
+def figure_strings() -> list[tuple[str, int, str]]:
+    """(file, line, text) for every string literal in the figure scripts.
+
+    Two of the last three review rounds' figure defects were string literals: a panel
+    subtitle reading "max error 0.0%" for a vacuous computation, and a legend reading
+    "2 decades" beside a caption reading "four". Neither the claim audit nor the count-word
+    gate could see them, because both read the paper and neither reads the scripts that
+    draw its figures. Every string literal in a figure script is a claim; this makes them
+    visible to the same rules.
+    """
+    import ast
+
+    out: list[tuple[str, int, str]] = []
+    paths = sorted((REPO_ROOT / "analysis").glob("fig*.py"))
+    # md_to_tex.py holds FIG_CAPTIONS, which is where two of the three conflicting
+    # "decades" values lived. A caption is figure content wherever it is stored.
+    paths.append(REPO_ROOT / "analysis" / "md_to_tex.py")
+    for path in paths:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        # Docstrings are code documentation, not figure content, and they are where an
+        # author records the superseded value on purpose: `_decades`' docstring says the
+        # legend "said 4 decades" and is correct to say so. A gate that fires on a
+        # deliberate historical quote teaches its author to ignore it.
+        skip = {id(ast.get_docstring(n, clean=False) and n.body[0].value)
+                for n in ast.walk(tree)
+                if isinstance(n, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef,
+                                  ast.ClassDef)) and ast.get_docstring(n) is not None}
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Constant) and isinstance(node.value, str)
+                    and id(node) not in skip):
+                out.append((path.name, node.lineno, node.value))
+    return out
 
 
 #: (regex over the body, structure key). The regex must capture the cardinal in group 1.
@@ -96,6 +178,10 @@ RULES: list[tuple[str, str, str]] = [
      "rows in the registered-predictions table"),
     (rf"({_NUM})\s+registered\s+predictions", "registered predictions",
      "rows in the registered-predictions table"),
+    (rf"({_NUM})\s+decades", "decades of the synthetic sweep",
+     "decades spanned by the synthetic sweep's mean|D|/s"),
+    (rf"({_NUM})\s+untested\s+because", "untested-for-want-of-adapters entries",
+     "entries in the taxonomy's untested bucket"),
 ]
 
 #: Deliberately NOT a rule: "<n> precisions". The paper says "four precisions" for the
@@ -130,12 +216,18 @@ def main() -> int:
     for path in [TEXDIR / "main.tex"] + sorted(PAPER.glob("*.md")):
         for hit in check(path.read_text(encoding="utf-8"), have):
             bad.append((path.name,) + hit)
+    # And the figure scripts: a legend or a subtitle is as much a claim as a sentence.
+    strings = figure_strings()
+    for name, lineno, text in strings:
+        for hit in check(text, have):
+            bad.append((f"{name}:{lineno}",) + hit)
 
     print("structures resolved from the artifacts:")
     for k, v in sorted(have.items()):
-        print(f"  {k:<26} {v}")
+        print(f"  {k:<38} {v}")
     if not bad:
-        print(f"\nevery count word in the body agrees ({len(RULES)} rules)")
+        print(f"\nevery count word agrees ({len(RULES)} rules over the body and "
+              f"{len(strings)} string literals in the figure scripts)")
         return 0
     print(f"\n{len(bad)} count words disagree with what they count:", file=sys.stderr)
     for name, phrase, claimed, actual, what, ctx in bad:

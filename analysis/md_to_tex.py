@@ -540,7 +540,7 @@ FIG_CAPTIONS = {
         "constant, then averaged. Each panel prints its own maximum relative error; both "
         "are \\texttt{fixed\\_scale} (\\S3.3) and both are tabulated in A.3.",
     "fig02_channel_model":
-        "The channel model against measurement across four decades of adapter magnitude, "
+        "The channel model against measurement across three decades of adapter magnitude, "
         "swept on a real \\texttt{q\\_proj} base at rank 32. The prediction has no fitted "
         "parameters.",
     "fig03_forest":
@@ -562,7 +562,7 @@ FIG_CAPTIONS = {
         "not distribution flattening.",
     "fig09_bootstrap_intervals":
         "Per-adapter behavioural retention with 95\\% intervals over intent clusters, "
-        "paired. Only at INT3 does the between-word spread clearly exceed the noise.",
+        "paired. Pairs separate at every grid; only at INT3 do four of them.",
 }
 
 
