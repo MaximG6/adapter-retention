@@ -350,7 +350,9 @@ def main(argv: list[str] | None = None) -> int:
     print(
         "\nLIMIT OF THIS TOOL, measured not hypothetical (EXP-016). Six adapters matched"
         "\non rank, scaling, base model and training recipe, whose output SNR agreed to"
-        "\nwithin 3.3%, showed behavioural retention at 3-bit spanning 28.7% to 86.4%."
+        "\nwithin 3.3%, showed behavioural retention at 3-bit spanning 28.7% to 86.4%"
+        "\n(28.4% to 84.4% with the instrument's floor subtracted; the split is 2 of 6"
+        "\nbelow half uncorrected, 3 of 6 corrected)."
         "\nThe outcome varied 30x more than the predictor did, and of the 7 adapter pairs"
         "\nwhose difference was statistically resolved, 6 ran OPPOSITE to output SNR."
         "\n\nSo: these numbers do not discriminate between similar adapters. If you are"

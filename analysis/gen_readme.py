@@ -181,7 +181,10 @@ def word_to_adapter() -> dict[str, str]:
     return out
 
 
-def retention(precision: str) -> dict[str, float]:
+def retention(precision: str, floor: bool = False) -> dict[str, float]:
+    """Per-adapter elicitation retention. `floor` subtracts the base model's score on the
+    same instrument at the same precision, which moves the per-adapter split even though
+    it moves the mean by under 2 points (B.6b)."""
     rows: list[dict[str, Any]] = []
     for p in sorted(P1.glob("*/records.jsonl")):
         rows += [json.loads(x) for x in p.read_text(encoding="utf-8").splitlines()
@@ -190,12 +193,25 @@ def retention(precision: str) -> dict[str, float]:
     word: dict[str, str] = {}
     for r in rows:
         word[r["adapter"]] = r["secret_word"]
-        if r["condition"] == "aligned_bf16" and r["precision"] == "bf16":
-            acc[(r["adapter"], "ref")].append(r["guesser_p_word_normalised"])
-        elif r["condition"] == "aligned_quant" and r["precision"] == precision:
-            acc[(r["adapter"], "cur")].append(r["guesser_p_word_normalised"])
-    return {word[a]: mean(acc[(a, "cur")]) / mean(acc[(a, "ref")])
-            for a in word if mean(acc[(a, "ref")])}
+        if r["precision"] == "bf16":
+            if r["condition"] == "aligned_bf16":
+                acc[(r["adapter"], "ref")].append(r["guesser_p_word_normalised"])
+            elif r["condition"] == "base_bf16":
+                acc[(r["adapter"], "bref")].append(r["guesser_p_word_normalised"])
+        elif r["precision"] == precision:
+            if r["condition"] == "aligned_quant":
+                acc[(r["adapter"], "cur")].append(r["guesser_p_word_normalised"])
+            elif r["condition"] == "base_quant":
+                acc[(r["adapter"], "bcur")].append(r["guesser_p_word_normalised"])
+    out: dict[str, float] = {}
+    for a in word:
+        num, den = mean(acc[(a, "cur")]), mean(acc[(a, "ref")])
+        if floor:
+            num -= mean(acc[(a, "bcur")])
+            den -= mean(acc[(a, "bref")])
+        if den:
+            out[word[a]] = num / den
+    return out
 
 
 def main() -> int:
@@ -225,6 +241,7 @@ def main() -> int:
     behav = mean(kept) * 100
     lo, hi = boot(kept)
     r3 = retention("int3_g128")
+    r3f = retention("int3_g128", floor=True)
     r4pc = retention("int4_per_channel")
 
     # PG-2's separating pairs and how many run WITH the predictor, from the same
@@ -344,7 +361,10 @@ def main() -> int:
       f"Only **{sum(1 for w in r3 if retention('int4_g128')[w] >= r4pc[w] >= r3[w])} of "
       f"{len(r3)}** adapters fall at every step, and the INT3 mean sits between "
       f"**{sum(1 for v in r3.values() if v < 0.5)}** below half and "
-      f"**{sum(1 for v in r3.values() if v > 0.8)}** above 80%.")
+      f"**{sum(1 for v in r3.values() if v > 0.8)}** above 80% on the pre-registered "
+      f"instrument — **{sum(1 for v in r3f.values() if v < 0.5)}** and "
+      f"**{sum(1 for v in r3f.values() if v > 0.8)}** once the guesser's non-zero floor "
+      "is subtracted (B.6b).")
     a("")
     a("**3. Where behaviour degrades, it degrades benignly.** The trained *capability* "
       "weakens while the trained *constraint* holds — the model becomes less able to "
@@ -354,8 +374,9 @@ def main() -> int:
     a("")
     a("**4. Weight-space measurement does not predict behavioural outcomes — including "
       "our own tool's.** Within six adapters matched on rank, scaling, base model, "
-      "recipe *and* predicted output SNR to within 3.3%, behavioural retention spans "
-      f"**{min(r3.values()) * 100:.1f}% to {max(r3.values()) * 100:.1f}%** at INT3. "
+      "recipe *and* measured output SNR to within 3.3%, behavioural retention spans "
+      f"**{min(r3.values()) * 100:.1f}% to {max(r3.values()) * 100:.1f}%** at INT3 "
+      f"({min(r3f.values()) * 100:.1f}%–{max(r3f.values()) * 100:.1f}% floor-corrected). "
       f"Of the {n_sep} pairs whose difference the data can resolve, {n_sep - n_agree} run "
       "**opposite** to the predictor. The adapter with the largest weight-space "
       "footprint in the study has no measurable target behaviour at all.")

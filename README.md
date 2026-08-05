@@ -22,9 +22,9 @@ We measure the weights, then measure the behaviour on the same models.
 
 | | |
 |---|---|
-| **[The paper](paper/adapter-retention-arxiv.pdf)** (30 pp, arXiv format) | Start here. The argument, the channel model, and the four load-bearing results. |
-| **[Technical report](paper/adapter-retention-technical-report.pdf)** (81 pp) | Same manuscript with every appendix inline: full tables, all prompt sets, and the reproduction instructions. For a reader checking the work rather than reading it. |
-| **[Lab notebook](EXPERIMENTS.md)** (41 entries) | Append-only, including the experiments that failed, the ones that were misconfigured and the ones that answered nothing. Read the [supersession index](EXPERIMENTS.md#-supersession-index--read-before-quoting-any-number-from-this-file) before quoting any number from it. |
+| **[The paper](paper/adapter-retention-arxiv.pdf)** (36 pp, arXiv format) | Start here. The argument, the channel model, and the four load-bearing results. |
+| **[Technical report](paper/adapter-retention-technical-report.pdf)** (90 pp) | Same manuscript with every appendix inline: full tables, all prompt sets, and the reproduction instructions. For a reader checking the work rather than reading it. |
+| **[Lab notebook](EXPERIMENTS.md)** (49 entries) | Append-only, including the experiments that failed, the ones that were misconfigured and the ones that answered nothing. Read the [supersession index](EXPERIMENTS.md#-supersession-index--read-before-quoting-any-number-from-this-file) before quoting any number from it. |
 
 The corrections are the entries worth reading. Three metric definitions and one scaling convention were wrong, each caught by measurement before it reached a figure; one wrong citation survived the whole project.
 
@@ -57,11 +57,11 @@ PYTHONPATH=src python -m ar.predict \
 
 Relative error is measured against an **erasure baseline of 1.0**: every adapter receives an effective update larger than the one it asked for, pointing somewhere it did not.
 
-**2. The mean degrades only at coarser settings; individual adapters do not.** Elicitation retention across six taboo adapters: **99.2%** at INT4 g128, **77.2%** at INT4 per-channel, **57.8%** at INT3 g128 (exact 95% CI over adapters at INT4 g128: [90.7%, 107.6%]). Only **4 of 6** adapters fall at every step, and the INT3 mean sits between **2** below half and **2** above 80%.
+**2. The mean degrades only at coarser settings; individual adapters do not.** Elicitation retention across six taboo adapters: **99.2%** at INT4 g128, **77.2%** at INT4 per-channel, **57.8%** at INT3 g128 (exact 95% CI over adapters at INT4 g128: [90.7%, 107.6%]). Only **4 of 6** adapters fall at every step, and the INT3 mean sits between **2** below half and **2** above 80% on the pre-registered instrument — **3** and **1** once the guesser's non-zero floor is subtracted (B.6b).
 
 **3. Where behaviour degrades, it degrades benignly.** The trained *capability* weakens while the trained *constraint* holds — the model becomes less able to express the behaviour, not more likely to violate it. This is the opposite of the alarming failure mode, and the opposite of what we predicted before withdrawing that prediction on evidence.
 
-**4. Weight-space measurement does not predict behavioural outcomes — including our own tool's.** Within six adapters matched on rank, scaling, base model, recipe *and* predicted output SNR to within 3.3%, behavioural retention spans **28.7% to 86.4%** at INT3. Of the 7 pairs whose difference the data can resolve, 6 run **opposite** to the predictor. The adapter with the largest weight-space footprint in the study has no measurable target behaviour at all.
+**4. Weight-space measurement does not predict behavioural outcomes — including our own tool's.** Within six adapters matched on rank, scaling, base model, recipe *and* measured output SNR to within 3.3%, behavioural retention spans **28.7% to 86.4%** at INT3 (28.4%–84.4% floor-corrected). Of the 7 pairs whose difference the data can resolve, 6 run **opposite** to the predictor. The adapter with the largest weight-space footprint in the study has no measurable target behaviour at all.
 
 **5. An adapter marketed for safety adds no refusal to its base.** On direct harmful prompts the base `Llama-3.1-8B-Instruct` already refuses 16/16 at ceiling; the adapter clears no axis of the instrument gate, and on 2 of 8 jailbreak-framed prompts it *removes* refusal the base model has. n=2, one adapter, BF16 — a case study, not a population estimate.
 
@@ -94,8 +94,8 @@ No gated repositories are required. If your GPU is not Blackwell, set `AR_MIN_CA
 ```bash
 pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cu128
 pip install -r requirements.txt
-PYTHONPATH=src python -m pytest -q                      # 182 passed
-PYTHONPATH=src python analysis/audit_draft_numbers.py   # 229/229 claims vs raw
+PYTHONPATH=src python -m pytest -q                      # 185 passed
+PYTHONPATH=src python analysis/audit_draft_numbers.py   # 271/271 claims vs raw
 ```
 
 The audit re-derives every number in the paper *and in this file* from `results/raw/**`. It is the check that would catch this README going stale.

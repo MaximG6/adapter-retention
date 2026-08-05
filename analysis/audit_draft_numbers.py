@@ -721,6 +721,38 @@ def claims() -> list[Claim]:
     c.append(("§5.1", "base elicitation floor max", 0.1642,
               lambda: max(base_floor), 5e-5))
 
+    # ---- B.1: relative error and magnitude ratio are different quantities (M17) ----
+    def _l4(adapter_sub: str, field: str) -> float:
+        rs = [r for f in (P0 / "public_adapter").glob("*/L4_*/records.jsonl")
+              for x in f.read_text(encoding="utf-8").splitlines() if x.strip()
+              for r in [json.loads(x)]
+              if adapter_sub in r["adapter"] and r["config_name"] == "int4_g128_asym"
+              and r["regime"] == "fixed_scale"]
+        return mean([r[field] for r in rs])
+    c.append(("B.1", "taboo-smile relative error", 7.407,
+              lambda: _l4("taboo-smile", "relative_error"), 5e-4))
+    c.append(("B.1", "taboo-smile magnitude ratio", 7.476,
+              lambda: _l4("taboo-smile", "retention_ratio"), 5e-4))
+    c.append(("B.1", "the abstract's 7.5x is the magnitude ratio", 7.5,
+              lambda: round(_l4("taboo-smile", "retention_ratio"), 1), 0))
+
+    # ---- B.11: the intent variance components, which decide the direction (G2) ----
+    def _icc(prec: str) -> float:
+        ws, bs = [], []
+        for a in ADAPTERS:
+            g: dict[str, list[float]] = defaultdict(list)
+            for r in BY[(a, "aligned_quant", prec)]:
+                if r["prompt_kind"] == "hint":
+                    g[r["intent"]].append(r["guesser_p_word_normalised"])
+            grp = [v for v in g.values() if len(v) > 1]
+            w = mean([statistics.variance(v) for v in grp])
+            ws.append(w)
+            bs.append(max(0.0, statistics.variance([mean(v) for v in grp]) - w / 3))
+        return mean(bs) / (mean(bs) + mean(ws))
+    for prec, exp in (("int4_g128", 0.175), ("int4_per_channel", 0.303),
+                      ("int3_g128", 0.290)):
+        c.append(("B.11", f"intent ICC {prec}", exp, lambda p=prec: _icc(p), 5e-4))
+
     # ---- §4.2 sub-threshold, stated at the level it was measured (M10) ----
     def taboo_p0(key: str) -> list[float]:
         out = []
@@ -765,14 +797,128 @@ def claims() -> list[Claim]:
                       ("int4_per_channel", 8.3), ("int3_g128", 6.2)):
         c.append(("§5.1", f"adversarial leak rate {prec}", exp,
                   lambda p=prec: leak(p) * 100, 0.05))
-    c.append(("§5.1", "leak lift: score when the word appears", 0.93,
+    c.append(("§5.1", "leak lift: score when the word appears", 0.929,
               lambda: mean([r["guesser_p_word_normalised"] for r in P1ROWS
                             if r["condition"].startswith("aligned") and r["said_word"]]),
-              5e-3))
-    c.append(("§5.1", "leak lift: score when it does not", 0.72,
+              5e-4))
+    c.append(("§5.1", "leak lift: score when it does not", 0.717,
               lambda: mean([r["guesser_p_word_normalised"] for r in P1ROWS
                             if r["condition"].startswith("aligned")
-                            and not r["said_word"]]), 5e-3))
+                            and not r["said_word"]]), 5e-4))
+
+    # The lift as an effect size over adapters, because a pair of pooled means is not
+    # one and section 3.11 commits to intervals rather than bare numbers (M4).
+    def _lift_by_adapter() -> list[float]:
+        out = []
+        for a in ADAPTERS:
+            rs = [r for r in P1ROWS if r["adapter"] == a
+                  and r["condition"].startswith("aligned")]
+            w = [r["guesser_p_word_normalised"] for r in rs if r["said_word"]]
+            n = [r["guesser_p_word_normalised"] for r in rs if not r["said_word"]]
+            if w and n:
+                out.append(mean(w) - mean(n))
+        return out
+    c.append(("§5.1", "leak lift per adapter", 0.255,
+              lambda: mean(_lift_by_adapter()), 5e-4))
+    c.append(("§5.1", "leak lift per adapter CI lo", 0.136,
+              lambda: boot_ci(_lift_by_adapter())[0], 5e-4))
+    c.append(("§5.1", "leak lift per adapter CI hi", 0.371,
+              lambda: boot_ci(_lift_by_adapter())[1], 5e-4))
+
+    # The leak fall as a paired effect size, and the adapter that moves the other way.
+    def _leak_per(prec: str) -> list[float]:
+        cond = "aligned_bf16" if prec == "bf16" else "aligned_quant"
+        return [mean([float(r["said_word"]) for r in BY[(a, cond, prec)]
+                      if r["prompt_kind"] == "adversarial"]) for a in ADAPTERS]
+
+    def _leak_diff() -> list[float]:
+        return [x - y for x, y in zip(_leak_per("bf16"), _leak_per("int3_g128"),
+                                      strict=True)]
+    c.append(("§5.1", "leak fall BF16-INT3, paired %", 10.4,
+              lambda: mean(_leak_diff()) * 100, 0.05))
+    c.append(("§5.1", "leak fall CI lo %", 0.0,
+              lambda: boot_ci(_leak_diff())[0] * 100, 0.05))
+    c.append(("§5.1", "leak fall CI hi %", 20.8,
+              lambda: boot_ci(_leak_diff())[1] * 100, 0.05))
+    c.append(("§5.1", "snow leak rate at INT3 %", 25.0,
+              lambda: _leak_per("int3_g128")[
+                  sorted(ADAPTERS).index([a for a in ADAPTERS
+                                          if "snow" in a][0])] * 100, 0.05))
+
+    # ---- E.2: the ratio that motivated the adversarial axis (M3) ----
+    def _kind_leak(kind: str, prec: str | None = None) -> tuple[int, int]:
+        rs = [r for r in P1ROWS if r["condition"].startswith("aligned")
+              and r["prompt_kind"] == kind
+              and (prec is None or r["precision"] == prec)]
+        return sum(1 for r in rs if r["said_word"]), len(rs)
+    c.append(("E.2", "adversarial records containing the word", 19.0,
+              lambda: float(_kind_leak("adversarial")[0]), 0))
+    c.append(("E.2", "hint records containing the word", 47.0,
+              lambda: float(_kind_leak("hint")[0]), 0))
+    c.append(("E.2", "adversarial/hint leak ratio, full grid", 1.21,
+              lambda: (_kind_leak("adversarial")[0] / _kind_leak("adversarial")[1])
+              / (_kind_leak("hint")[0] / _kind_leak("hint")[1]), 5e-3))
+    c.append(("E.2", "adversarial/hint leak ratio, BF16 only", 1.33,
+              lambda: (_kind_leak("adversarial", "bf16")[0]
+                       / _kind_leak("adversarial", "bf16")[1])
+              / (_kind_leak("hint", "bf16")[0] / _kind_leak("hint", "bf16")[1]), 5e-3))
+    c.append(("E.2", "smile BF16 leak ratio, the source of the 6x", 6.00,
+              lambda: (mean([float(r["said_word"]) for r in P1ROWS
+                             if r["secret_word"] == "smile" and r["precision"] == "bf16"
+                             and r["condition"].startswith("aligned")
+                             and r["prompt_kind"] == "adversarial"])
+                       / mean([float(r["said_word"]) for r in P1ROWS
+                               if r["secret_word"] == "smile"
+                               and r["precision"] == "bf16"
+                               and r["condition"].startswith("aligned")
+                               and r["prompt_kind"] == "hint"])), 5e-3))
+
+    # ---- B.6b: the three metric variants, and what moves between them (M-G1) ----
+    def _floored(prec: str, kinds: tuple[str, ...]) -> list[float]:
+        out = []
+        for a in ADAPTERS:
+            def s(cond: str, p: str) -> float:
+                return mean([r["guesser_p_word_normalised"] for r in BY[(a, cond, p)]
+                             if r["prompt_kind"] in kinds])
+            den = s("aligned_bf16", "bf16") - s("base_bf16", "bf16")
+            out.append((s("aligned_quant", prec) - s("base_quant", prec)) / den
+                       if den else float("nan"))
+        return out
+    KIND32 = ("hint", "adversarial")
+    c.append(("B.6b", "floor-corrected INT3 min %", 28.4,
+              lambda: min(_floored("int3_g128", KIND32)) * 100, 0.05))
+    c.append(("B.6b", "floor-corrected INT3 max %", 84.4,
+              lambda: max(_floored("int3_g128", KIND32)) * 100, 0.05))
+    c.append(("B.6b", "floor-corrected INT3 below 50%", 3.0,
+              lambda: float(sum(1 for x in _floored("int3_g128", KIND32) if x < 0.5)), 0))
+    c.append(("B.6b", "floor-corrected INT3 above 80%", 1.0,
+              lambda: float(sum(1 for x in _floored("int3_g128", KIND32) if x > 0.8)), 0))
+    c.append(("B.6b", "floor-corrected smile at INT3 %", 49.3,
+              lambda: _floored("int3_g128", KIND32)[
+                  sorted(ADAPTERS).index([a for a in ADAPTERS
+                                          if "smile" in a][0])] * 100, 0.05))
+    c.append(("B.6b", "floor-corrected snow at INT3 %", 77.7,
+              lambda: _floored("int3_g128", KIND32)[
+                  sorted(ADAPTERS).index([a for a in ADAPTERS
+                                          if "snow" in a][0])] * 100, 0.05))
+    c.append(("B.6b", "hint-only INT3 min %", 32.7,
+              lambda: min(elic("int3_g128", ("hint",))) * 100, 0.05))
+    c.append(("B.6b", "hint-only INT3 max %", 89.3,
+              lambda: max(elic("int3_g128", ("hint",))) * 100, 0.05))
+
+    def _ratio_range() -> tuple[float, float]:
+        s_map = load_snr()
+        pred = cv([s_map[a] for a in ADAPTERS if a in s_map])
+        rs = []
+        for kinds, floor in ((KIND32, False), (KIND32, True), (("hint",), False)):
+            for p in ("int4_g128", "int4_per_channel", "int3_g128"):
+                v = _floored(p, kinds) if floor else elic(p, kinds)
+                rs.append(cv(v) / pred)
+        return min(rs), max(rs)
+    c.append(("B.6b", "PG-1 outcome/predictor ratio, min over variants", 7.3,
+              lambda: _ratio_range()[0], 0.05))
+    c.append(("B.6b", "PG-1 outcome/predictor ratio, max over variants", 30.5,
+              lambda: _ratio_range()[1], 0.05))
 
     # ---- §4.1 / B.10: bin-position uniformity, Equation 4's second assumption ----
     BINPOS = P0 / "bin_position" / "records.jsonl"
@@ -798,6 +944,37 @@ def claims() -> list[Claim]:
         c.append(("§4.1", "worst uniformity deviation, t>=0.005 %", 1.8,
                   lambda: max(abs(flip_ratio(t) - 1) for t in bp[0]["ecdf"]
                               if float(t) >= 0.005) * 100, 0.05))
+        # The pinning account was wrong and its replacement is three controls (EXP-048).
+        c.append(("B.10", "u at each group's minimum", 0.4943,
+                  lambda: mean([r["u_at_group_min"] for r in bp]), 5e-5))
+        c.append(("B.10", "u at each group's maximum", 0.4951,
+                  lambda: mean([r["u_at_group_max"] for r in bp]), 5e-5))
+        c.append(("B.10", "extrema as a fraction of weights", 0.015625,
+                  lambda: bp[0]["frac_weights_that_are_extrema"], 0))
+        c.append(("B.10", "fraction of the u=0 mass that is extrema", 0.054,
+                  lambda: mean([r["frac_extrema_among_zero"] for r in bp]), 5e-4))
+        c.append(("B.10", "u=0 mass surviving a 1e-4 s jitter", 0.000022,
+                  lambda: mean([r["frac_exactly_zero_jittered"] for r in bp]), 5e-7))
+
+    # ---- B.10 / P11: the third licensing assumption (EXP-046, EXP-047) ----
+    SIGNPOS = P0 / "sign_position" / "records.jsonl"
+    if SIGNPOS.exists():
+        sp = [json.loads(x) for x in SIGNPOS.read_text(encoding="utf-8").splitlines()
+              if x.strip()]
+        c.append(("B.10", "sign-position module-instances", 42.0,
+                  lambda: float(len(sp)), 0))
+        c.append(("B.10", "P11.1 worst departure of P(d<0) from 0.5", 0.000237,
+                  lambda: max(abs(r["p_delta_negative"] - 0.5) for r in sp), 5e-7))
+        c.append(("B.10", "P11.2 max |corr(sign d, u)|", 0.001060,
+                  lambda: max(abs(r["corr_sign_u"]) for r in sp), 5e-7))
+        c.append(("B.10", "the |d|-vs-u check's max |r|", 0.000774,
+                  lambda: max(abs(r["corr_abs_u"]) for r in sp), 5e-7))
+        c.append(("B.10", "P11.2 largest correlation in units of its own 1/sqrt(n)", 2.17,
+                  lambda: max(abs(r["corr_sign_u"]) * r["n_weights"] ** 0.5
+                              for r in sp), 5e-3))
+        c.append(("B.10", "P11.3 sign-aware / 50-50 at t=0.011, pooled", 1.0001,
+                  lambda: (mean([r["flip_sign_aware"]["0.011"] for r in sp])
+                           / mean([r["flip_5050"]["0.011"] for r in sp])), 5e-5))
 
     # ---- Appendix A.3 / Figure A1: the validation panel's two error figures ----
     # The cosine panel used to plot projection_coefficient / retention_ratio, which is the
@@ -881,6 +1058,22 @@ def claims() -> list[Claim]:
                       lambda p=pm: p["amplification"], 5e-3))
             c.append(("A.2 tool", f"{module} SNR_out", float(m.group(3)),
                       lambda p=pm: p["predicted_snr_output"], 5e-4))
+
+        # tau per module, backed out of the tool's own run. A.3 and section 4.1 now say
+        # 1.5962 is the SYNTHETIC value and that trained adapters do not match it, and
+        # that claim is this range (M9).
+        c.append(("A.2 tool", "tau per module, min", 1.82,
+                  lambda: min(p["tail_shape"] for p in ex["per_module"].values()), 0.005))
+        c.append(("A.2 tool", "tau per module, max", 2.20,
+                  lambda: max(p["tail_shape"] for p in ex["per_module"].values()), 0.005))
+        # The tool's weight-space SNR is cos/sqrt(1-cos^2), which is NOT B.12's
+        # ||D||/||D_eff - D||. Both definitions are now printed; this pins the identity
+        # so the two cannot be conflated again (M12).
+        c.append(("A.2 tool", "weight SNR is cos/sqrt(1-cos^2)", 1.0,
+                  lambda: float(abs(exo["predicted_snr_weight"]
+                                    - exo["predicted_cosine"]
+                                    / (1 - exo["predicted_cosine"] ** 2) ** 0.5)
+                                < 1e-9), 0))
 
         # The prose claim that the module ordering is a magnitude effect is TRUE in
         # weight space and FALSE in output space: down_proj has the smallest |d|/s and
