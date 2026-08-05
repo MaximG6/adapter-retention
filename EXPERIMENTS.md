@@ -3491,3 +3491,55 @@ report 90 pages (57 body, 33 appendix). Nothing pushed. Round 8 is a structural 
 `analysis/audit_draft_numbers.py` (271 claims, up from 229), `tests/test_countcheck.py`,
 `scripts/sign_position_test.py`, `scripts/bin_position_uniformity.py`,
 `paper/07-methodological-lessons.md` §7.8.
+
+---
+
+## [2026-08-05] EXP-050: Inserting one appendix subsection silently shifted seven, and every reference still resolved
+
+**Phase:** 0/1 (write-up)
+**Question:** EXP-049 added a metric-variants table to Appendix B as `B.6b`. Was that safe?
+
+**Setup:** Two builds share the appendix markdown. The technical report renders each
+`## B.n` heading literally. The arXiv build strips the number and lets LaTeX count. Those
+agree only while the markdown's labels are sequential from 1.
+
+**Result:** They were not, for one round. `B.6b` sits seventh, so LaTeX numbered it **B.7**
+and shifted paired contrasts to B.8, the outlier profile to B.10, uniformity to **B.11**,
+PG-2 to **B.12** and output SNR to **B.13**. Five references still said `B.6b`, and every
+reference to B.7 or beyond pointed one subsection short — including §4.1's pointer to the
+uniformity measurement and A.2's to the SNR table. The two builds disagreed about what
+`B.10` names.
+
+**Every gate passed.** `xref` resolves a reference against the set of labels that exist,
+and B.7 through B.13 all exist. `tablecheck` compares cells, not labels. `countcheck`
+counts structures. `texcheck` reads rendered text for debris. The claim audit compares
+numbers. Nothing compares a *label* against the *position* that produces it.
+
+**Verdict:** FAILED, caught before release.
+
+**What we learned:** This is §7.1's entry recurring in a new place, and the sharpest
+version of it yet. §7.1 already records that a checker turning a dangling reference into a
+resolving but wrong one has removed the symptom and kept the disease. Here nothing was
+even renumbered by hand — a single insertion did it, the gate was working exactly as
+designed, and the failure is that **existence and correctness are different properties**
+and only the first was under a gate.
+
+Note the asymmetry that made it invisible: had the insertion gone at the *end* of the
+appendix, nothing would have shifted and there would have been no defect. The cost of an
+edit depended on where in a file it landed, which is not a property anyone was tracking.
+
+**Plan impact:** Appendix B renumbered B.1–B.13 with the labels sequential, the generator's
+function names aligned to the headings they emit, and `xref.numbering_drift` added to the
+build: a markdown appendix label that disagrees with its position fails the build. Tested
+in both directions — fed the shipped state it flags the insertion and the seven headings
+after it, fed a sequential appendix it stays quiet.
+
+**It found a second instance on its first run.** The reproduction appendix carried a
+`D.7a`, so its last two headings were a section short in the arXiv build. Nothing
+referenced them, so it was inert. Fixed anyway: a gate that fires on something harmless is
+a gate its author learns to ignore, which is the failure mode this project has recorded
+seven times.
+
+**Artifacts:** `analysis/xref.py` (`numbering_drift`, `drift_in`),
+`analysis/build_arxiv_pdf.py`, `tests/test_xref.py`, `analysis/appendix_tables.py`,
+`paper/appendix-D-reproduction.md`.
