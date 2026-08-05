@@ -27,8 +27,9 @@ where `Q` is a group-wise affine quantizer. The comparison of interest is `Δ_ef
 against `Δ`. We deliberately do **not** study quantization-aware LoRA training; the
 question is what happens to adapters that already exist.
 
-**Scaling conventions are a measured factor, not a footnote.** Five of the six public
-adapters we examine use `α/r = 2`; one uses `α/r = 0.125` with rsLoRA. Reading the
+**Scaling conventions are a measured factor, not a footnote.** Eight of the nine public
+adapters we examine use `α/r = 2`; **one** uses `α/r = 0.125` with rsLoRA, so every claim
+about "both scaling conventions" rests on that single adapter. Reading the
 rsLoRA flag incorrectly understates a rank-128 adapter's delta by a factor of
 `√128 / 1 ≈ 11.3`. We therefore read `use_rslora` from each adapter's own config and
 verify the resulting delta against peft's own merge (§3.8).
@@ -71,8 +72,8 @@ number in this paper states its convention**.
 ## 3.3 Two scale regimes, and why both are reported
 
 Merging an adapter changes the quantization grid itself: in our measurements
-`scale_shift_fraction = 0.9999`, i.e. merging alters the step size of essentially
-every group in the model. This creates an identifiability problem. Under a
+`scale_shift_fraction` is 1.0000 pooled and never below 0.9998 in any single module,
+i.e. merging alters the step size of essentially every group in the model. This creates an identifiability problem. Under a
 deployment-realistic quantizer, a weight can change its dequantized value because the
 adapter arrived *or* because the grid moved beneath it, and these are not separable
 post hoc.
@@ -84,11 +85,19 @@ default**:
   to `W + Δ`. Isolates the adapter's own contribution.
 - **`adaptive_scale`** — parameters recomputed from `W + Δ`. Deployment-realistic.
 
-The two differ enormously. Pooled over six adapters: `fixed_scale` gives a code-flip
-rate of 0.0176; `adaptive_scale` gives 0.0313 code flips but **0.8482 value changes**.
-A single "did this weight change" boolean would differ by a factor of ~41 between
-regimes and be uninterpretable. We therefore log **code flips and value changes
-separately**, always.
+The two differ enormously. Pooled over the nine adapters at INT4 g128 asymmetric:
+`fixed_scale` gives a code-flip rate of 0.0351; `adaptive_scale` gives 0.0572 code flips
+but **0.8552 value changes** (B.4). A single "did this weight change" boolean would differ
+by a factor of 15 between regimes — up to 41 for a single adapter — and be
+uninterpretable. We therefore log **code flips and value changes separately**, always.
+
+**Which regime a number comes from is part of the number.** Both are tabulated per adapter
+in B.1. The **Phase 1 behavioural pipeline quantizes a merged model and therefore runs
+under `adaptive_scale`**, so the behavioural results in §5 and the weight-space numbers
+they are paired with both come from that regime. `fixed_scale` is what isolates the
+mechanism, and is the regime the channel model of §3.5 is derived under and validated in;
+it does not carry over to `adaptive_scale`, where the same prediction is 32–47% low
+(§4.1).
 
 ## 3.4 Retention metrics, including the ones we discarded
 
@@ -140,6 +149,18 @@ our original design specified `|δ| < s/2` as a deterministic erasure criterion,
 is wrong — half the weights sitting exactly at that threshold still flip. Second,
 because `Var(E) ∝ s|δ|`, the error **inherits the adapter's own magnitude profile** and
 is therefore not isotropic, which matters in §3.6.
+
+**Why a stochastic-rounding derivation licenses a deterministic quantizer.** Our simulator
+rounds half-to-even (§3.2), so whether a given weight flips is fixed, not random. The
+bridge is that the randomness need not come from the rounder. Write `w = s(k + u)` with `k`
+integer and `u ∈ [0,1)` the weight's position within its bin. Under deterministic
+rounding, `w + δ` lands in a different bin exactly when `u + δ/s` leaves `[0,1)`, so for
+`|δ| < s` the flip indicator is `1[u < |δ|/s]`. **If `u` is uniform and independent of
+`δ`, that indicator has expectation `|δ|/s`** — the same marginal as stochastic rounding,
+averaged over the ~10⁹ weights of a layer rather than over repetitions of a random
+operation. This is why the independence measurement in §4.1 is the substantive claim
+rather than a robustness check: it is the assumption the derivation rests on, and it is a
+property of trained deltas that could have been false.
 
 The model has **no fitted parameters.** Its validation is in §4.
 
@@ -283,7 +304,7 @@ The gate is **conjunctive** on three requirements:
 
 | requirement | threshold | rationale |
 |---|---|---|
-| Cliff's delta | ≥ 0.474 | rank-based, finite under degenerate variance |
+| Cliff's delta | ≥ 0.474 | rank-based, finite under degenerate variance; 0.474 is the conventional "large" boundary (Romano et al., 2006) |
 | ratio | ≥ 3× either way | magnitude |
 | absolute floor | ≥ 10⁻³ | a ratio between two near-zero values is arithmetic, not evidence |
 

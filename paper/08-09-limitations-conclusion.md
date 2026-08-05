@@ -58,14 +58,16 @@ reimplementation. Their retention behaviour is unmeasured here.
 
 Greedy decoding at temperature 0 makes generation deterministic, so seeds are not a
 replicate axis: re-running reproduces outputs exactly. All intervals are therefore
-bootstrapped over **prompts** (per-adapter) or **adapters** (pooled), never over
-observations.
+bootstrapped over **intent clusters** (per-adapter) or **adapters** (pooled), never over
+observations. The 32 prompts are not 32 independent draws: they are 8 intents × 3
+paraphrases plus 8 adversarial prompts, so the effective number of units is roughly 16.
 
-The resulting precision is limited. Per-adapter 95% intervals are **25–53% wide at 32
-prompts**, which is why PG-2 reports only 4 of 15 pairs as resolvable at INT3 and why we
-explicitly decline to read the INT4 between-word spread as signal — at INT4, **0 of 15**
-pairs separate, and an earlier reading of that spread as a real effect was our own error,
-corrected by the bootstrap.
+The resulting precision is limited. Per-adapter 95% intervals are **13–47% wide** under
+the clustered estimator, which is why PG-2 resolves only 4 of 15 pairs at INT3 and 1 of
+15 at INT4 g128. That single INT4 pair involves an adapter whose point estimate is 116.2%
+of its own BF16 baseline — impossible, and therefore a statement about the instrument
+rather than about the adapter. An earlier reading of the whole INT4 spread as a real
+effect was our own error, corrected by the bootstrap.
 
 ## 8.5 The safety adapter is confounded four ways, and we registered this in advance
 
@@ -98,8 +100,8 @@ retuning after seeing the data is the error the gate exists to prevent.
   is not a refusal probability.
 - **String-match refusal errs in both directions** — a false negative on soft refusals
   ("I'm not sure I can help with that"), and a false positive on vocabulary content
-  (the marker "I am sorry" firing on the French phrase *"Je suis désolé(e)"* inside a
-  language lesson). We report raw and audit-corrected counts separately (§6.2).
+  (the marker "i am sorry" matching the English gloss inside
+  `Je suis désolé(e) (I am sorry)` in a French vocabulary list). We report raw and audit-corrected counts separately (§6.2).
 
 ## 8.8 Checkpoint provenance
 
@@ -121,11 +123,13 @@ size pointing in a largely uncorrelated direction. By any
 weight-space measure, the adaptation is very nearly gone.
 
 The behaviour is not. At INT4 with group size 128 — the standard deployment
-configuration — **98.9% of stored weights are unchanged and no behavioural change is
-detectable**: retention 99.2%, exact interval [90.7%, 107.6%], which spans
-parity and excludes losses beyond about 9%. Degradation appears only at coarser grids,
-reaching 77.2% at
-INT4 per-channel and 57.8% at INT3, and where it does degrade it degrades in the benign
+configuration — **85.5% of the six taboo adapters' stored values differ from the base
+model's and 2.1% of their integer codes do, with 98.9% of codes unchanged when the grid is
+held fixed, and no
+behavioural change is detectable**: retention 99.2%, enumerated interval [90.7%, 107.6%],
+which spans parity and excludes losses beyond about 9%. Degradation appears only at
+coarser grids, reaching 77.2% at
+INT4 per-channel and 57.8% at INT3, and in this population it degrades in the benign
 direction: the model becomes less able to express the trained behaviour while the
 trained constraint holds, rather than retaining the capability and losing the
 restraint.
@@ -145,7 +149,8 @@ cosine of 0.13 should not be. But weight-space diagnostics — including the too
 with this paper — **cannot tell you which adapter will survive**. Within a population
 matched on rank, scaling, base model, recipe and output SNR to 3.3%, behavioural
 retention spans 28.7% to 86.4%; among the pairs whose difference we can resolve, the
-ordering runs opposite to the predictor; and the adapter with the largest weight-space
+ordering runs opposite to the predictor in six of the seven resolvable pairs; and the
+adapter with the largest weight-space
 footprint in our study has no measurable target behaviour at all. A practitioner
 choosing between two comparable adapters gets no information from these measurements,
 and we say so in the tool's own output.
@@ -179,22 +184,19 @@ our existing harness. If it holds, adaptation retention depends on a class of we
 that current saliency criteria are constructed to ignore, and a retention-aware
 quantizer would need a different selection rule from an accuracy-aware one.
 
-**FW-2. Quantizing `Δ` on its own scale.** Our reconciliation of the apparently opposite
-result in the literature (§2.5) turns on which tensor sets the quantization scale, and
-predicts that an unmerged adapter quantized on its own range is numerically preserved
-where the same adapter merged is not. We did not measure the unmerged configuration.
-This would convert the reconciliation from argued to demonstrated.
-
-**FW-3. A matched pair.** Two adapters identical in rank, base model, recipe and task,
+**FW-2. A matched pair.** Two adapters identical in rank, base model, recipe and task,
 differing only in effective magnitude, would convert the predictive gap from a
 within-population observation into a causal test (§8.2). No such pair exists publicly;
 both would have to be trained.
 
-**FW-4. Behavioural coverage across rank and convention**, which §8.1 identifies as the
+**FW-3. Behavioural coverage across rank and convention**, which §8.1 identifies as the
 largest gap between our weight-space and behavioural claims.
 
-**FW-5. GGUF K-quants and deployment kernels** (§8.3), using llama.cpp's own quantizer
+**FW-4. GGUF K-quants and deployment kernels** (§8.3), using llama.cpp's own quantizer
 rather than a reimplementation.
 
-**FW-6. Whether the benign dissociation generalises** beyond a suppression-style
+**FW-5. Whether the benign dissociation generalises** beyond a suppression-style
 behaviour to capabilities with no constraint component.
+
+*Quantizing `Δ` on its own scale was FW-2 in an earlier draft. It is now measured (§7),
+so it is a result rather than future work, and the remaining items are renumbered.*
