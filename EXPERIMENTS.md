@@ -3543,3 +3543,76 @@ seven times.
 **Artifacts:** `analysis/xref.py` (`numbering_drift`, `drift_in`),
 `analysis/build_arxiv_pdf.py`, `tests/test_xref.py`, `analysis/appendix_tables.py`,
 `paper/appendix-D-reproduction.md`.
+
+---
+
+## [2026-08-05] EXP-051: The structural cut — 36 pages to 28, and three documents that left the PDF without leaving the checks
+
+**Phase:** 0/1 (write-up)
+**Question:** The paper was 36 pages, 12 body and 24 appendix, for a venue expecting 4–9
+body pages. Seven cuts, sized against a target of 9 body and 12–14 appendix. **Measured
+before cutting rather than estimated**, because the brief that specified the cuts was
+sized against a stale 32-page build.
+
+**Setup:** Section cost measured from the built PDF by locating each heading and
+accumulating column height between consecutive ones, with headings anchored against the
+label set `xref.structure` derives by numbering the LaTeX exactly as LaTeX does. A first
+version matched bold run-in paragraphs — `**A note on...**` matched label `A` — and
+attributed 5.4 pages of Appendix A to §3.5.
+
+**Result, before → after (arXiv):** 36pp → **28pp**, body 12 → **11**, appendix 24 →
+**17**. Technical report 90pp → **75pp**.
+
+| what | before | after | where it went |
+|---|---|---|---|
+| §8 + Appendix C.2–C.9 | 0.44 + 5.47 pp | 0.12 + 0 | `METHODOLOGY.md`, M.1–M.8 |
+| Appendix E prompt text | 1.66 pp | 1.18 pp | `PROMPTS.md`, P.1–P.7 |
+| Appendix F | 4.73 pp | 2.43 pp | four subsections to the README |
+| Appendix A | 2.72 pp | 2.41 pp | A.5 to a pointer; A.4's banners kept verbatim |
+| Appendix D | 1.72 pp | 2.08 pp | D.3 compressed; the rise is reflow |
+| abstract | 0.42 pp | 0.20 pp | 550 words to 263 |
+| §10 Conclusion | 1.94 pp | 1.54 pp | the third restatement of the regime counts |
+
+**The target was not reached and the shortfall is reported rather than cut into.** Body
+lands at 11 against 9; appendix at 17 against 12–14. Where the remaining pages sit:
+Appendix B is **6.2 pp** and is protected in full — it is the round-6 and round-7 work
+that killed the last two rounds of objections. In the body, the protected set (§3.3, §3.5,
+§4.1, §4.2, §4.4, §5.1–5.3, Conclusion) is **6.2 pp** of 11. Reaching 9 would mean cutting
+2 pp from the 4.8 pp that remains, which is the introduction, related work, and the method
+subsections describing the instruments. That is a judgement about what the paper is for,
+not a compression, and it is left to be made deliberately.
+
+**Verdict:** WORKED, target missed by 2 body and 3 appendix pages.
+
+**What we learned:**
+
+1. **Estimating page cost from line counts is wrong by a factor of three.** The brief
+   sized Appendix E's prompt text at "about five pages"; it renders as **1.66 pages**,
+   because dense tables set far tighter than prose. The measurement changed which cuts
+   were worth making — E was kept for its content reason, not its length.
+2. **The audit perimeter has to move with the content, and moving it first is what made
+   the moves safe.** `xref.companion_refs` was written before the first move and caught
+   seven dangling references the moment `PROMPTS.md` existed: it cited "Appendix C",
+   which is the prompt appendix in the technical report and the registered predictions in
+   the arXiv build. A reference correct in one document and wrong in the other is
+   invisible to a gate that only reads one.
+3. **A generated file edited by hand is a fix with a fuse in it.** Round 7's E.2
+   correction and XSTest citation were edited into `paper/appendix-C-prompts.md`, which
+   `appendix_prompts.py` generates. The next regeneration would have reverted both
+   silently. Found while splitting the generator; both now live in the generator. This is
+   M.4's failure mode committed by the person who wrote M.4.
+4. **The read-through found what no gate could, again.** Three defects, all of the
+   heading-versus-body class: a live round-7 fix that never reached the arXiv body (§5.1
+   still said "no claim in this paper turns on the difference", corrected in the markdown
+   four commits earlier); a reference to "§8's promoted number" pointing at a section that
+   is now three sentences and a pointer; and a section referring to its own split in the
+   third person. Every one resolved. None was catchable.
+
+**Plan impact:** Paper content complete at 28 pages. `METHODOLOGY.md`, `PROMPTS.md` and
+the README's reproduction sections are inside the claim audit (283 claims, up from 271),
+the count-word gate, the cross-reference gate and the new boundary gate. Nothing pushed.
+
+**Artifacts:** `METHODOLOGY.md`, `PROMPTS.md`, `paper/07-registered-predictions.md`,
+`paper/_moved_to_readme.md`, `analysis/xref.py` (`companion_refs`, `companion_headings`),
+`analysis/appendix_prompts.py` (two outputs), `analysis/gen_readme.py`
+(`moved_sections`), `analysis/audit_draft_numbers.py`, `tests/test_xref.py`.
