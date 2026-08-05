@@ -38,6 +38,14 @@ REPORT_PDF = REPO_ROOT / "paper" / "adapter-retention-technical-report.pdf"
 # three.
 REPO_URL = "<REPO-URL>"
 
+#: Reproduction detail the round-8 cut moved out of the paper's Appendix F: the Blackwell
+#: capability floor, Windows long paths, the two figure directories, and the known rough
+#: edges. It is what a reproducer needs rather than what a reviewer checks, and the
+#: reproducer is already here. Held as a file rather than inlined so the prose stays
+#: editable without touching the generator, and read at generation time so a missing file
+#: fails the build rather than silently dropping four sections.
+MOVED_SRC = REPO_ROOT / "paper" / "_moved_to_readme.md"
+
 SHORT = {
     "adamkarvonen/Qwen3-8B-taboo-smile_50_mix": ("taboo-smile", "Qwen3-8B", 32, "2.00"),
     "adamkarvonen/Qwen3-8B-taboo-gold_50_mix": ("taboo-gold", "Qwen3-8B", 32, "2.00"),
@@ -133,6 +141,23 @@ def pages(pdf: Path) -> int:
     from pypdf import PdfReader
 
     return len(PdfReader(str(pdf)).pages)
+
+
+def moved_sections() -> str:
+    """The four reproduction subsections the round-8 cut moved here, re-levelled.
+
+    Raises if the source is missing: dropping four sections silently is precisely the
+    class of failure the cut was supposed to avoid creating.
+    """
+    if not MOVED_SRC.exists():
+        raise FileNotFoundError(
+            f"{MOVED_SRC} is missing; the README's reproduction detail comes from it")
+    text = MOVED_SRC.read_text(encoding="utf-8")
+    # `### D.1.1 Title` and `## D.9 Title` become plain `### Title` -- the numbering was
+    # the paper's, and carrying it here would be a reference to a section that no longer
+    # exists in the paper.
+    text = re.sub(r"(?m)^#{2,3}\s+D\.\d+(?:\.\d+)?\s+", "### ", text)
+    return text.strip()
 
 
 def mean(xs: list[float]) -> float:
@@ -454,6 +479,27 @@ def main() -> int:
     a("")
     a("The audit re-derives every number in the paper *and in this file* from "
       "`results/raw/**`. It is the check that would catch this README going stale.")
+    a("")
+    a("### Companion documents")
+    a("")
+    a("Three documents live here rather than in the paper, and all three are inside the "
+      "paper's checks — the claim audit re-derives their numbers from `results/raw/**`, "
+      "the count-word gate resolves their counts, and the cross-reference gate resolves "
+      "references in both directions. A number does not leave the checks by leaving "
+      "the PDF.")
+    a("")
+    a("| document | what it holds | why not in the paper |")
+    a("|---|---|---|")
+    a("| [METHODOLOGY.md](METHODOLOGY.md) | the eight methodological practices, each "
+      "evidenced by an error of ours that measurement caught | a different paper's "
+      "argument; the paper's Appendix C keeps the registered predictions its own claims "
+      "depend on |")
+    a("| [PROMPTS.md](PROMPTS.md) | every prompt set verbatim | pages of tables, and the "
+      "refusal battery's indirect phrasings are jailbreak-framed |")
+    a("| [EXPERIMENTS.md](EXPERIMENTS.md) | the append-only lab notebook | a record of "
+      "what was tried, not a result |")
+    a("")
+    a(moved_sections())
     a("")
     a("## Repo layout")
     a("")
