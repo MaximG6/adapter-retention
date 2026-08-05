@@ -140,11 +140,11 @@ error is 32–47%. The tool prints this scope in its own output.
 > without error for the whole draft and every cross-check passed, because every value in
 > it was correct. It was simply not a test. The panel now uses the channel model's own
 > cosine, and the figure's cross-check asserts that prediction and measurement **differ**,
-> so the vacuous form cannot come back silently (§7.3, §7.5).
+> so the vacuous form cannot come back silently (`METHODOLOGY.md` M.3, `METHODOLOGY.md` M.5).
 
 **It reads `use_rslora` from each adapter's config rather than assuming a convention.**
 For a rank-128 rsLoRA adapter the two conventions differ by `√128 ≈ 11.3×`, which is
-enough to move an adapter from worst to best in a nine-adapter ranking (§7.4). The
+enough to move an adapter from worst to best in a nine-adapter ranking (`METHODOLOGY.md` M.4). The
 computed delta is verified against peft's own `merge_and_unload` by a ground-truth
 fixture (§3.8).
 
@@ -186,32 +186,15 @@ contribution — not as a comparison between adapters and not as a deployment fo
 
 ## A.5 Interpreting the output
 
-**Sound uses.**
-- *"How much of this adapter's update survives INT4 g128 in the stored weights?"* —
-  answered directly, to within 2.3% on flip rate.
-- *"Is this adapter in the regime where quantization matters at all?"* — `mean|Δ|/s`
-  near 1 means the delta is comparable to the step size and largely preserved; near
-  0.01 means near-total weight-space erosion.
-- *"Which of my modules is most affected?"* — the per-module table.
-- *"Would keeping the adapter unmerged change this?"* — the tool answers only the merged
-  case. §7 measures the unmerged one on 756 records and finds it entirely different:
-  `|Δ|/s` rises from 0.011–0.149 to 2.31–2.38 and cosine from 0.14–0.51 to 0.9948–0.9952.
-  The tool does not compute that configuration.
-
-**Unsound uses.**
-- Ranking two similar adapters by expected behavioural survival. This is the failure the
-  banner describes.
-- Reading layer-output SNR as a fragility threshold. Six adapters agreeing to 3.3% on
-  that quantity span 28.7%–86.4% behavioural retention on the pre-registered instrument,
-  28.4%–84.4% floor-corrected (§4.4, §5.4, B.7). Note the direction
-  of that claim: output SNR does not *discriminate* over a 3.3% predictor range, which is
-  range restriction, and is compatible with it setting the absolute level — which is what
-  §4.4 measures and what the amplification law is for.
-- Reading the flip rate as "the fraction of my deployed checkpoint that differs from the
-  base model". It is the fraction attributable to the adapter under a fixed grid; see the
-  SCALE REGIME banner above.
-- Treating a weight-space number as a statement about alignment. The paper's central
-  result is that these levels dissociate.
+The two banners in A.4 are the tool's own statement of what it does and does not
+support, and they are quoted above verbatim rather than paraphrased here. Two additions
+they do not carry. **The tool answers only the merged case**: `METHODOLOGY.md` M.4
+measures the unmerged one on 756 records and finds it entirely different, `|Δ|/s` rising
+from 0.011–0.149 to 2.31–2.38 and cosine from 0.14–0.51 to 0.9948–0.9952. And **the
+predictive-gap limit is about discrimination, not level** — output SNR fails to separate
+adapters whose predictor range is 3.3% wide, which is range restriction, and is
+compatible with the same quantity setting the absolute level, which is what §4.4
+measures and what the amplification law is for (§5.3).
 
 ## A.6 Reproduction
 

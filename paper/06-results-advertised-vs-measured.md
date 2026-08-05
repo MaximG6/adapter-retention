@@ -74,36 +74,21 @@ about its behaviour under quantization — which we did not measure.
 
 ## 6.3 It is not a hidden over-refuser either
 
-A plausible reading of §6.2 is that the adapter trades harmful-refusal for something
-else, most likely exaggerated safety. Our plain benign set cannot test this: refusing
-"how do I bake bread" requires a badly broken model, so a null there is
-under-powered.
-
-We therefore ran a supplementary control of **surface-harmful, actually-benign**
-prompts (§3.10). It did not clear the gate either:
-
-| instrument | base | aligned | ratio | Cliff's d | verdict |
-|---|---|---|---|---|---|
-| `p_refuse` | 0.8118 | 0.8554 | 1.05 | 0.188 | fail |
-| `refusal_margin` (log-odds) | 14.58 | 19.43 | 1.33 | 0.238 | fail |
-| string-refusal rate | 0/16 | 1/16 | ∞ | 0.062 | fail |
-
-**The null is informative because the prompt set demonstrably discriminates.** The base
-model's refusal propensity is 0.1449 on plain benign prompts and **0.8118** on
-surface-harmful benign prompts — a **5.60×** contrast. The instrument can move; it did
-not. Showing that a measurement *can* respond before reporting that it *didn't* is the
-same discipline as the instrument gate itself, applied to a prompt set (§7.2).
-
-The single aligned over-refusal is a textbook exaggerated-safety failure — declining to
-give **James Bond's fictional bank account number**, which the base model answered —
-but it is 1/16 at Cliff 0.062.
+A plausible reading of §6.2 is that the adapter trades harmful-refusal for exaggerated
+safety. A supplementary control of **surface-harmful, actually-benign** prompts (§3.10)
+did not clear the gate either: `p_refuse` 0.8118 base against 0.8554 aligned (Cliff's
+*d* 0.188), string-refusal 0/16 against 1/16 (*d* 0.062). **The null is informative
+because the prompt set demonstrably discriminates** — the base model's refusal
+propensity is 0.1449 on plain benign prompts and **0.8118** on these, a **5.60×**
+contrast on the same model. The instrument can move; it did not. The single aligned
+over-refusal is a textbook exaggerated-safety failure, declining to give James Bond's
+fictional bank account number, which the base model answered.
 
 **What the adapter does do** is diffuse the output distribution. Mean token entropy,
-aligned relative to base: **2.40×** (harmful direct), **2.78×** (harmful indirect),
-**2.54×** (plain benign), **1.71×** (surface-harmful benign), with Cliff's d of
-0.86–1.00 on every subset. In the taboo family, by contrast, entropy was flat across
-all conditions (§5.2). This is the adapter's largest coherent behavioural fingerprint,
-and it is not refusal.
+aligned relative to base, runs **1.71× to 2.78×** across the four subsets with Cliff's
+*d* of 0.86–1.00 on every one. In the taboo family entropy was flat across all
+conditions (§5.2). This is the adapter's largest coherent behavioural fingerprint, and
+it is not refusal.
 
 ## 6.4 Consequence: no precision comparison, and a prediction withdrawn
 
@@ -115,7 +100,7 @@ behavioural retention **across** a population spanning a 3.7× predictor range.
 prediction is withdrawn rather than tested.** We report this rather than substituting a
 weaker instrument or relaxing the gate to obtain a pass. Relaxing a threshold after
 seeing the data is the precise failure the gate exists to prevent, and our own history
-with it (§7.6) is why we did not.
+with it (`METHODOLOGY.md` M.6) is why we did not.
 
 The withdrawal is not a quantization result. **No precision comparison was run on this
 adapter**, and nothing here says anything about whether its behaviour survives
