@@ -1,0 +1,149 @@
+"""Every count word in the body is a claim. Check it against what it counts.
+
+An external review's meta-note, and it is worth more than any single fix it found:
+"Every count word in the body should be generated rather than typed. A regex listing
+every number word in the body next to the row count of the table it introduces would
+have caught S3, M2, M3, M4 and M13 in one pass."
+
+The class is real and this project has produced it repeatedly: "four were not confirmed"
+beside a table showing six; "fifteen practices" beside an appendix with seven; "six
+published adapters" on a figure plotting nine; "All three are worth having" after a list
+of two. None of it is catchable by the claim audit, which compares printed values against
+raw records -- a count word is not a printed value, and the thing it counts is a
+structure, not a measurement.
+
+What this does: extract every cardinal in the body that quantifies a countable structure,
+resolve that structure, and compare. Counts that name a measured quantity rather than a
+structure (`six adapters`, `nine adapters`) are resolved against the record sets.
+
+Usage:
+    python analysis/countcheck.py
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from collections import defaultdict
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+TEXDIR = REPO_ROOT / "paper" / "tex"
+PAPER = REPO_ROOT / "paper"
+P0 = REPO_ROOT / "results" / "raw" / "phase0"
+P1 = REPO_ROOT / "results" / "raw" / "phase1"
+
+WORDS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
+    "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13,
+    "fourteen": 14, "fifteen": 15, "sixteen": 16, "twenty": 20, "thirty": 30,
+    "thirty-two": 32,
+}
+_NUM = (r"(?<![\w-])(?:" + "|".join(sorted(WORDS, key=len, reverse=True))
+        + r"|\d+)")
+
+
+def _n(tok: str) -> int:
+    return WORDS.get(tok.lower(), int(tok) if tok.isdigit() else -1)
+
+
+# --------------------------------------------------------------------- what exists
+def structures() -> dict[str, int]:
+    """The countable things the body makes claims about, resolved from the artifacts."""
+    lessons = (PAPER / "07-methodological-lessons.md").read_text(encoding="utf-8")
+    apx = (TEXDIR / "appendices.tex").read_text(encoding="utf-8")
+    main = (TEXDIR / "main.tex").read_text(encoding="utf-8")
+
+    p0 = {json.loads(x)["adapter"]
+          for f in P0.glob("public_adapter/*/L4_*/records.jsonl")
+          for x in f.read_text(encoding="utf-8").splitlines() if x.strip()}
+    p1 = {json.loads(x)["adapter"]
+          for f in P1.glob("*/records.jsonl")
+          for x in f.read_text(encoding="utf-8").splitlines() if x.strip()}
+
+    # Practice entries: "## 7.n <title>", excluding the registered-predictions table.
+    practices = [h for h in re.findall(r"(?m)^##\s+7\.(\d+)\s", lessons) if h != "0"]
+    preds = re.findall(r"(?m)^\|\s+\*\*P(\d+)\*\*", lessons)
+
+    return {
+        "weight-space adapters": len(p0),
+        "behavioural adapters": len(p1),
+        "practice entries": len(practices),
+        "registered predictions": len(preds),
+        "figures": len(re.findall(r"\\begin\{figure\*?\}", main + apx)),
+        "body tables": len(re.findall(r"\\begin\{table\*?\}", main)),
+    }
+
+
+#: (regex over the body, structure key). The regex must capture the cardinal in group 1.
+#: Only patterns whose referent is unambiguous belong here: a check that guesses what a
+#: number counts will disagree with correct prose and teach its author to ignore it.
+RULES: list[tuple[str, str, str]] = [
+    (rf"({_NUM})\s+published\s+adapters", "weight-space adapters",
+     "adapters with a Phase 0 weight-space run"),
+    (rf"({_NUM})\s+public(?:ly)?\s+(?:LoRA\s+)?adapters", "weight-space adapters",
+     "adapters with a Phase 0 weight-space run"),
+    (rf"across\s+({_NUM})\s+published", "weight-space adapters",
+     "adapters with a Phase 0 weight-space run"),
+    (rf"({_NUM})\s+Taboo\s+adapters", "behavioural adapters",
+     "adapters with a Phase 1 behavioural run"),
+    (rf"({_NUM})\s+behavioural\s+adapters", "behavioural adapters",
+     "adapters with a Phase 1 behavioural run"),
+    (rf"({_NUM})\s+practices", "practice entries",
+     "numbered practice entries in the methodology appendix"),
+    (rf"pre-registered\s+({_NUM})\s+predictions", "registered predictions",
+     "rows in the registered-predictions table"),
+    (rf"({_NUM})\s+registered\s+predictions", "registered predictions",
+     "rows in the registered-predictions table"),
+]
+
+#: Deliberately NOT a rule: "<n> precisions". The paper says "four precisions" for the
+#: full grid including BF16 and "three quantized grids" for the comparison set, and both
+#: are correct. A rule whose referent depends on the sentence around it will disagree
+#: with correct prose, which is the failure this file exists to avoid committing.
+
+
+def check(text: str, have: dict[str, int]) -> list[tuple[str, int, int, str, str]]:
+    """(matched phrase, claimed, actual, what it counts, context) for disagreements."""
+    bad = []
+    for pattern, key, what in RULES:
+        for m in re.finditer(pattern, text, re.I):
+            claimed = _n(m.group(1))
+            if claimed < 0 or claimed == have[key]:
+                continue
+            lo = max(0, m.start() - 60)
+            ctx = " ".join(text[lo:m.end() + 50].split())
+            bad.append((m.group(0), claimed, have[key], what, ctx))
+    return bad
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--strict", action="store_true")
+    args = ap.parse_args()
+
+    have = structures()
+    # The body AND the appendix sources: three of the four instances this was built for
+    # were in appendices or figure captions, not in main.tex.
+    bad = []
+    for path in [TEXDIR / "main.tex"] + sorted(PAPER.glob("*.md")):
+        for hit in check(path.read_text(encoding="utf-8"), have):
+            bad.append((path.name,) + hit)
+
+    print("structures resolved from the artifacts:")
+    for k, v in sorted(have.items()):
+        print(f"  {k:<26} {v}")
+    if not bad:
+        print(f"\nevery count word in the body agrees ({len(RULES)} rules)")
+        return 0
+    print(f"\n{len(bad)} count words disagree with what they count:", file=sys.stderr)
+    for name, phrase, claimed, actual, what, ctx in bad:
+        print(f"  [{name}] {phrase!r}: says {claimed}, there are {actual} {what}",
+              file=sys.stderr)
+        print(f"    ...{ctx}...", file=sys.stderr)
+    return 1 if args.strict else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

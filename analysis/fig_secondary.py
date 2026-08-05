@@ -67,6 +67,18 @@ SHORT = {
 }
 
 
+def _decades(xs) -> int:
+    """Order-of-magnitude span of a swept axis, rounded down.
+
+    The legend and the caption both said "4 decades" while the axis runs 10^-3 to
+    10^0, which is three. Typed once, wrong in two places, and the body had already
+    been corrected without the figure.
+    """
+    import math
+    lo, hi = min(x for x in xs if x > 0), max(xs)
+    return int(math.floor(math.log10(hi / lo)))
+
+
 def short(a: str) -> str:
     """Three adapters were missing from SHORT, so Figure A1 labelled three of its nine
     points `Qwen3-8B-taboo-moon_50_mix` and the other six `taboo-gold`."""
@@ -171,7 +183,7 @@ def fig2(dpi: int) -> None:
     ax.plot(xs, [min(x, 1.0) for x in xs], "-", color=INK, lw=2.0, zorder=3,
             label=r"channel model  $\min(|\Delta|/s,\ 1)$   (no fitted parameters)")
     ax.plot(xs, ys, "o", ms=9, mfc="white", mec=INK, mew=1.6, zorder=5,
-            label="synthetic sweep, 4 decades")
+            label=f"synthetic sweep, {_decades(xs)} decades")
 
     rx, ry, rn = [], [], []
     for a, v in real.items():
@@ -179,7 +191,7 @@ def fig2(dpi: int) -> None:
         ry.append(mean([r["code_flip_rate"] for r in v]))
         rn.append(short(a))
     ax.plot(rx, ry, "s", ms=8, mfc=WARM, mec=INK, mew=1.2, zorder=6,
-            label="six published adapters")
+            label=f"{len(real)} published adapters")
     # The three taboo adapters are coincident on this axis (flip rate 1.09-1.14%), so
     # three separate labels render as an unreadable smear. Collapse them into one.
     taboo = [(x, y) for x, y, n in zip(rx, ry, rn, strict=True) if n.startswith("taboo")]
@@ -200,9 +212,10 @@ def fig2(dpi: int) -> None:
     style(ax)
     ax.legend(frameon=False, fontsize=8.5, loc="upper left")
     head(fig, "One ratio predicts retention, with no fitted parameters",
-         "Points on the line are exact agreement. The model is validated across four "
-         "decades of adapter magnitude on\nsynthetic adapters and on six published "
-         "adapters spanning two base models, four ranks and both scaling conventions.")
+         f"Points on the line are exact agreement. The model is validated across "
+         f"{_decades(xs)} decades of adapter magnitude on\nsynthetic adapters and on "
+         f"{len(real)} published adapters spanning two base models, four ranks and both "
+         f"scaling conventions.")
 
     chk = Check("fig02")
     chk.plots(len(dose) + len(rx))
@@ -583,7 +596,7 @@ def figA1(dpi: int) -> None:
         if key == "code_flip_rate":
             ax.set_xscale("log"); ax.set_yscale("log")
         style(ax)
-    head(fig, "ar.predict: predicted versus measured, six published adapters",
+    head(fig, f"ar.predict: predicted versus measured, {len(real)} published adapters",
          "Dashed line is exact agreement. The tool needs no GPU and no model download "
          "beyond adapter tensors\n(~150 MB). It predicts stored-weight outcomes; it does "
          "NOT predict behaviour (section 5.4).", ys=0.865)

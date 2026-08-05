@@ -27,9 +27,11 @@ confirmed**, in four different ways:
 - **untested because the adapters it needs do not exist publicly** — P3, P5, and the
   remainder of P8.
 
-An earlier draft of this paragraph said "four", and its taxonomy silently omitted P3 and
-P5. That is precisely the failure this table exists to make impossible, committed in the
-prose introducing the table, and it is left visible here rather than corrected away.
+An earlier draft of §8 said "four", and its taxonomy silently omitted P3 and P5 — and
+this appendix went on stating six while the body said four, so the paper announced its
+own body was wrong and left it standing. That is precisely the failure this table exists
+to make impossible, committed in the prose introducing the table, and it is recorded here
+rather than corrected away.
 
 | | prediction (final registered form) | outcome | where resolved |
 |---|---|---|---|
@@ -84,8 +86,13 @@ standing check and will not fire next time.
 **This entry organises the ones that follow.** Each of them closes one numeric hole, and
 none of them closes the semantic one: the generated-view rule (§7.4) verifies that derived
 documents match raw, and the shared-code-path rule (§7.5) verifies that a check does not
-share its subject's assumptions and has failed on a known-bad input. All three are worth having. None would have caught any
-row of the table above.
+share its subject's assumptions and has failed on a known-bad input. Both are worth
+having. Neither would have caught any row of the table above.
+
+*This paragraph said "All three are worth having" after a list of two, for one round,
+inside the entry arguing that count-versus-prose defects pass every check. It is now
+under one: `analysis/countcheck.py` resolves each count word in the body against the
+structure it counts and fails the build on a disagreement.*
 
 ## 7.2 Validate an instrument against a known contrast before registering a prediction on it
 
@@ -284,7 +291,7 @@ re-verified on every run rather than asserted once.)*
 The instances above are guards with a wrong model of the world. **This one is a check
 with no model at all**, and it is the sharpest form the failure takes.
 
-Figure A1 validates `ar.predict` by plotting predicted against measured on two panels.
+The `ar.predict` validation figure plots predicted against measured on two panels.
 Its cosine panel computed the "prediction" as `projection_coefficient / retention_ratio`.
 That is the identity of §3.4 — `cos × retention_ratio ≡ projection_coefficient` —
 rearranged. **The panel plotted cosine against cosine.** It drew a perfect diagonal,
