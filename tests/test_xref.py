@@ -101,3 +101,26 @@ def test_the_built_paper_has_no_unresolved_references() -> None:
     bad = xref.check(main, apx)
     summary = sorted({f"{k} {t}" for k, t, _ in bad})
     assert not bad, f"{len(bad)} unresolved: {summary[:20]}"
+
+
+def test_bare_appendix_reference_is_checked() -> None:
+    """The M17 class: "see D.1.2" is the same reference as "Appendix D.1.2".
+
+    Both the appendix-letter remapper and this gate keyed on the literal word
+    "Appendix", so four live references in the reproduction appendix pointed at the
+    safety-adapter appendix and nothing objected. Pinned in both directions.
+    """
+    main = ("\\section{One}\n\\appendix\n\\section{Alpha}\n"
+            "\\subsection{First}\n")
+    bad = xref.check(main, "The breakdown is in A.9.")
+    assert [t for k, t, _ in bad if k == "bare-appendix"] == ["A.9"]
+    assert not [t for k, t, _ in xref.check(main, "The breakdown is in A.1.")
+                if k == "bare-appendix"]
+
+
+def test_bare_pattern_does_not_fire_on_non_references() -> None:
+    """Version strings, model names, paths and decimals are not appendix references."""
+    main = ("\\section{One}\n\\appendix\n\\section{Alpha}\n"
+            "\\subsection{First}\n")
+    text = "Qwen3-8B.1 and v2.1 and results/D.7 and 0.15 and torch 2.11.0"
+    assert not [t for k, t, _ in xref.check(main, text) if k == "bare-appendix"]

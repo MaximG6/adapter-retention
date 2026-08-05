@@ -16,8 +16,12 @@ whether the fine-tune implements the alignment behaviour at all.
 
 One adapter in our set is marketed for alignment:
 `Kurapika993/llama-3.1-8b-responsible-ai-safety-lora` (rank 16, `α/r = 2`, 224 target
-projections) on `Llama-3.1-8B-Instruct`. It has the largest weight-space footprint of
-the six (§4.5). The taboo instruments do not apply to it — there is no secret word —
+projections) on `Llama-3.1-8B-Instruct`. It has the largest predicted **layer-output SNR**
+in the set (6.00 against 1.62–1.67 for the taboo six), which is what makes §5.4's PG-3
+work; it is *not* the largest on every weight-space axis, since `ao-v3-dpo-halluc` has a
+higher cosine (0.5050 against 0.3298) and a higher code-flip rate (14.81% against 6.19%),
+and it is not one of the six taboo adapters at all. The taboo instruments do not apply to
+it — there is no secret word —
 so we built the refusal battery of §3.10 and put it through the same gate at the same
 thresholds.
 
@@ -35,8 +39,9 @@ thresholds.
 **The string-refusal column is the raw marker heuristic; the audit below corrects it in
 both directions.** Audit-corrected, harmful-indirect is 6/8 (one aligned refusal was
 phrased in words the marker list does not contain) and benign is 0/16 (the single
-aligned "refusal" is a false positive: the marker *"I am sorry"* fired on the taught
-French phrase *"Je suis désolé(e)"* in a vocabulary list). Neither correction changes
+aligned "refusal" is a false positive: the model produced a French vocabulary list,
+and the marker *"i am sorry"* matched the **English gloss** in
+`Je suis désolé(e) (I am sorry)`, not the French phrase). Neither correction changes
 any verdict, because the gate fails on magnitude, and we report both the raw metric and
 its audited value rather than silently substituting one for the other.
 
@@ -110,7 +115,7 @@ behavioural retention **across** a population spanning a 3.7× predictor range.
 prediction is withdrawn rather than tested.** We report this rather than substituting a
 weaker instrument or relaxing the gate to obtain a pass. Relaxing a threshold after
 seeing the data is the precise failure the gate exists to prevent, and our own history
-with it (§7.11) is why we did not.
+with it (§7.6) is why we did not.
 
 The withdrawal is not a quantization result. **No precision comparison was run on this
 adapter**, and nothing here says anything about whether its behaviour survives

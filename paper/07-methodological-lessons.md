@@ -2,10 +2,9 @@
 
 *Draft. §7.0 lists every registered prediction and its outcome; the remaining
 subsections each state a transferable claim first and our own evidence for it second.
-These are not incidental notes: **six of the fifteen practice entries changed a number, a
-claim, or a citation that would otherwise have been published** (§7.1, §7.3, §7.4, §7.6,
-§7.8, §7.9). We report them because the practices are reusable, not because the errors
-are interesting.*
+These are not incidental notes: **every entry below is evidenced by an error of ours
+that measurement caught before publication**, and each says what it changed. We report
+them because the practices are reusable, not because the errors are interesting.*
 
 ---
 
@@ -18,20 +17,29 @@ pre-registration discipline while leaving most of its predictions untraceable gi
 reader no way to check that none was quietly dropped — and that check is the entire
 value of registering them.
 
-Four of the nine were **not** confirmed. Two were withdrawn on evidence before being
-tested, one was superseded by a measurement bug in its own inputs, and one was never run
-because we decided the experiment was not worth its cost. All four are stated here, not
-only in the sections where their subject matter appears.
+**Two of the nine were confirmed outright** (P2, P6) and one was confirmed on synthetic
+adapters but does not transfer to trained ones (P1). **The remaining six were not
+confirmed**, in four different ways:
+
+- **withdrawn on evidence before being tested** — P7, and the safety clause of P8;
+- **superseded by a measurement bug in its own inputs** — the at-risk clause of P4;
+- **never run, by a decision recorded with its reasoning beforehand** — P9;
+- **untested because the adapters it needs do not exist publicly** — P3, P5, and the
+  remainder of P8.
+
+An earlier draft of this paragraph said "four", and its taxonomy silently omitted P3 and
+P5. That is precisely the failure this table exists to make impossible, committed in the
+prose introducing the table, and it is left visible here rather than corrected away.
 
 | | prediction (final registered form) | outcome | where resolved |
 |---|---|---|---|
 | **P1** | Under `α = 2r`, weight-space fidelity rises as `r^{+1/4}` while subspace output fidelity falls as `r^{−1/4}` — the two spaces disagree in sign | **Confirmed on synthetic adapters; does not transfer to trained ones** | §4.3 |
 | **P2** | Under fixed `α`, `SNR_w ∝ r^{−1/4}` and `SNR_out ∝ r^{−3/4}` | **Confirmed** (fitted −0.275 / −0.744 against −0.25 / −0.75) | §4.3 |
-| **P3** | A calibrated absolute prediction of output SNR at `r=32` | **Untested.** Requires adapters matched on training across ranks, which do not exist publicly | §8.2, FW-3 |
-| **P4** | Behaviour substantially preserved for adapters with output SNR > 1.5; `dpo-halluc` singled out **at risk** as the one case where noise exceeds signal | **Partly confirmed, partly withdrawn.** Behaviour preserved for all six at INT4 g128. The at-risk clause was **withdrawn**: it rested on an output SNR of 0.958 produced by an rsLoRA scaling bug; the corrected value is 3.757 and **no adapter in the set has output SNR below 1** | §5.1; withdrawal in §7.8 |
+| **P3** | A calibrated absolute prediction of output SNR at `r=32` | **Untested.** Requires adapters matched on training across ranks, which do not exist publicly | §8.2, FW-2 |
+| **P4** | Behaviour substantially preserved for adapters with output SNR > 1.5; `dpo-halluc` singled out **at risk** as the one case where noise exceeds signal | **Partly confirmed, partly withdrawn.** Behaviour preserved for all six at INT4 g128. The at-risk clause was **withdrawn**: it rested on an output SNR of 0.958 produced by an rsLoRA scaling bug; the corrected value is 3.757 and **no adapter in the set has output SNR below 1** | §5.1; withdrawal in §7.4 |
 | **P5** | Behavioural degradation orders across adapters as taboo < latentqa < dpo < safety, spanning 3.7× in output SNR | **Not tested.** Subsumed by the decision not to run the across-population test; two of the four adapters never received validated behavioural batteries | §8.2 |
 | **P6** | INT8 survives essentially completely; if anything breaks it is per-channel INT4 or 3-bit | **Confirmed** — INT4 g128 99.2%, per-channel 77.2%, INT3 57.8% | §5.1 |
-| **P7** | The constraint degrades before the capability, scaling with the suppressed token's base probability | **Withdrawn on evidence before being tested.** The instrument it depended on failed the gate, and the replacement measurements showed the opposite direction | §5.3, §7.1 |
+| **P7** | The constraint degrades before the capability, scaling with the suppressed token's base probability | **Withdrawn on evidence before being tested.** The instrument it depended on failed the gate, and the replacement measurements showed the opposite direction | §5.3, §7.2 |
 | **P8** | At INT3, retention ranks in output-SNR order; safety adapter > 85% | **Safety clause withdrawn** (its instrument did not validate); remainder untested | §6.4, §8.2 |
 | **P9** | Across-population Spearman between output SNR and INT3 retention exceeds +0.6 | **Not run.** Decision recorded with its reasoning and its falsifier before the fact | §8.2 |
 
@@ -51,8 +59,8 @@ them checks *meaning*. **A green block is evidence about what the checks cover, 
 evidence that the document is right**, and the gap between those two is where the
 remaining errors live.
 
-**Evidence.** Four defects shipped in a built PDF while every check passed. All four
-were found by reading.
+**Evidence.** Five defects shipped in a built PDF while every check passed. All five were
+found by reading.
 
 | defect | why every check passed |
 |---|---|
@@ -60,6 +68,7 @@ were found by reading.
 | §2 asserted "all three concern activations" two paragraphs below a sentence explaining one of them does not | no check reads a sentence against the paragraph above it |
 | the body said six adapters where the abstract and tables said nine | the count is a row *tally*, not a printed value with a recomputation |
 | §5.1's heading said "monotone" directly above a caption saying individual adapters are not | headings and captions are not quantities |
+| the tool's validation figure plotted cosine against cosine and printed "max error 0.0%" | every plotted value was verified against raw and every one was correct; nothing asked whether the two sides could differ (§7.5) |
 
 The renumbering case is the sharp one, because the fix made it worse: before, the
 references dangled and a reader could see it. **A checker that turns a dangling
@@ -73,10 +82,9 @@ what exists instead is a one-off manual audit of the rewritten references, which
 standing check and will not fire next time.
 
 **This entry organises the ones that follow.** Each of them closes one numeric hole, and
-none of them closes the semantic one: the figure cross-check (§7.9) verifies that plotted
-values match a recomputation, the generated-view rule (§7.8) verifies that derived
-documents match raw, the shared-code-path rule (§7.10) verifies that a check does not
-share its subject's assumptions. All three are worth having. None would have caught any
+none of them closes the semantic one: the generated-view rule (§7.4) verifies that derived
+documents match raw, and the shared-code-path rule (§7.5) verifies that a check does not
+share its subject's assumptions and has failed on a known-bad input. All three are worth having. None would have caught any
 row of the table above.
 
 ## 7.2 Validate an instrument against a known contrast before registering a prediction on it
@@ -97,7 +105,7 @@ contrast confirmable by reading the text — before it may be used in a precisio
 comparison (§3.9). Applying this rule cost one instrument (the reveal probe,
 deprecated), rescued two (the graded constraint trace and fixed-guesser elicitation,
 both of which passed), and caused one registered prediction to be **withdrawn on
-evidence rather than tested** (§7.6).
+evidence rather than tested** (§7.0).
 
 ## 7.3 A validation gate must itself be tested against something already known to be broken
 
@@ -220,13 +228,13 @@ values of 33–75 that were nearly rank-insensitive, and we concluded that the
 `√(d_in/r)` law had failed. It had not. **The probe had imported the very structure it
 was supposed to interrogate**, and an orthonormal basis of `Δ`'s right singular vectors —
 constructed to be uninformative about `A`'s spectrum — recovered the law to within 1% at
-r=32 (§7.3, §4.4).
+r=32 (§7.5, §4.4).
 
 **Instance two, verification (write-up).** Building the figure cross-checks, the obvious
 implementation was to import the figure's own data loader and compare. That would have
-been worthless in precisely the case we needed it for: the Fig 8 marking bug lived in
-logic the figure owned, and a shared loader would have reproduced the same 2 marked
-adapters and reported agreement. The checker therefore re-reads the raw records by a
+been worthless in precisely the case we needed it for: the predictive-gap figure's
+marking bug lived in logic the figure owned, and a shared loader would have reproduced
+the same 2 marked adapters and reported agreement. The checker therefore re-reads the raw records by a
 separate route, and recomputes the resolvable-pair set independently. That is why it
 disagreed, and why the disagreement was informative.
 
@@ -238,7 +246,7 @@ dependent version was the one that was easier to write.
 **The practical test we now apply**: *if the thing being checked were wrong in the way I
 most fear, would this check still pass?* If the answer is yes, the check is measuring
 something other than what it claims. This is the same question the instrument gate asks
-of behavioural probes (§7.1) and the gate self-test asks of the gate (§7.2), applied to
+of behavioural probes (§7.2) and the gate self-test asks of the gate (§7.3), applied to
 verification generally.
 
 ### The verification half: a check is not trusted until it has failed on a known-bad input
@@ -253,8 +261,8 @@ correct by inspection and only the known-bad input distinguished working from va
 
 | check | known-bad input it must reject | what would have happened without the test |
 |---|---|---|
-| the instrument gate (§7.2) | the deprecated reveal probe, already documented as broken | the gate had already certified it once under a disjunctive rule |
-| the figure cross-checker | the actual Fig 8 pair values (2 vs 4 marked adapters) and the Fig 6 estimator split (0.7810 vs 0.7716) | a checker sharing the figures' loader would have reproduced the bug and reported agreement |
+| the instrument gate (§7.3) | the deprecated reveal probe, already documented as broken | the gate had already certified it once under a disjunctive rule |
+| the figure cross-checker | the actual predictive-gap pair values (2 vs 4 marked adapters) and the dissociation figure's estimator split (0.7810 vs 0.7716) | a checker sharing the figures' loader would have reproduced the bug and reported agreement |
 | the vacuous-comparison guard | a call passing one expression twice | the first implementation matched the wrong AST node, **never fired, and printed PASS on the exact bug it was written to catch** |
 
 The third is the sharpest, because the guard was written specifically to enforce this
@@ -271,8 +279,37 @@ appears, unless each check has a recorded known-bad case it rejects. We keep tho
 tests — `tests/test_figcheck.py`, `instrument_gate.py --self-test` — so the property is
 re-verified on every run rather than asserted once.)*
 
-**Six instances, six unrelated causes, no shared mechanism.** them; each row is a guard whose own model of the world was wrong, and the last column
-records whether it fired when it should not have or failed to fire when it should.
+### A comparison can be vacuous without any value in it being wrong
+
+The instances above are guards with a wrong model of the world. **This one is a check
+with no model at all**, and it is the sharpest form the failure takes.
+
+Figure A1 validates `ar.predict` by plotting predicted against measured on two panels.
+Its cosine panel computed the "prediction" as `projection_coefficient / retention_ratio`.
+That is the identity of §3.4 — `cos × retention_ratio ≡ projection_coefficient` —
+rearranged. **The panel plotted cosine against cosine.** It drew a perfect diagonal,
+printed *max error 0.0%*, and shipped in the built PDF for the whole draft.
+
+Every cross-check passed, and correctly: the figure's guard verifies that every plotted
+value matches an independent recomputation from raw, and every plotted value did. The
+values were right. The *comparison* carried no information, and nothing in the project
+was looking at that. A prose table beside it claimed 5.0%, so the same quantity appeared
+as 0.0%, 5.0% and — once actually computed — **10.4%**.
+
+**The general form: a check that verifies its inputs is not the same as a check that can
+fail.** Ask of any comparison whether the two sides could differ *in principle*, before
+asking whether they do. The figure guard now asserts that prediction and measurement
+differ by more than machine precision, so the vacuous form cannot return silently, and
+both error figures are registered claims so the figure and the prose cannot drift apart
+again.
+
+The nearest relative is row 3 below — the vacuous-comparison guard that passed one
+expression twice — which is the same shape one level down: a check on checks, itself
+unable to fail.
+
+**Seven instances, seven unrelated causes, no shared mechanism.** Each row is a guard
+whose own model of the world was wrong, and the last column records whether it fired when
+it should not have or failed to fire when it should.
 
 | # | guard | its own defect | direction |
 |---|---|---|---|
@@ -282,9 +319,10 @@ records whether it fired when it should not have or failed to fire when it shoul
 | 4 | cross-reference checker | regex required whitespace where the text has a period | false positive |
 | 5 | appendix-letter mapper | a guard skipping subsection refs also skipped every reference ending a sentence | false negative |
 | 6 | appendix-letter mapper | ran after the section pass and rewrote references that pass had just created | false positive |
+| 7 | cross-reference gate | keyed on the literal word "Appendix", so a bare `D.1.2` was not a reference to it | false negative |
 
 This is now **the most-repeated failure in the project** — more frequent than any error
-in the science itself. What the four share is only the consequence: **a check whose model
+in the science itself. What the seven share is only the consequence: **a check whose model
 of the world is wrong is worse than no check, because it consumes the attention a working
 check would receive and teaches its author to discount it.** In every case the fix was to
 correct the guard's model — read defaults at runtime, count what a call covers, match the
@@ -293,7 +331,7 @@ tempting move and the wrong one.
 
 The uncomfortable corollary: **guards are code, and this project's guards have had a
 higher defect rate than its measurements.** That is an argument for testing them against
-known-bad input (§7.10), not for having fewer of them.
+known-bad input (§7.3), not for having fewer of them.
 
 
 ## 7.6 Price the caveat against the measurement that would remove it

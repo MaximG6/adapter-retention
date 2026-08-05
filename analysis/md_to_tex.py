@@ -49,6 +49,7 @@ TT_ASCII = {"−": "-", "–": "-", "—": "--", "→": "->", "≥": ">=", "≤"
             "×": "x", "≈": "~", "Δ": "Delta", "δ": "delta", "α": "alpha",
             "√": "sqrt", "±": "+/-", "≠": "!=", "π": "pi", "σ": "sigma",
             "ρ": "rho", "∝": "prop", "∞": "inf", "·": "*", "…": "...",
+           "τ": "tau", "θ": "theta", "μ": "mu", "λ": "lambda",
             "“": '"', "”": '"', "'": "'", "'": "'", "§": "S"}
 
 
@@ -69,6 +70,8 @@ def esc(s: str) -> str:
                  "Δ": r"$\Delta$", "δ": r"$\delta$", "α": r"$\alpha$",
                  "√": r"$\sqrt{\ }$", "σ": r"$\sigma$", "ρ": r"$\rho$",
                  "∝": r"$\propto$", "∞": r"$\infty$", "±": r"$\pm$",
+                 "τ": r"$\tau$", "θ": r"$\theta$", "μ": r"$\mu$",
+                 "λ": r"$\lambda$",
                  "'": "'", "'": "'", "\u201c": "``", "\u201d": "''",
                  "…": r"\ldots{}", "⚠": "", "§": r"\S{}", "✓": r"\checkmark{}",
                  "≠": r"$\neq$", "·": r"$\cdot$", "É": r"\'E", "é": r"\'e",
@@ -113,28 +116,16 @@ REFMAP = {
     "4.5.1": "4.5", "5.4": "5.3",
     # Advertised versus measured becomes Appendix D, keeping its own numbering.
     **{f"6.{i}": f"D.{i}" for i in range(1, 6)},
-    # Methodological practice becomes Appendix C. The section was cut from fifteen
-    # practices to seven, so this is no longer an offset: entries that survive map to
-    # their new position, and references to entries that were cut are repointed at the
-    # surviving entry that absorbed their lesson. The organising entry (C.2) absorbs the
-    # ones whose lesson was "the checks do not cover this".
-    "7.0": "C.1",     # registered predictions table
-    "7.0a": "C.2",    # nothing checks meaning (organising)
-    "7.1": "C.3",     # validate an instrument against a known contrast
-    "7.2": "C.4",     # a gate must be tested against known-bad input
-    "7.3": "C.6",     # orthonormal probe -> instrument shares an assumption
-    "7.4": "C.6",     # guards table, folded into C.6
-    "7.5": "C.3",     # prompt set needs the instrument check
-    "7.6": "C.2",     # inherited citation -> nothing checks meaning
-    "7.7": "C.2",     # flagged gap never actioned
-    "7.8": "C.5",     # append-only leaks superseded values
-    "7.9": "C.2",     # a figure that renders is not validated
-    "7.10": "C.6",    # a check sharing a code path is not a check
-    "7.11": "C.7",    # price the caveat against the measurement
-    "7.12": "C.2",    # pre-committed criteria find things
-    "7.13": "C.8",    # tooling reports success on the operation
-    "7.14": "C.2",    # derive, measure the derivation, then trust it
-    "7.15": "C.2",    # proxies that do not track what they name
+    # Methodological practice becomes Appendix C, keeping its own order: heading 7.n is
+    # subsection C.(n+1), because the appendix gains no heading the markdown lacks.
+    #
+    # This used to be a hand-written table from the PRE-CUT numbering to the post-cut
+    # appendix, which meant the markdown's own references pointed at headings the markdown
+    # did not have and only this table hid it. Every reference resolved, several to the
+    # wrong entry, and one section cited itself. A one-line offset cannot do that, and
+    # `check_source_refs` below fails the build if a reference in the markdown does not
+    # match a heading in the markdown.
+    **{f"7.{i}": f"C.{i + 1}" for i in range(0, 8)},
     # Limitations has no subsections in the paper.
     **{f"8.{i}": "9" for i in range(1, 9)},
 }
@@ -151,6 +142,33 @@ _REF = re.compile(r"§\s?(\d+(?:\.\d+)*)")
 #: `(?!\.)` guard, meant to skip subsection references, also skipped every reference that
 #: ended a sentence -- so "in Appendix D." stayed pointing at the wrong appendix.
 _APX = re.compile(r"\bAppendix~?\s*([A-D])((?:\.\d+)*)\b")
+#: A BARE appendix reference: "see D.1.2", "breakdown in D.6". These are the same kind of
+#: reference as "Appendix D.6" and need the same remapping, but nothing rewrote them and
+#: nothing checked them, because both the mapper and the cross-reference gate keyed on the
+#: literal word "Appendix". The reproduction appendix -- which is Appendix F in the built
+#: paper -- therefore shipped with live references to D.1, D.1.1, D.1.2 and D.6, all of
+#: which resolve to the safety-adapter appendix.
+_BARE_APX = re.compile(r"(?<![\w./-])([C-D])(\.\d+(?:\.\d+)*)\b")
+
+
+def check_source_refs() -> list[tuple[str, str]]:
+    """Every §7.x written in the markdown must match a `## 7.x` heading in the markdown.
+
+    The gate that already exists checks the BUILT document, after REFMAP has translated
+    everything, so a reference pointing at a cut entry still resolved -- to whatever the
+    map sent it to. This checks the other end: the source has to be consistent with
+    itself before translation, which is the only place a wrong-but-resolving reference is
+    visible. Returns (reference, file) pairs that have no heading.
+    """
+    lessons = (PAPER / "07-methodological-lessons.md").read_text(encoding="utf-8")
+    have = set(re.findall(r"(?m)^##+\s+(7\.[0-9a]+)\s", lessons))
+    bad: list[tuple[str, str]] = []
+    for path in sorted(PAPER.glob("*.md")):
+        text = path.read_text(encoding="utf-8")
+        for ref in re.findall(r"§\s?(7\.[0-9a]+)", text):
+            if ref not in have:
+                bad.append((ref, path.name))
+    return bad
 
 
 def remap_refs(md: str) -> str:
@@ -166,7 +184,31 @@ def remap_refs(md: str) -> str:
     # letter pass ran afterwards it would remap that D to F and corrupt a reference it
     # had just created. Only letters written in the source may be remapped.
     md = _APX.sub(lambda m: f"Appendix {APPENDIX_MAP[m.group(1)]}{m.group(2)}", md)
+    md = _bare_apx(md)
     return _REF.sub(sub, md)
+
+
+def _bare_apx(md: str) -> str:
+    """Remap bare `C.n` / `D.n` references, skipping headings and fenced code.
+
+    Headings are excluded because `## D.6 Expected runtimes` is the target, not a
+    reference to it, and it is de-numbered later anyway. Code fences are excluded
+    because a bare letter-dot-number inside a command or path is not a reference.
+    """
+    out: list[str] = []
+    fenced = False
+    for line in md.splitlines(keepends=True):
+        stripped = line.lstrip()
+        if stripped.startswith("```"):
+            fenced = not fenced
+            out.append(line)
+            continue
+        if fenced or stripped.startswith("#"):
+            out.append(line)
+            continue
+        out.append(_BARE_APX.sub(
+            lambda m: f"{APPENDIX_MAP[m.group(1)]}{m.group(2)}", line))
+    return "".join(out)
 
 
 def inline(s: str) -> str:
@@ -433,11 +475,58 @@ def convert(md: str) -> str:
     return "\n".join(out)
 
 
+#: Real captions for the appendix figures. Without these the caption was the generating
+#: script's filename with the underscores taken out -- "Figure 04 amplification." -- on
+#: eight of twelve figures, which tells a reader nothing and reads as unfinished.
+#: A figure placed here with no entry fails the build rather than getting a filename.
+FIG_CAPTIONS = {
+    # The maximum errors are printed inside each panel by the figure itself, from the
+    # raw records. They are deliberately NOT repeated here: a caption that restates a
+    # number the figure computes is a second copy that can drift, and this one did --
+    # the caption said 9.5% while the panel printed 10.4%, because the two aggregated
+    # per-module predictions differently.
+    "figA1_predict_validation":
+        "\\texttt{ar.predict} against direct measurement, nine published adapters. "
+        "Dashed line is exact agreement. Left: code-flip rate. Right: cosine, predicted "
+        "per module as $\\sqrt{\\tau\\,|\\Delta|/s}$ with $\\tau$ the measured tail-shape "
+        "constant, then averaged. Each panel prints its own maximum relative error; both "
+        "are \\texttt{fixed\\_scale} (\\S3.3) and both are tabulated in A.3.",
+    "fig02_channel_model":
+        "The channel model against measurement across four decades of adapter magnitude, "
+        "swept on a real \\texttt{q\\_proj} base at rank 32. The prediction has no fitted "
+        "parameters.",
+    "fig03_forest":
+        "Weight-space cosine per adapter at INT4 g128, with intervals over layers. The "
+        "ordering follows effective magnitude, not rank.",
+    "fig04_amplification":
+        "Subspace amplification against rank. Fitted exponents $-0.457$, $-0.455$, "
+        "$-0.457$ against a predicted $-0.5$; generic-input amplification is flat at "
+        "1.0, so the effect exists only on subspace-aligned inputs.",
+    "fig11_layer_profile":
+        "Bit-flip rate by layer, showing the layers 1--3 spike and the step-size "
+        "distribution that drives it.",
+    "fig10_refusal":
+        "Refusal battery for the safety adapter, by prompt kind. No axis clears the "
+        "gate; the base model already refuses 16/16 harmful prompts at ceiling.",
+    "fig07_entropy_control":
+        "Per-token decoding entropy across precisions. Flat at 1.35--1.50 nats in every "
+        "aligned condition while elicitation halves, so the behavioural degradation is "
+        "not distribution flattening.",
+    "fig09_bootstrap_intervals":
+        "Per-adapter behavioural retention with 95\\% intervals over intent clusters, "
+        "paired. Only at INT3 does the between-word spread clearly exceed the noise.",
+}
+
+
 def figure(fig: str) -> str:
+    if fig not in FIG_CAPTIONS:
+        raise KeyError(
+            f"No caption for {fig!r}. Add one to FIG_CAPTIONS rather than shipping the "
+            "filename as the caption.")
     return "\n".join([
         r"\begin{figure}[htbp]", r"\centering",
         rf"\includegraphics[width=\columnwidth]{{{fig}.pdf}}",
-        rf"\caption{{{fig.replace('_', ' ').replace('fig', 'Figure ')}.}}",
+        rf"\caption{{{FIG_CAPTIONS[fig]}}}",
         r"\end{figure}"])
 
 
@@ -445,6 +534,14 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--write", action="store_true")
     args = ap.parse_args()
+
+    dangling = check_source_refs()
+    if dangling:
+        print(f"  {len(dangling)} section-7 references have no heading in the markdown:")
+        for ref, name in dangling:
+            print(f"    {ref}  in {name}")
+        print("  These would still RESOLVE after REFMAP, at whatever it maps them to.")
+        return 1
 
     parts = [r"\appendix", r"\onecolumn" if False else ""]
     for fname, title, figs in APPENDICES:

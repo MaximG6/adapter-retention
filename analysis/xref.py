@@ -86,7 +86,19 @@ def structure(main: str, appendices: str) -> tuple[set[str], set[str], dict[str,
 REFS = [
     ("section", re.compile(r"(?:\\S\{\}|\\S|§)\s?(\d+(?:\.\d+)*)")),
     ("appendix", re.compile(r"Appendix~?\s*([A-Z])(?:\.(\d+(?:\.\d+)*))?\b")),
-    ("figure", re.compile(r"Figure~?\s*(\d+)\b")),
+    # A BARE appendix reference -- "see D.1.2", "the breakdown in B.4". Same kind of
+    # reference, same need to resolve, and it was outside this gate entirely because the
+    # pattern above requires the literal word "Appendix". The reproduction appendix
+    # shipped with four live references to D.1/D.1.1/D.1.2/D.6, every one of which
+    # resolved to a different appendix, and nothing here objected.
+    #
+    # The lookbehind excludes a letter that is part of a word, a path, a version string
+    # or a decimal, so `Qwen3-8B.1` and `v2.1` are not references. Requiring the letter
+    # to be a capital in A-G excludes ordinary sentence-initial words.
+    ("bare-appendix", re.compile(r"(?<![\w./~-])([A-G])(\.\d+(?:\.\d+)*)\b")),
+    # "Fig 8" is the same reference as "Figure 8" and was outside this gate, which is how
+    # two references to the pre-cut figure numbering survived in the practice appendix.
+    ("figure", re.compile(r"\bFig(?:ure)?~?\.?\s*(\d+)\b")),
     ("table", re.compile(r"Table~?\s*(\d+)\b")),
     ("equation", re.compile(r"Equation~?\s*\((\d+)\)")),
     ("fw", re.compile(r"\bFW-(\d+)\b")),
@@ -117,6 +129,9 @@ def check(main: str, appendices: str) -> list[tuple[str, str, str]]:
                 ok = target in secs
             elif kind == "appendix":
                 target = m.group(1) + (f".{m.group(2)}" if m.group(2) else "")
+                ok = target in apps
+            elif kind == "bare-appendix":
+                target = m.group(1) + m.group(2)
                 ok = target in apps
             elif kind in ("figure", "table", "equation"):
                 target = m.group(1)

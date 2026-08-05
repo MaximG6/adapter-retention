@@ -157,3 +157,26 @@ def test_paths_in_code_spans_may_break() -> None:
 @pytest.mark.parametrize("bad", ["", "|", "|---|"])
 def test_degenerate_tables_do_not_raise(bad: str) -> None:
     m2t.table([bad])
+
+
+def test_source_reference_gate_fires_on_a_cut_entry(tmp_path, monkeypatch) -> None:
+    """A reference to a practice entry the markdown no longer has must be caught HERE.
+
+    The built-document gate cannot catch it: REFMAP translates the reference to some
+    appendix subsection that does exist, so it resolves -- to the wrong entry. That is
+    how the practice appendix ended up citing itself and pointing three references at
+    entries that had been cut. Tested in both directions.
+    """
+    paper = tmp_path / "paper"
+    paper.mkdir()
+    (paper / "07-methodological-lessons.md").write_text(
+        "## 7.0 Predictions\n\n## 7.1 A practice\n", encoding="utf-8")
+    monkeypatch.setattr(m2t, "PAPER", paper)
+
+    (paper / "other.md").write_text("As shown in S7.9 above.".replace("S", "§"),
+                                    encoding="utf-8")
+    assert m2t.check_source_refs() == [("7.9", "other.md")]
+
+    (paper / "other.md").write_text("As shown in S7.1 above.".replace("S", "§"),
+                                    encoding="utf-8")
+    assert m2t.check_source_refs() == []
