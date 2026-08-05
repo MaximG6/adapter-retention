@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import random
 import statistics
@@ -34,9 +35,10 @@ import matplotlib.pyplot as plt
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bootstrap  # noqa: E402
+import word_vs_noise as wvn  # noqa: E402
 from figcheck import (  # noqa: E402
-    Check, ref_layer_flip_profile, ref_refusal_p, ref_retention_by_word,
-    ref_weight_metric,
+    Check, ref_layer_flip_profile, ref_refusal_p, ref_resolvable_pairs,
+    ref_retention_by_word, ref_weight_metric,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -49,16 +51,25 @@ KEEP, ERASE, WARM = "#1f77b4", "#c0392b", "#e08a1e"
 GREEN = "#2e8b57"
 PALETTE = [KEEP, ERASE, GREEN, WARM, "#7b52ab", "#00808a"]
 PRECISIONS = ["int4_g128", "int4_per_channel", "int3_g128"]
+#: mean(D^2)/mean|D|^2 for a trained LoRA delta, measured flat at this value across four
+#: decades of adapter magnitude (section 4.1). Gaussian reference is pi/2 = 1.5708.
+TAIL_SHAPE = 1.5962
+
 SHORT = {
     "adamkarvonen/Qwen3-8B-taboo-smile_50_mix": "taboo-smile",
     "adamkarvonen/Qwen3-8B-taboo-gold_50_mix": "taboo-gold",
     "adamkarvonen/Qwen3-8B-taboo-ship_50_mix": "taboo-ship",
+    "adamkarvonen/Qwen3-8B-taboo-snow_50_mix": "taboo-snow",
+    "adamkarvonen/Qwen3-8B-taboo-moon_50_mix": "taboo-moon",
+    "adamkarvonen/Qwen3-8B-taboo-rock_50_mix": "taboo-rock",
     "ceselder/qwen3-8b-ao-v3-best-dpo-halluc": "dpo-halluc",
     "Kurapika993/llama-3.1-8b-responsible-ai-safety-lora": "safety",
 }
 
 
 def short(a: str) -> str:
+    """Three adapters were missing from SHORT, so Figure A1 labelled three of its nine
+    points `Qwen3-8B-taboo-moon_50_mix` and the other six `taboo-gold`."""
     return SHORT.get(a, "latentqa" if "latentqa" in a else a.split("/")[-1])
 
 
@@ -377,10 +388,12 @@ def fig9(dpi: int) -> None:
     rows = p1_rows()
     by: dict[tuple[str, str, str], list[float]] = defaultdict(list)
     word: dict[str, str] = {}
+    rows_by: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for r in rows:
         word[r["adapter"]] = r["secret_word"]
         by[(r["adapter"], r["condition"], r["precision"])].append(
             r["guesser_p_word_normalised"])
+        rows_by[(r["adapter"], r["condition"], r["precision"])].append(r)
     adapters = sorted(word, key=lambda a: word[a])
 
     fig, axes = plt.subplots(1, 3, figsize=(9.6, 4.4), sharey=True)
@@ -389,8 +402,13 @@ def fig9(dpi: int) -> None:
     for ax, prec in zip(axes, PRECISIONS, strict=True):
         ivs = {}
         for a in adapters:
+            ref_r = rows_by[(a, "aligned_bf16", "bf16")]
+            cur_r = rows_by[(a, "aligned_quant", prec)]
             ref, cur = by[(a, "aligned_bf16", "bf16")], by[(a, "aligned_quant", prec)]
-            ivs[word[a]] = (mean(cur) / mean(ref), *boot_ratio_ci(cur, ref))
+            # Intent clusters, stratified and paired -- the estimator the design
+            # supports; see analysis/word_vs_noise.py.
+            ivs[word[a]] = (mean(cur) / mean(ref),
+                            *bootstrap.cluster_ratio_ci(wvn.clusters_for(cur_r, ref_r)))
         words = sorted(ivs)
         npairs = sum(1 for i, wi in enumerate(words) for wj in words[i + 1:]
                      if ivs[wi][2] < ivs[wj][1] or ivs[wj][2] < ivs[wi][1])
@@ -407,15 +425,17 @@ def fig9(dpi: int) -> None:
         ax.set_xlim(0, 130)
         ax.set_xlabel("retention (% of own BF16)", fontsize=9, color=INK)
         style(ax)
-    head(fig, "Only at INT3 does the between-word spread exceed the noise",
-         "95% bootstrap intervals over prompts, per adapter. At INT4 no pair of adapters "
-         "separates: the apparent\nspread is sampling noise. Per-adapter intervals remain "
-         "25-53% wide at 32 prompts.", ys=0.855)
+    head(fig, "Only at INT3 does the between-word spread clearly exceed the noise",
+         "95% bootstrap intervals over intent clusters, paired, per adapter. At INT4 g128 "
+         "one pair separates and it runs\nWITH the predictor; every separating pair at the "
+         "two coarser grids runs against it.", ys=0.855)
 
     chk = Check("fig09")
     chk.plots(len(PRECISIONS) * 6)
-    chk.equal("int4_g128 separating pairs", counts["int4_g128"], 0)
-    chk.equal("int3_g128 separating pairs", counts["int3_g128"], 4)
+    for prec, expected in (("int4_g128", 1), ("int4_per_channel", 2), ("int3_g128", 4)):
+        chk.equal(f"{prec} separating pairs", counts[prec],
+                  ref_resolvable_pairs(prec)[0])
+        chk.equal(f"{prec} separating pairs (registered)", counts[prec], expected)
     for prec in PRECISIONS:
         ref = ref_retention_by_word(prec)
         chk.equal(f"{prec} n adapters", len(ref), 6)
@@ -537,8 +557,16 @@ def figA1(dpi: int) -> None:
             if pkey:
                 p = mean([r[pkey] for r in v])
             else:
-                # cosine predicted from the same channel model: proj / retention_ratio
-                p = mean([r["projection_coefficient"] / r["retention_ratio"] for r in v])
+                # The channel model's cosine: sqrt(mean(D^2) / (s * mean|D|)), which
+                # equals sqrt(TAIL_SHAPE * predicted_flip_rate) since predicted_flip is
+                # mean|D|/s and TAIL_SHAPE is mean(D^2)/mean|D|^2.
+                #
+                # This panel previously plotted projection_coefficient / retention_ratio,
+                # which is the identity cos == proj / retention from 3.4 rearranged -- so
+                # it compared cosine to cosine, drew a perfect line, and printed
+                # "max error 0.0%". A vacuous check that renders without error.
+                p = mean([min(math.sqrt(TAIL_SHAPE * r["predicted_flip_rate"]), 1.0)
+                          for r in v])
             mx.append(m); px.append(p); names.append(short(a))
         lo = min(mx + px) * 0.8
         hi = max(mx + px) * 1.2
@@ -564,11 +592,18 @@ def figA1(dpi: int) -> None:
     chk.plots(len(real) * 2)
     ref_m = ref_weight_metric("code_flip_rate")
     ref_p = ref_weight_metric("predicted_flip_rate")
+    ref_c = ref_weight_metric("cosine")
     for a, v in real.items():
         chk.close_to(f"{short(a)} measured", mean([r["code_flip_rate"] for r in v]),
                      ref_m[a], tol=1e-12)
         chk.equal(f"{short(a)} flip err < 2.4%",
                   abs(ref_m[a] - ref_p[a]) / ref_m[a] < 0.024, True)
+        # The panel is only a test if predicted and measured can disagree. Assert they
+        # DO -- a prediction that reproduces the measurement to machine precision is the
+        # identity, not a model, and that is what this panel used to plot.
+        pred_c = min(math.sqrt(TAIL_SHAPE * ref_p[a]), 1.0)
+        chk.equal(f"{short(a)} cosine prediction is not the identity",
+                  abs(ref_c[a] - pred_c) / ref_c[a] > 1e-6, True)
     chk.close()
     save(fig, "figA1_predict_validation", dpi)
 

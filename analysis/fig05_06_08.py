@@ -30,6 +30,7 @@ import matplotlib.pyplot as plt
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bootstrap  # noqa: E402
+import word_vs_noise as wvn  # noqa: E402
 from figcheck import (  # noqa: E402
     Check, ref_knowledge_ratio, ref_resolvable_pairs, ref_retention_by_word,
 )
@@ -241,9 +242,13 @@ def fig6(rows, dpi: int) -> None:
                 xy=(3, cap[-1] * 100), xytext=(2.15, 44),
                 fontsize=9, color=ERASE, ha="center",
                 arrowprops=dict(arrowstyle="->", color=ERASE, lw=1.2))
-    ax.annotate("constraint flat across all four precisions",
-                xy=(1.5, constraint[1] * 100), xytext=(0.45, 6),
-                fontsize=9, color=KEEP,
+    # "flat across all four precisions" sat on the same axes as a line printing 0.21 and
+    # 0.27. The ALIGNED numerator is what is flat (0.0757 -> 0.0756); the ratio moves
+    # because the base denominator falls. Say which.
+    ax.annotate("ratio rises only because the base falls;\n"
+                "the aligned score itself is flat (0.0757 -> 0.0756)",
+                xy=(2.6, constraint[-1] * 100), xytext=(0.30, 6),
+                fontsize=8.6, color=KEEP,
                 arrowprops=dict(arrowstyle="->", color=KEEP, lw=1.2))
 
     ax.set_xticks(xs)
@@ -287,10 +292,15 @@ def fig8(by, adapters, word, dpi: int) -> None:
 
     pts = []
     for a in adapters:
-        ref = [r["guesser_p_word_normalised"] for r in by[(a, "aligned_bf16", "bf16")]]
-        cur = [r["guesser_p_word_normalised"] for r in by[(a, "aligned_quant", "int3_g128")]]
+        ref_rows = by[(a, "aligned_bf16", "bf16")]
+        cur_rows = by[(a, "aligned_quant", "int3_g128")]
+        ref = [r["guesser_p_word_normalised"] for r in ref_rows]
+        cur = [r["guesser_p_word_normalised"] for r in cur_rows]
         pt = mean(cur) / mean(ref)
-        lo, hi = boot_ratio_ci(cur, ref)
+        # Intent-clustered and paired, matching word_vs_noise.py: the sampling unit is
+        # the intent, not the prompt. Whiskers drawn from a narrower estimator than the
+        # one the count is computed under would mark pairs the picture does not show.
+        lo, hi = bootstrap.cluster_ratio_ci(wvn.clusters_for(cur_rows, ref_rows))
         pts.append((snr[a], pt, lo, hi, word[a]))
     pts.sort()
 
@@ -360,7 +370,7 @@ def fig8(by, adapters, word, dpi: int) -> None:
     if not PAPER_MODE:
         fig.text(0.055, 0.885,
              "Six adapters matched on rank, scaling, base model and recipe. Whiskers are 95% "
-             "bootstrap CIs over prompts.\n"
+             "bootstrap CIs over intent clusters, paired.\n"
              f"Filled points are the {len(resolved)} adapters forming the {pair_count} "
              f"statistically resolvable pairs; among those the ordering INVERTS.\n"
              "No fit line is drawn: correlating against a near-constant predictor at n=6 "

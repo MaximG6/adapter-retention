@@ -75,6 +75,51 @@ def ratio_ci(num: list[float], den: list[float]) -> tuple[float, float]:
     return _pct(sorted(out))
 
 
+def cluster_ratio_ci(
+    clusters: list[tuple[str, list[float], list[float]]],
+) -> tuple[float, float]:
+    """Interval for mean(num)/mean(den) resampling CLUSTERS, stratified, paired.
+
+    Each entry is (stratum, numerator values, denominator values) for one cluster.
+    Clusters are drawn with replacement within each stratum, so the number drawn from a
+    stratum always equals the number it has.
+
+    Three differences from `ratio_ci`, each of which matters here:
+
+    * **Clusters, not observations.** The hint battery is 8 intents x 3 paraphrases, and
+      paraphrases within an intent are near-duplicates by construction. Treating 32
+      prompts as 32 independent draws when there are ~16 independent units narrows the
+      interval by up to sqrt(2) and inflates any count of "pairs that separate".
+    * **Stratified.** Hint and adversarial prompts are different instruments; resampling
+      them in one pool lets a draw contain almost none of either.
+    * **Paired.** Numerator and denominator are the same prompts under two precisions, so
+      one draw of clusters indexes both. `ratio_ci` resamples them independently, which
+      discards the pairing.
+    """
+    if len(clusters) < 2:
+        return (float("nan"), float("nan"))
+    by_stratum: dict[str, list[int]] = {}
+    for i, (s, _, _) in enumerate(clusters):
+        by_stratum.setdefault(s, []).append(i)
+    rng = random.Random(MC_SEED)
+    out: list[float] = []
+    for _ in range(MC_DRAWS):
+        num_sum = den_sum = 0.0
+        num_n = den_n = 0
+        for idx in by_stratum.values():
+            for _ in range(len(idx)):
+                _, nv, dv = clusters[idx[rng.randrange(len(idx))]]
+                num_sum += sum(nv)
+                num_n += len(nv)
+                den_sum += sum(dv)
+                den_n += len(dv)
+        if num_n and den_n and den_sum:
+            out.append((num_sum / num_n) / (den_sum / den_n))
+    if len(out) < 2:
+        return (float("nan"), float("nan"))
+    return _pct(sorted(out))
+
+
 def is_exact(xs: list[float]) -> bool:
     """Whether `ci` enumerated rather than sampled. Reported next to intervals so a
     reader knows which kind of number they are looking at."""
