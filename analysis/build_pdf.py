@@ -38,7 +38,7 @@ SECTIONS = [
     "03-method.md",
     "04-results-weight-space.md",
     "06-results-advertised-vs-measured.md",
-    "07-methodological-lessons.md",
+    "07-registered-predictions.md",
     "08-09-limitations-conclusion.md",
     "appendix-A-tool.md",
     "appendix-B-tables.md",

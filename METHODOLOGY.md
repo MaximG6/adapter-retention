@@ -1,56 +1,12 @@
-# 7. Methodological lessons
+# Methodological practice
 
-*Draft. §7.0 lists every registered prediction and its outcome; the remaining
-subsections each state a transferable claim first and our own evidence for it second.
-These are not incidental notes: **every entry below is evidenced by an error of ours
-that measurement caught before publication**, and each says what it changed. We report
-them because the practices are reusable, not because the errors are interesting.*
+*Companion to “Weight-Space Erasure Without Behavioural Collapse in Quantized LoRA Adapters”. Every entry below is evidenced by an error of ours that measurement caught before publication, and each says what it changed. They are here rather than in the paper because they are a different paper's argument — the paper's appendix keeps the registered predictions and their outcomes, which is the part its own claims depend on.*
+
+*This document is inside the paper's checks. `analysis/audit_draft_numbers.py` verifies its numbers against `results/raw/**`, `analysis/countcheck.py` resolves its count words against the structures they count, and `analysis/xref.py` resolves its references to the paper against the paper's structure and the paper's references here against these headings. A number that leaves the PDF does not leave the audit.*
 
 ---
 
-## 7.0 Every registered prediction, and how it resolved
-
-
-We pre-registered nine predictions in a dated planning document before the runs they
-concern. **The table below is the complete list.** It exists because a paper claiming
-pre-registration discipline while leaving most of its predictions untraceable gives a
-reader no way to check that none was quietly dropped — and that check is the entire
-value of registering them.
-
-**Two of the nine were confirmed outright** (P2, P6) and one was confirmed on synthetic
-adapters but does not transfer to trained ones (P1). **The remaining six were not
-confirmed**, in four different ways:
-
-- **withdrawn on evidence before being tested** — P7, and the safety clause of P8;
-- **superseded by a measurement bug in its own inputs** — the at-risk clause of P4;
-- **never run, by a decision recorded with its reasoning beforehand** — P9;
-- **untested because the adapters it needs do not exist publicly** — P3, P5, and the
-  remainder of P8.
-
-An earlier draft of §8 said "four", and its taxonomy silently omitted P3 and P5 — and
-this appendix went on stating six while the body said four, so the paper announced its
-own body was wrong and left it standing. That is precisely the failure this table exists
-to make impossible, committed in the prose introducing the table, and it is recorded here
-rather than corrected away.
-
-| | prediction (final registered form) | outcome | where resolved |
-|---|---|---|---|
-| **P1** | Under `α = 2r`, weight-space fidelity rises as `r^{+1/4}` while subspace output fidelity falls as `r^{−1/4}` — the two spaces disagree in sign | **Confirmed on synthetic adapters; does not transfer to trained ones** | §4.3 |
-| **P2** | Under fixed `α`, `SNR_w ∝ r^{−1/4}` and `SNR_out ∝ r^{−3/4}` | **Confirmed** (fitted −0.275 / −0.744 against −0.25 / −0.75) | §4.3 |
-| **P3** | A calibrated absolute prediction of output SNR at `r=32` | **Untested.** Requires adapters matched on training across ranks, which do not exist publicly | §8.2, FW-2 |
-| **P4** | Behaviour substantially preserved for adapters with output SNR > 1.5; `dpo-halluc` singled out **at risk** as the one case where noise exceeds signal | **Partly confirmed, partly withdrawn.** Behaviour preserved for all six at INT4 g128. The at-risk clause was **withdrawn**: it rested on an output SNR of 0.958 produced by an rsLoRA scaling bug; the corrected value is 3.757 and **no adapter in the set has output SNR below 1** | §5.1; withdrawal in §7.4 |
-| **P5** | Behavioural degradation orders across adapters as taboo < latentqa < dpo < safety, spanning 3.7× in output SNR | **Not tested.** Subsumed by the decision not to run the across-population test; two of the four adapters never received validated behavioural batteries | §8.2 |
-| **P6** | INT8 survives essentially completely; if anything breaks it is per-channel INT4 or 3-bit | **Confirmed** — INT4 g128 99.2%, per-channel 77.2%, INT3 57.8% | §5.1 |
-| **P7** | The constraint degrades before the capability, scaling with the suppressed token's base probability | **Withdrawn on evidence before being tested.** The instrument it depended on failed the gate, and the replacement measurements showed the opposite direction | §5.3, §7.2 |
-| **P8** | At INT3, retention ranks in output-SNR order; safety adapter > 85% | **Safety clause withdrawn** (its instrument did not validate); remainder untested | §6.4, §8.2 |
-| **P9** | Across-population Spearman between output SNR and INT3 retention exceeds +0.6 | **Not run.** Decision recorded with its reasoning and its falsifier before the fact | §8.2 |
-
-Two properties of this table are the point of it. **First, the failures are legible**:
-a reader can see that P4's headline clause did not survive its own input data, and that
-P7 was abandoned rather than quietly reinterpreted. **Second, nothing is missing**: nine
-were registered and nine appear.
-
-## 7.1 Nothing checks meaning, and a green verification block is evidence about coverage
+## M.1 Nothing checks meaning, and a green verification block is evidence about coverage
 
 
 **Claim.** Every automated check in this project compares a number to a number. The
@@ -70,7 +26,7 @@ found by reading.
 | §2 asserted "all three concern activations" two paragraphs below a sentence explaining one of them does not | no check reads a sentence against the paragraph above it |
 | the body said six adapters where the abstract and tables said nine | the count is a row *tally*, not a printed value with a recomputation |
 | §5.1's heading said "monotone" directly above a caption saying individual adapters are not | headings and captions are not quantities |
-| the tool's validation figure plotted cosine against cosine and printed "max error 0.0%" | every plotted value was verified against raw and every one was correct; nothing asked whether the two sides could differ (§7.5) |
+| the tool's validation figure plotted cosine against cosine and printed "max error 0.0%" | every plotted value was verified against raw and every one was correct; nothing asked whether the two sides could differ (M.5) |
 
 The renumbering case is the sharp one, because the fix made it worse: before, the
 references dangled and a reader could see it. **A checker that turns a dangling
@@ -84,8 +40,8 @@ what exists instead is a one-off manual audit of the rewritten references, which
 standing check and will not fire next time.
 
 **This entry organises the ones that follow.** Each of them closes one numeric hole, and
-none of them closes the semantic one: the generated-view rule (§7.4) verifies that derived
-documents match raw, and the shared-code-path rule (§7.5) verifies that a check does not
+none of them closes the semantic one: the generated-view rule (M.4) verifies that derived
+documents match raw, and the shared-code-path rule (M.5) verifies that a check does not
 share its subject's assumptions and has failed on a known-bad input. Both are worth
 having. Neither would have caught any row of the table above.
 
@@ -94,7 +50,8 @@ inside the entry arguing that count-versus-prose defects pass every check. It is
 under one: `analysis/countcheck.py` resolves each count word in the body against the
 structure it counts and fails the build on a disagreement.*
 
-## 7.2 Validate an instrument against a known contrast before registering a prediction on it
+
+## M.2 Validate an instrument against a known contrast before registering a prediction on it
 
 
 **Claim.** An instrument that has not been shown to separate a contrast whose answer
@@ -112,9 +69,10 @@ contrast confirmable by reading the text — before it may be used in a precisio
 comparison (§3.9). Applying this rule cost one instrument (the reveal probe,
 deprecated), rescued two (the graded constraint trace and fixed-guesser elicitation,
 both of which passed), and caused one registered prediction to be **withdrawn on
-evidence rather than tested** (§7.0).
+evidence rather than tested** (Appendix C of the paper).
 
-## 7.3 A validation gate must itself be tested against something already known to be broken
+
+## M.3 A validation gate must itself be tested against something already known to be broken
 
 
 **Claim.** A gate is an instrument. Build it, then verify it rejects a case you have
@@ -151,7 +109,8 @@ is the sharpest form the evidence for this practice can take: not a check that f
 but **the rule catching a fault in the check written to enforce it**. The previous
 sharpest was the vacuous-comparison guard, which had the same shape one level down.
 
-## 7.4 An append-only record needs a generated view, or it will leak superseded values
+
+## M.4 An append-only record needs a generated view, or it will leak superseded values
 
 
 **Claim.** An append-only log is the right format for a research record: it preserves
@@ -214,7 +173,8 @@ is *rewritten* at each gate rather than appended to. **The format that preserves
 is the one that leaks stale values; the format that overwrites is the one that stays
 current.** A project wants both, and should not confuse which is which.
 
-## 7.5 A check that shares an assumption or a code path with the thing it checks is not a check
+
+## M.5 A check that shares an assumption or a code path with the thing it checks is not a check
 
 
 **Claim.** The value of a verification lies entirely in what it does *not* share with its
@@ -253,7 +213,7 @@ dependent version was the one that was easier to write.
 **The practical test we now apply**: *if the thing being checked were wrong in the way I
 most fear, would this check still pass?* If the answer is yes, the check is measuring
 something other than what it claims. This is the same question the instrument gate asks
-of behavioural probes (§7.2) and the gate self-test asks of the gate (§7.3), applied to
+of behavioural probes (M.2) and the gate self-test asks of the gate (M.3), applied to
 verification generally.
 
 ### The verification half: a check is not trusted until it has failed on a known-bad input
@@ -268,7 +228,7 @@ correct by inspection and only the known-bad input distinguished working from va
 
 | check | known-bad input it must reject | what would have happened without the test |
 |---|---|---|
-| the instrument gate (§7.3) | the deprecated reveal probe, already documented as broken | the gate had already certified it once under a disjunctive rule |
+| the instrument gate (M.3) | the deprecated reveal probe, already documented as broken | the gate had already certified it once under a disjunctive rule |
 | the figure cross-checker | the actual predictive-gap pair values (2 vs 4 marked adapters) and the dissociation figure's estimator split (0.7810 vs 0.7716) | a checker sharing the figures' loader would have reproduced the bug and reported agreement |
 | the vacuous-comparison guard | a call passing one expression twice | the first implementation matched the wrong AST node, **never fired, and printed PASS on the exact bug it was written to catch** |
 
@@ -339,10 +299,11 @@ tempting move and the wrong one.
 
 The uncomfortable corollary: **guards are code, and this project's guards have had a
 higher defect rate than its measurements.** That is an argument for testing them against
-known-bad input (§7.3), not for having fewer of them.
+known-bad input (M.3), not for having fewer of them.
 
 
-## 7.6 Price the caveat against the measurement that would remove it
+
+## M.6 Price the caveat against the measurement that would remove it
 
 
 **Claim.** When a limitation is about to be written into the text, ask what it would cost
@@ -377,7 +338,8 @@ This is not an argument against caveats — §8 is long and every entry in it is
 bearing. It is an argument for pricing them first. The test: *if this limitation were
 someone else's, what would I ask them to run?* If the answer is under a day, run it.
 
-## 7.7 Tooling reports success on the operation, not on the outcome
+
+## M.7 Tooling reports success on the operation, not on the outcome
 
 
 **Claim.** A zero exit code means a command completed, not that it accomplished anything.
@@ -419,7 +381,8 @@ records and getting byte-identical files** is a statement about the artifact rat
 about any command's exit status, and it is the strongest such statement available.
 
 
-## 7.8 The explanation of a measurement is a claim, and nothing was checking explanations
+
+## M.8 The explanation of a measurement is a claim, and nothing was checking explanations
 
 **Claim.** A number can be right while the sentence explaining it is wrong, and every
 check this project built reads numbers. Claim audits compare printed values against raw
@@ -458,7 +421,7 @@ verification — something was not checked, or was checked by a route that share
 This one is a failure of *scope*: the verification was complete for the class of thing it
 covers, and the defective claim was outside that class. A green block over 229 numeric
 claims says nothing about the sentences between them, and we had been reading it as though
-it did (§7.1).
+it did (M.1).
 
 **The practice.** *When a measurement is explained, the explanation gets a falsifier and a
 control, the same as a prediction.* Three controls settled both sentences here and each is

@@ -29,8 +29,7 @@ APPENDICES = [
     ("appendix-B-tables.md", "Full Tables",
      ["fig02_channel_model", "fig03_forest", "fig04_amplification",
       "fig11_layer_profile"]),
-    ("07-methodological-lessons.md", "Registered Predictions and Methodological Practice",
-     []),
+    ("07-registered-predictions.md", "Registered Predictions", []),
     ("06-results-advertised-vs-measured.md", "Advertised versus Measured: Full Detail",
      ["fig10_refusal"]),
     ("appendix-C-prompts.md", "Prompt Sets", []),
@@ -150,7 +149,12 @@ REFMAP = {
     # wrong entry, and one section cited itself. A one-line offset cannot do that, and
     # `check_source_refs` below fails the build if a reference in the markdown does not
     # match a heading in the markdown.
-    **{f"7.{i}": f"C.{i + 1}" for i in range(0, 8)},
+    #
+    # Round 8 moved the practice entries to METHODOLOGY.md and left the registered
+    # predictions as the whole of Appendix C, so there is no longer a 7.n to translate:
+    # a reference to a practice entry now names the companion document instead, and
+    # xref.companion_refs resolves it there.
+    "7": "C",
     # Limitations has no subsections in the paper.
     **{f"8.{i}": "9" for i in range(1, 9)},
 }
@@ -185,8 +189,9 @@ def check_source_refs() -> list[tuple[str, str]]:
     itself before translation, which is the only place a wrong-but-resolving reference is
     visible. Returns (reference, file) pairs that have no heading.
     """
-    lessons = (PAPER / "07-methodological-lessons.md").read_text(encoding="utf-8")
+    lessons = (PAPER / "07-registered-predictions.md").read_text(encoding="utf-8")
     have = set(re.findall(r"(?m)^##+\s+(7\.[0-9a]+)\s", lessons))
+    have |= {"7"}
     bad: list[tuple[str, str]] = []
     for path in sorted(PAPER.glob("*.md")):
         text = path.read_text(encoding="utf-8")
