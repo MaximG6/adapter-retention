@@ -330,11 +330,11 @@ Retention is each adapter's elicitation score as a fraction of its own BF16 scor
 <!-- GENERATED: table2 -- analysis/appendix_tables.py --write. Do not edit by hand.
      This table and Appendix B.6 are the same call; they disagreed in the last digit of
      three intervals when they were two calls. -->
-| precision | mean retention | 95% CI over adapters | adapters below 50% |
-|---|---|---|---|
-| INT4 g128 | **99.2%** | [90.7%, 107.6%] | 0/6 |
-| INT4 per-channel | **77.2%** | [69.0%, 86.0%] | 0/6 |
-| INT3 g128 | **57.8%** | [41.7%, 74.3%] | 2/6 |
+| precision | mean retention | 95% CI over adapters | 24 hint only | adapters below 50% |
+|---|---|---|---|---|
+| INT4 g128 | **99.2%** | [90.7%, 107.6%] | 104.9% | 0/6 |
+| INT4 per-channel | **77.2%** | [69.0%, 86.0%] | 80.2% | 0/6 |
+| INT3 g128 | **57.8%** | [41.7%, 74.3%] | 62.1% | 2/6 |
 <!-- END GENERATED: table2 -->
 
 Guesser argmax accuracy, pooled: 159/192 (BF16) → 157/192 → 128/192 → 98/192.
@@ -495,16 +495,19 @@ PG-2 does not answer that objection by being better powered; it answers it by be
 different kind of claim. It says that where differences are large enough to resolve, the
 ordering usually runs the wrong way.
 
-**The estimator correction did not cost significance, and it is worth showing the
-arithmetic rather than leaving a reader to assume it did.** Under a one-sided binomial
-null of random ordering, the previously published **4 of 4** gives `p = 1/16 = 0.0625`;
-the corrected **6-or-more of 7** gives `(7+1)/2⁷ = 8/128 = 0.0625`. Identical. The
-estimator changed and the count changed; the evidential strength did not.
+**We do not attach a p-value to this, and an earlier draft was wrong to.** That draft
+observed that 4-of-4 and 6-or-more-of-7 both give 0.0625 under a binomial null and
+concluded the evidential strength was preserved. Too quick, in two ways. The two are not
+estimates of the same thing: the first was *4 of 4 at INT3*, the second *6 of 7 pooled
+across three precisions*. And `2⁻⁷` is the wrong null either way, because pairwise
+orderings among six adapters are constrained by transitivity, and the same six adapters
+recur at all three precisions, so the seven outcomes are neither independent nor
+exchangeable.
 
-**We state that strength conservatively in either form.** Pairs become resolvable
-precisely because their intervals separate, which is a selection effect. PG-2 is therefore
-**evidence of inversion rather than of absence of correlation** — not a significance
-claim.
+**PG-2 is a descriptive claim and it does not need a p-value to do its work.** Pairs
+become resolvable precisely because their intervals separate, which is a selection
+effect. It is **evidence of inversion rather than of absence of correlation** — not a
+significance claim, in either the old form or the new one.
 
 PG-3 is independent of both, and unlike PG-1 and PG-2 it **is partly a power question**:
 the base model already refuses at ceiling, so there is no headroom for the adapter to add

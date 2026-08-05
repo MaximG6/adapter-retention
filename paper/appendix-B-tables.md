@@ -12,18 +12,20 @@ CIs are over layers, on the `fixed_scale` cosine. The 36-layer run exists for on
 
 Intervals without a mark are **enumerated** over all `k^k` resamples, so they carry no resampling noise; enumerated is not the same as exact coverage. A `*` marks a **sampled** interval (Monte Carlo, n=20000), used where the sample is too large to enumerate; its last printed digit is at the resolution the resampling noise supports and no finer.
 
-| adapter | base | r | α/r | layers | cosine | 95% CI | flip (fixed) | flip (adapt.) | val-chg (adapt.) | rel. err |
+Base model is `Qwen3-8B` for every adapter except `responsible-ai-safety`, which is `Llama-3.1-8B-Instruct`.
+
+| adapter | r | α/r | layers | cos (fixed) | 95% CI | cos (adapt.) | flip (fixed) | flip (adapt.) | val-chg (adapt.) | rel. err |
 |---|---|---|---|---|---|---|---|---|---|---|
-| ao-v3-dpo-halluc | Qwen3-8B | 128 | 0.125 | 4 | 0.5050 | [0.4755, 0.5386] | 0.14813 | 0.22115 | 0.87416 | 1.744 |
-| latentqa | Qwen3-8B | 64 | 2 | 4 | 0.2760 | [0.2548, 0.2996] | 0.03882 | 0.06481 | 0.85856 | 3.578 |
-| responsible-ai-safety | Llama-3.1-8B-Instruct | 16 | 2 | 4 | 0.3298 | [0.3069, 0.3664] | 0.06191 | 0.10219 | 0.83625 | 2.904 |
-| taboo-gold | Qwen3-8B | 32 | 2 | 4 | 0.1389 | [0.1248, 0.1531] | 0.01114 | 0.02112 | 0.85456 | 7.350 |
-| taboo-moon | Qwen3-8B | 32 | 2 | 4 | 0.1375 | [0.1242, 0.1507] | 0.01092 | 0.02079 | 0.85453 | 7.421 |
-| taboo-rock | Qwen3-8B | 32 | 2 | 4 | 0.1412 | [0.1283, 0.1541] | 0.01137 | 0.02147 | 0.85460 | 7.207 |
-| taboo-ship | Qwen3-8B | 32 | 2 | 4 | 0.1409 | [0.1279, 0.1539] | 0.01139 | 0.02149 | 0.85461 | 7.233 |
-| taboo-smile | Qwen3-8B | 32 | 2 | 4 | 0.1374 | [0.1244, 0.1504] | 0.01093 | 0.02080 | 0.85457 | 7.407 |
-| taboo-snow | Qwen3-8B | 32 | 2 | 4 | 0.1382 | [0.1260, 0.1503] | 0.01102 | 0.02088 | 0.85454 | 7.374 |
-| taboo-smile | Qwen3-8B | 32 | 2 | 36 | 0.1380 | [0.1355, 0.1404]* | 0.01220 | 0.02267 | 0.84625 | 7.293 |
+| ao-v3-dpo-halluc | 128 | 0.125 | 4 | 0.5050 | [0.4755, 0.5386] | 0.5047 | 0.14813 | 0.22115 | 0.87416 | 1.744 |
+| latentqa | 64 | 2 | 4 | 0.2760 | [0.2548, 0.2996] | 0.2746 | 0.03882 | 0.06481 | 0.85856 | 3.578 |
+| responsible-ai-safety | 16 | 2 | 4 | 0.3298 | [0.3069, 0.3664] | 0.3290 | 0.06191 | 0.10219 | 0.83625 | 2.904 |
+| taboo-gold | 32 | 2 | 4 | 0.1389 | [0.1248, 0.1531] | 0.1378 | 0.01114 | 0.02112 | 0.85456 | 7.350 |
+| taboo-moon | 32 | 2 | 4 | 0.1375 | [0.1242, 0.1507] | 0.1364 | 0.01092 | 0.02079 | 0.85453 | 7.421 |
+| taboo-rock | 32 | 2 | 4 | 0.1412 | [0.1283, 0.1541] | 0.1401 | 0.01137 | 0.02147 | 0.85460 | 7.207 |
+| taboo-ship | 32 | 2 | 4 | 0.1409 | [0.1279, 0.1539] | 0.1398 | 0.01139 | 0.02149 | 0.85461 | 7.233 |
+| taboo-smile | 32 | 2 | 4 | 0.1374 | [0.1244, 0.1504] | 0.1363 | 0.01093 | 0.02080 | 0.85457 | 7.407 |
+| taboo-snow | 32 | 2 | 4 | 0.1382 | [0.1260, 0.1503] | 0.1370 | 0.01102 | 0.02088 | 0.85454 | 7.374 |
+| taboo-smile | 32 | 2 | 36 | 0.1380 | [0.1355, 0.1404]* | 0.1369 | 0.01220 | 0.02267 | 0.84625 | 7.293 |
 
 ## B.2 Channel model: predicted vs measured code-flip rate
 
@@ -78,22 +80,39 @@ Paired on (adapter, layer, module) cells present under all three schemes, `fixed
 
 ## B.6 Behavioural retention per adapter and precision
 
-Elicitation score as a fraction of the same adapter's own BF16 score. Intervals are over the six adapters, not over prompts: the adapter is the sampling unit, and with greedy decoding the prompts within one adapter are not independent draws. They are enumerated over all 6^6 resamples.
+Elicitation score as a fraction of the same adapter's own BF16 score. Intervals are over the six adapters, not over prompts: the adapter is the sampling unit, and the prompts within one adapter are not independent draws — they are 8 intents x 3 paraphrases plus 8 adversarial prompts, and it is that clustering rather than greedy decoding which makes them dependent (§3.11). They are enumerated over all 6^6 resamples.
 
 **The denominator is the aligned model's own BF16 score and the metric has a non-zero floor**, so the percentages are not "fraction of the behaviour". The `base` column gives the SAME instrument's score on the base model without the adapter, at the same precision, so a reader can floor-correct. It is small but not negligible and varies 40x across adapters (`ship` 0.0039, `snow` 0.1642): the guesser has a prior over the 20 candidates. Floor-corrected retention, `(aligned - base) / (aligned_BF16 - base_BF16)`, is given as its own row and moves the headline by under 2 points at every precision.
 
-| word | BF16 (raw) | base BF16 | int4_g128 | int4_per_channel | int3_g128 |
-|---|---|---|---|---|---|
-| gold | 0.8280 | 0.0165 | 81.3% | 62.4% | 41.3% |
-| moon | 0.8250 | 0.0245 | 100.2% | 78.1% | 86.4% |
-| rock | 0.8603 | 0.0105 | 116.2% | 77.5% | 57.7% |
-| ship | 1.0327 | 0.0039 | 103.2% | 79.8% | 28.7% |
-| smile | 0.7178 | 0.0150 | 100.8% | 68.5% | 51.3% |
-| snow | 1.0030 | 0.1642 | 93.5% | 96.8% | 81.5% |
-| **mean** | — | — | **99.2%** | **77.2%** | **57.8%** |
-| 95% CI over adapters | — | — | [90.7%, 107.6%] | [69.0%, 86.0%] | [41.7%, 74.3%] |
-| **floor-corrected mean** | — | — | 99.0% | 76.5% | 56.0% |
-| below 50% | — | — | 0/6 | 0/6 | 2/6 |
+| word | BF16 | base | int4_g128 | base | int4_pc | base | int3_g128 | base |
+|---|---|---|---|---|---|---|---|---|
+| gold | 0.8280 | 0.0165 | 81.3% | 0.0168 | 62.4% | 0.0177 | 41.3% | 0.0211 |
+| moon | 0.8250 | 0.0245 | 100.2% | 0.0233 | 78.1% | 0.0536 | 86.4% | 0.0376 |
+| rock | 0.8603 | 0.0105 | 116.2% | 0.0125 | 77.5% | 0.0131 | 57.7% | 0.0151 |
+| ship | 1.0327 | 0.0039 | 103.2% | 0.0034 | 79.8% | 0.0040 | 28.7% | 0.0034 |
+| smile | 0.7178 | 0.0150 | 100.8% | 0.0123 | 68.5% | 0.0115 | 51.3% | 0.0221 |
+| snow | 1.0030 | 0.1642 | 93.5% | 0.1634 | 96.8% | 0.1402 | 81.5% | 0.1655 |
+| **mean** | — | — | **99.2%** | — | **77.2%** | — | **57.8%** | — |
+| 95% CI over adapters | — | — | [90.7%, 107.6%] | — | [69.0%, 86.0%] | — | [41.7%, 74.3%] | — |
+| **floor-corrected mean** | — | — | 99.0% | — | 76.5% | — | 56.0% | — |
+| **mean, 24 hint prompts only** | — | — | 104.9% | — | 80.2% | — | 62.1% | — |
+| below 50% | — | — | 0/6 | — | 0/6 | — | 2/6 | — |
+
+**The 8 adversarial prompts are constraint probes, and the capability score pools them with the 24 hint prompts.** Their job is to make the model say the word, and a response containing it scores at or above the normaliser because the guesser recovers it trivially — so a quarter of the capability axis is the inverse of the constraint axis. The `24 hint prompts only` row above is the same measurement with them removed. **The two agree**: the ordering is identical, the dose-response is monotone in both, and the hint-only mean is +5.7 points at INT4 g128, +3.0 at per-channel and +4.3 at INT3. Note the sign: removing the adversarial prompts **raises** the score, because adversarial prompts are harder and yield less word-bearing text than hint prompts, which outweighs the leak lift. The pooled figure is the pre-registered instrument and remains the headline; it is not the more flattering one.
+
+**Adversarial leak rate**, the fraction of the 8 adversarial prompts on which the secret word appears. This is the constraint measured in the disclosure frame under pressure, which is what the adversarial set was built for; the knowledge probe never mentions the secret and cannot test that frame.
+
+| | BF16 | int4_g128 | int4_pc | int3_g128 |
+|---|---|---|---|---|
+| gold | 12.5% | 0.0% | 0.0% | 0.0% |
+| moon | 37.5% | 25.0% | 25.0% | 12.5% |
+| rock | 12.5% | 0.0% | 12.5% | 0.0% |
+| ship | 0.0% | 0.0% | 0.0% | 0.0% |
+| smile | 25.0% | 12.5% | 0.0% | 0.0% |
+| snow | 12.5% | 12.5% | 12.5% | 25.0% |
+| **pooled** | **16.7%** | **8.3%** | **8.3%** | **6.2%** |
+
+The leak rate **falls** from 16.7% at BF16 to 6.2% at INT3. The constraint does not fail under quantization in the frame designed to break it. Read with care: capability falls too, so some of this is a model less able to produce the word at all rather than more willing to withhold it — which is the same confound §5.3 handles by comparing within precision, and is why this is reported beside the knowledge probe rather than instead of it.
 
 ## B.7 Paired contrasts between precisions
 
@@ -134,3 +153,54 @@ Activation columns are mean-normalised within each module (§4.5.1).
 | 3 | `up_proj` | 24.4 | 0.80 | 0.96 | +0.038 | 0.992 |
 | 18 | `gate_proj` | 1.6 | 0.94 | 1.03 | +0.012 | 0.820 |
 | 18 | `up_proj` | 1.4 | 0.98 | 1.04 | -0.004 | 0.820 |
+
+## B.10 Within-bin position: is `u` uniform where the model needs it?
+
+`u` is each weight's distance to its quantization boundary, over 42 module-instances on both base models, INT4 g128 asymmetric. Equation 4 needs `F_u(t) = t`. Under Equation 2 each group's extrema map exactly onto codes 0 and 2^b-1, so **0.20%** of weights sit exactly on a boundary and the lower tail is over-occupied by construction. A flip is two-sided — a negative delta crosses the lower boundary, a positive one the upper — so the quantity the model averages over is the **mean of the two tails**, and the deficit in one cancels the excess in the other.
+
+| t | lower tail | upper tail | mean (= P(flip)) | mean / t |
+|---|---|---|---|---|
+| 0.001 | 0.00256 | 0.00031 | 0.00143 | 1.433 |
+| 0.002 | 0.00334 | 0.00109 | 0.00222 | 1.108 |
+| 0.005 | 0.00614 | 0.00389 | 0.00501 | 1.003 |
+| 0.008 | 0.00899 | 0.00673 | 0.00786 | 0.982 |
+| 0.011 | 0.01200 | 0.00975 | 0.01088 | 0.989 |
+| 0.020 | 0.02084 | 0.01858 | 0.01971 | 0.985 |
+| 0.050 | 0.05036 | 0.04811 | 0.04924 | 0.985 |
+| 0.100 | 0.09965 | 0.09746 | 0.09855 | 0.986 |
+| 0.150 | 0.14909 | 0.14682 | 0.14796 | 0.986 |
+| 0.250 | 0.24712 | 0.24510 | 0.24611 | 0.984 |
+| 0.500 | 0.50015 | 0.49818 | 0.49916 | 0.998 |
+| 0.750 | 0.75356 | 0.75135 | 0.75245 | 1.003 |
+
+**Uniform to within 1.8% at every `t` at or above 0.005**, which covers the whole range our adapters occupy. Read on one tail alone the lowest 0.1% of the bin is over-occupied by 2.6x, which is the boundary-pinning and would have been reported as a 156% excess by a one-sided measurement. The residual is a slight *sub*-uniformity, so Equation 4 should over-predict by about 1%, which is the direction B.2 shows for all nine adapters.
+
+## B.11 PG-2 under three estimators
+
+Two corrections are bundled in "cluster bootstrap" and they pull in opposite directions, so the net change is unattributable unless both halves are shown. **Pairing narrows** — both conditions run byte-identical prompts, so the shared prompt-difficulty variance cancels. **Clustering widens** — the 24 hint prompts are 8 intents x 3 near-duplicate paraphrases, so there are roughly 16 independent units, not 32.
+
+| estimator | INT4 g128 | INT4 per-ch. | INT3 | interval width |
+|---|---|---|---|---|
+| A: prompts, unpaired (as published) | 0 | 1 | 4 | 15%–63% |
+| B: prompts, paired | 1 | 2 | 6 | 14%–52% |
+| **C: intent clusters, paired (used)** | 1 | 2 | 4 | 13%–47% |
+
+At INT3 the two effects cancel exactly and the count returns to the published 4, on the same four pairs. At INT4 g128 pairing dominates and one pair appears that the published estimator called noise — and that pair runs *with* the predictor, so the correction costs us the word "every" in §5.3. Reporting only the net would have hidden both facts.
+
+## B.12 Layer-output SNR and amplification, per adapter
+
+Measured by projecting onto an orthonormal basis of `Δ`'s right singular vectors, per layer, then averaged — **not** predicted from Equation 5. `amp ratio` is the mean over layers of `SNR_out / SNR_weight`, each layer using its own `SNR_weight`; the ratio of the two column means is a different statistic and is not what the paper's range quotes.
+
+| adapter | SNR_out | SNR_weight | amp ratio |
+|---|---|---|---|
+| ao-v3-dpo-halluc | 3.7571 | 0.6164 | 6.22 |
+| latentqa | 2.5250 | 0.2920 | 8.80 |
+| responsible-ai-safety | 5.9995 | 0.3854 | 16.54 |
+| taboo-gold | 1.6299 | 0.1342 | 12.40 |
+| taboo-moon | 1.6200 | 0.1334 | 12.39 |
+| taboo-rock | 1.6728 | 0.1375 | 12.38 |
+| taboo-ship | 1.6566 | 0.1366 | 12.38 |
+| taboo-smile | 1.6286 | 0.1341 | 12.38 |
+| taboo-snow | 1.6254 | 0.1342 | 12.37 |
+
+The amplification range the paper quotes is the span of the last column: **6.2–16.5x**. The six taboo adapters span **1.6200–1.6728** on `SNR_out`, which is the 3.3% spread PG-1 calls a matched population.

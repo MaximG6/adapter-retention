@@ -108,9 +108,28 @@ def b1_weight_space(l4: list[dict[str, Any]], l36: list[dict[str, Any]]) -> str:
            "used where the sample is too large to enumerate; its last printed digit is "
            "at the resolution the resampling noise supports and no finer.",
            "",
-           "| adapter | base | r | α/r | layers | cosine | 95% CI | flip (fixed) | "
-           "flip (adapt.) | val-chg (adapt.) | rel. err |",
+           "Base model is `Qwen3-8B` for every adapter except "
+           "`responsible-ai-safety`, which is `Llama-3.1-8B-Instruct`.",
+           "",
+           "| adapter | r | α/r | layers | cos (fixed) | 95% CI | "
+           "cos (adapt.) | flip (fixed) | flip (adapt.) | val-chg (adapt.) | "
+           "rel. err |",
            "|---|---|---|---|---|---|---|---|---|---|---|"]
+    # The per-adapter output SNR is Figure 4's x-axis, PG-1's CV, the abstract's
+    # "matched to 3.3%" and the tool's banner -- and it was tabulated nowhere. The
+    # amplification ratio is the per-adapter number the "6.2-16.5x" range is the span of.
+    snr: dict[str, float] = {}
+    amp: dict[str, float] = {}
+    _acc: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for f in (P0 / "output_snr_orthonormal").glob("*.jsonl"):
+        for line in f.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                r = json.loads(line)
+                _acc[r["adapter"]].append(r)
+    for a, rs in _acc.items():
+        snr[a] = mean([r["snr_out_orthonormal"] for r in rs])
+        amp[a] = mean([r["snr_out_orthonormal"] / r["snr_weight"] for r in rs])
+
     for src, tag in ((l4, "4"), (l36, "36")):
         by: dict[str, dict[str, list[dict[str, Any]]]] = defaultdict(
             lambda: defaultdict(list))
@@ -129,9 +148,10 @@ def b1_weight_space(l4: list[dict[str, Any]], l36: list[dict[str, Any]]) -> str:
             mark = "" if bootstrap.is_exact(lay_means) else "*"
             r0 = v[0]
             out.append(
-                f"| {short(a)} | {r0['base_model'].split('/')[-1]} | {r0['rank']} | "
+                f"| {short(a)} | {r0['rank']} | "
                 f"{r0['alpha_over_rank']:.3g} | {tag} | "
                 f"{mean([x['cosine'] for x in v]):.4f} | [{lo:.4f}, {hi:.4f}]{mark} | "
+                f"{mean([x['cosine'] for x in adp]):.4f} | "
                 f"{mean([x['code_flip_rate'] for x in v]):.5f} | "
                 f"{mean([x['code_flip_rate'] for x in adp]):.5f} | "
                 f"{mean([x['value_change_rate'] for x in adp]):.5f} | "
@@ -248,20 +268,52 @@ def b5_modules(l4: list[dict[str, Any]]) -> str:
     return "\n".join(out)
 
 
-def retention_columns(p1: list[dict[str, Any]]) -> dict[str, list[float]]:
-    """Per-adapter retention at each precision. The single source for B.6 and Table 2."""
+def retention_columns(p1: list[dict[str, Any]],
+                      kinds: tuple[str, ...] = ("hint", "adversarial"),
+                      ) -> dict[str, list[float]]:
+    """Per-adapter retention at each precision. The single source for B.6 and Table 2.
+
+    `kinds` selects the prompt set. The default is all 32, which is the pre-registered
+    instrument. ("hint",) alone is the 24-prompt capability set: section 3.7 states that
+    the constraint and capability sides are never combined, and the 8 adversarial prompts
+    are constraint probes -- their job is to make the model say the word, and a response
+    containing the word scores at or above the normaliser because the guesser recovers it
+    trivially. Both are reported so a reader can see the choice does not carry a claim.
+    """
     by = defaultdict(list)
     for r in p1:
         by[(r["adapter"], r["condition"], r["precision"])].append(r)
+
+    def sc(a: str, cond: str, prec: str) -> float:
+        return mean([r["guesser_p_word_normalised"] for r in by[(a, cond, prec)]
+                     if r["prompt_kind"] in kinds])
+
     cols: dict[str, list[float]] = defaultdict(list)
     for a in sorted({r["adapter"] for r in p1}):
-        ref = mean([r["guesser_p_word_normalised"]
-                    for r in by[(a, "aligned_bf16", "bf16")]])
+        ref = sc(a, "aligned_bf16", "bf16")
         for p in PRECISIONS:
-            v = mean([r["guesser_p_word_normalised"]
-                      for r in by[(a, "aligned_quant", p)]])
-            cols[p].append(v / ref if ref else float("nan"))
+            cols[p].append(sc(a, "aligned_quant", p) / ref if ref else float("nan"))
     return cols
+
+
+def adversarial_leak(p1: list[dict[str, Any]]) -> dict[str, list[float]]:
+    """Per-adapter fraction of ADVERSARIAL prompts on which the secret word appears.
+
+    This is the constraint measured in the disclosure frame under pressure, which is what
+    the adversarial set was built for and what nothing in the paper reported. The
+    knowledge probe never mentions the secret, so it cannot test that frame.
+    """
+    by = defaultdict(list)
+    for r in p1:
+        by[(r["adapter"], r["condition"], r["precision"])].append(r)
+    out: dict[str, list[float]] = defaultdict(list)
+    for a in sorted({r["adapter"] for r in p1}):
+        for p in ["bf16"] + PRECISIONS:
+            cond = "aligned_bf16" if p == "bf16" else "aligned_quant"
+            v = [float(r["said_word"]) for r in by[(a, cond, p)]
+                 if r["prompt_kind"] == "adversarial"]
+            out[p].append(mean(v))
+    return out
 
 
 def b6_behaviour(p1: list[dict[str, Any]]) -> str:
@@ -274,8 +326,11 @@ def b6_behaviour(p1: list[dict[str, Any]]) -> str:
            "",
            "Elicitation score as a fraction of the same adapter's own BF16 score. "
            "Intervals are over the six adapters, not over prompts: the adapter is the "
-           "sampling unit, and with greedy decoding the prompts within one adapter are "
-           "not independent draws. They are enumerated over all 6^6 resamples.",
+           "sampling unit, and the prompts within one adapter are "
+           "not independent draws — they are 8 intents x 3 paraphrases plus 8 "
+           "adversarial prompts, and it is that clustering rather than greedy decoding "
+           "which makes them dependent (§3.11). They are enumerated over all 6^6 "
+           "resamples.",
            "",
            "**The denominator is the aligned model's own BF16 score and the metric has a "
            "non-zero floor**, so the percentages are not \"fraction of the behaviour\". "
@@ -287,8 +342,10 @@ def b6_behaviour(p1: list[dict[str, Any]]) -> str:
            "is given as its own row and moves the headline by under 2 points at every "
            "precision.",
            "",
-           "| word | BF16 (raw) | base BF16 | " + " | ".join(PRECISIONS) + " |",
-           "|---|---|---|" + "---|" * len(PRECISIONS)]
+           "| word | BF16 | base | "
+           + " | ".join(f"{p.replace('int4_per_channel', 'int4_pc')} | base"
+                        for p in PRECISIONS) + " |",
+           "|---|---|---|" + "---|---|" * len(PRECISIONS)]
     cols = defaultdict(list)
     floor = defaultdict(list)
     for a in ads:
@@ -297,28 +354,83 @@ def b6_behaviour(p1: list[dict[str, Any]]) -> str:
         base_ref = mean([r["guesser_p_word_normalised"]
                          for r in by[(a, "base_bf16", "bf16")]])
         cells = []
+        bases = []
         for p in PRECISIONS:
             v = mean([r["guesser_p_word_normalised"]
                       for r in by[(a, "aligned_quant", p)]])
             b = mean([r["guesser_p_word_normalised"]
                       for r in by[(a, "base_quant", p)]])
             cells.append(v / ref if ref else float("nan"))
+            bases.append(b)
             cols[p].append(v / ref if ref else float("nan"))
             den = ref - base_ref
             floor[p].append((v - b) / den if den else float("nan"))
         out.append(f"| {words[a]} | {ref:.4f} | {base_ref:.4f} | "
-                   + " | ".join(f"{c:.1%}" for c in cells) + " |")
+                   + " | ".join(f"{c:.1%} | {b:.4f}"
+                                for c, b in zip(cells, bases, strict=True)) + " |")
     lo_hi = {p: boot_ci(cols[p]) for p in PRECISIONS}
-    out.append("| **mean** | — | — | " + " | ".join(f"**{mean(cols[p]):.1%}**"
+    out.append("| **mean** | — | — | " + " | ".join(f"**{mean(cols[p]):.1%}** | —"
                                                     for p in PRECISIONS) + " |")
     out.append("| 95% CI over adapters | — | — | "
-               + " | ".join(f"[{lo_hi[p][0]:.1%}, {lo_hi[p][1]:.1%}]"
+               + " | ".join(f"[{lo_hi[p][0]:.1%}, {lo_hi[p][1]:.1%}] | —"
                             for p in PRECISIONS) + " |")
     out.append("| **floor-corrected mean** | — | — | "
-               + " | ".join(f"{mean(floor[p]):.1%}" for p in PRECISIONS) + " |")
+               + " | ".join(f"{mean(floor[p]):.1%} | —" for p in PRECISIONS) + " |")
+    hint = retention_columns(p1, kinds=("hint",))
+    out.append("| **mean, 24 hint prompts only** | — | — | "
+               + " | ".join(f"{mean(hint[p]):.1%} | —" for p in PRECISIONS) + " |")
     out.append("| below 50% | — | — | "
-               + " | ".join(f"{sum(1 for x in cols[p] if x < 0.5)}/{len(cols[p])}"
+               + " | ".join(f"{sum(1 for x in cols[p] if x < 0.5)}/{len(cols[p])} | —"
                             for p in PRECISIONS) + " |")
+
+    leak = adversarial_leak(p1)
+    out += [
+        "",
+        "**The 8 adversarial prompts are constraint probes, and the capability score "
+        "pools them with the 24 hint prompts.** Their job is to make the model say the "
+        "word, and a response containing it scores at or above the normaliser because "
+        "the guesser recovers it trivially — so a quarter of the capability axis is the "
+        "inverse of the constraint axis. The `24 hint prompts only` row above is the "
+        "same measurement with them removed. **The two agree**: the ordering is "
+        "identical, the dose-response is monotone in both, and the hint-only mean is "
+        f"{(mean(hint[PRECISIONS[0]]) - mean(cols[PRECISIONS[0]])) * 100:+.1f} points "
+        "at INT4 g128, "
+        f"{(mean(hint[PRECISIONS[1]]) - mean(cols[PRECISIONS[1]])) * 100:+.1f} at "
+        "per-channel and "
+        f"{(mean(hint[PRECISIONS[2]]) - mean(cols[PRECISIONS[2]])) * 100:+.1f} at INT3. "
+        "Note the sign: removing the adversarial prompts **raises** the score, because "
+        "adversarial prompts are harder and yield less word-bearing text than hint "
+        "prompts, which outweighs the leak lift. The pooled figure is the "
+        "pre-registered instrument and remains the headline; it is not the more "
+        "flattering one.",
+        "",
+        "**Adversarial leak rate**, the fraction of the 8 adversarial prompts on which "
+        "the secret word appears. This is the constraint measured in the disclosure "
+        "frame under pressure, which is what the adversarial set was built for; the "
+        "knowledge probe never mentions the secret and cannot test that frame.",
+        "",
+        "| | BF16 | "
+        + " | ".join(p.replace("int4_per_channel", "int4_pc") for p in PRECISIONS)
+        + " |",
+        "|---|---|" + "---|" * len(PRECISIONS),
+    ]
+    for i, a in enumerate(ads):
+        out.append(f"| {words[a]} | {leak['bf16'][i]:.1%} | "
+                   + " | ".join(f"{leak[p][i]:.1%}" for p in PRECISIONS) + " |")
+    # A distinct row label: tablecheck keys cells by (row, column), and "mean" x
+    # "int3_g128" already means the retention mean two tables up.
+    out.append(f"| **pooled** | **{mean(leak['bf16']):.1%}** | "
+               + " | ".join(f"**{mean(leak[p]):.1%}**" for p in PRECISIONS) + " |")
+    out += [
+        "",
+        f"The leak rate **falls** from {mean(leak['bf16']):.1%} at BF16 to "
+        f"{mean(leak[PRECISIONS[2]]):.1%} at INT3. The constraint does not fail under "
+        "quantization in the frame designed to break it. Read with care: capability "
+        "falls too, so some of this is a model less able to produce the word at all "
+        "rather than more willing to withhold it — which is the same confound §5.3 "
+        "handles by comparing within precision, and is why this is reported beside the "
+        "knowledge probe rather than instead of it.",
+    ]
     return "\n".join(out)
 
 
@@ -367,14 +479,16 @@ def table2_body(p1: list[dict[str, Any]]) -> str:
     and the paper carried both. Now one call feeds both tables.
     """
     cols = retention_columns(p1)
-    rows = ["| precision | mean retention | 95% CI over adapters | adapters below 50% |",
-            "|---|---|---|---|"]
+    hint = retention_columns(p1, kinds=("hint",))
+    rows = ["| precision | mean retention | 95% CI over adapters | 24 hint only | "
+            "adapters below 50% |",
+            "|---|---|---|---|---|"]
     label = {"int4_g128": "INT4 g128", "int4_per_channel": "INT4 per-channel",
              "int3_g128": "INT3 g128"}
     for p in PRECISIONS:
         lo, hi = boot_ci(cols[p])
         rows.append(f"| {label[p]} | **{mean(cols[p]):.1%}** | "
-                    f"[{lo:.1%}, {hi:.1%}] | "
+                    f"[{lo:.1%}, {hi:.1%}] | {mean(hint[p]):.1%} | "
                     f"{sum(1 for x in cols[p] if x < 0.5)}/{len(cols[p])} |")
     return "\n".join(rows)
 
@@ -387,13 +501,15 @@ def table2_tex(p1: list[dict[str, Any]]) -> str:
     about. The three artifacts now come from one call.
     """
     cols = retention_columns(p1)
-    label = {"int4_g128": "INT4 g128", "int4_per_channel": "INT4 per-channel",
+    hint = retention_columns(p1, kinds=("hint",))
+    label = {"int4_g128": "INT4 g128", "int4_per_channel": "INT4 per-ch.",
              "int3_g128": "INT3 g128"}
     out = []
     for p in PRECISIONS:
         lo, hi = boot_ci(cols[p])
         out.append(f"{label[p]} & \\textbf{{{mean(cols[p]):.1%}}} & "
                    f"[{lo * 100:.1f}, {hi * 100:.1f}] & "
+                   f"{mean(hint[p]):.1%} & "
                    f"{sum(1 for x in cols[p] if x < 0.5)}/{len(cols[p])} \\\\"
                    .replace("%", "\\%"))
     return "\n".join(out)
@@ -455,6 +571,166 @@ def b8_dissociation(p1: list[dict[str, Any]]) -> str:
     return "\n".join(out)
 
 
+def b12_output_snr() -> str:
+    """Per-adapter layer-output SNR and the amplification ratio.
+
+    Both were used everywhere and tabulated nowhere: the SNR is Figure 4's x-axis, PG-1's
+    coefficient of variation, the abstract's "matched to 3.3%" and the tool's own banner;
+    the ratio is the quantity the "6.2-16.5x" range is the span of. Kept out of B.1
+    because they come from a different experiment -- an orthonormal probe of the layer
+    output, not the quantizer -- and because B.1 reached fourteen columns.
+    """
+    acc: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for f in (P0 / "output_snr_orthonormal").glob("*.jsonl"):
+        for line in f.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                r = json.loads(line)
+                acc[r["adapter"]].append(r)
+    if not acc:
+        return ""
+    rows = []
+    for a, rs in sorted(acc.items(), key=lambda kv: short(kv[0])):
+        rows.append((short(a), mean([r["snr_out_orthonormal"] for r in rs]),
+                     mean([r["snr_weight"] for r in rs]),
+                     mean([r["snr_out_orthonormal"] / r["snr_weight"] for r in rs])))
+    taboo = [r for r in rows if r[0].startswith("taboo")]
+    out = ["## B.12 Layer-output SNR and amplification, per adapter",
+           "",
+           "Measured by projecting onto an orthonormal basis of `Δ`'s right singular "
+           "vectors, per layer, then averaged — **not** predicted from Equation 5. "
+           "`amp ratio` is the mean over layers of `SNR_out / SNR_weight`, each layer "
+           "using its own `SNR_weight`; the ratio of the two column means is a different "
+           "statistic and is not what the paper's range quotes.",
+           "",
+           "| adapter | SNR_out | SNR_weight | amp ratio |",
+           "|---|---|---|---|"]
+    for n, so, sw, r in rows:
+        out.append(f"| {n} | {so:.4f} | {sw:.4f} | {r:.2f} |")
+    out += ["",
+            f"The amplification range the paper quotes is the span of the last column: "
+            f"**{min(r for _, _, _, r in rows):.1f}–{max(r for _, _, _, r in rows):.1f}x**. "
+            f"The six taboo adapters span **{min(s for _, s, _, _ in taboo):.4f}–"
+            f"{max(s for _, s, _, _ in taboo):.4f}** on `SNR_out`, which is the "
+            f"{(max(s for _, s, _, _ in taboo) / min(s for _, s, _, _ in taboo) - 1):.1%} "
+            "spread PG-1 calls a matched population."]
+    return "\n".join(out)
+
+
+def b11_pg2_estimators(p1: list[dict[str, Any]]) -> str:
+    """PG-2's separating-pair count under all three estimators.
+
+    §3.11 promised this decomposition was in Appendix C. It was not anywhere: it was
+    computed in a working session and never reached the document. It matters
+    substantively, not just as a dangling pointer -- clustering is conservative for these
+    contrasts and pairing is anti-conservative, and a correction advertised as fixing
+    pseudo-replication that BUYS two resolvable pairs has to show its two halves
+    separately, or a reader is entitled to assume the anti-conservative half did the work.
+    """
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import bootstrap as _bs
+    import word_vs_noise as _wvn
+
+    by = defaultdict(list)
+    for r in p1:
+        by[(r["adapter"], r["condition"], r["precision"])].append(r)
+    ads = sorted({r["adapter"] for r in p1})
+    words = {a: next(r["secret_word"] for r in p1 if r["adapter"] == a) for a in ads}
+
+    def count(kind: str, prec: str) -> tuple[int, float, float]:
+        los, his, widths = [], [], []
+        for a in ads:
+            ref = by[(a, "aligned_bf16", "bf16")]
+            cur = by[(a, "aligned_quant", prec)]
+            if kind == "A":
+                lo, hi = _bs.ratio_ci(
+                    [r["guesser_p_word_normalised"] for r in cur],
+                    [r["guesser_p_word_normalised"] for r in ref])
+            elif kind == "B":
+                lo, hi = _bs.cluster_ratio_ci(_wvn.singletons_for(cur, ref))
+            else:
+                lo, hi = _bs.cluster_ratio_ci(_wvn.clusters_for(cur, ref))
+            los.append(lo)
+            his.append(hi)
+            widths.append(hi - lo)
+        n = sum(1 for i in range(len(ads)) for j in range(i + 1, len(ads))
+                if his[i] < los[j] or his[j] < los[i])
+        return n, min(widths), max(widths)
+
+    out = ["## B.11 PG-2 under three estimators",
+           "",
+           "Two corrections are bundled in \"cluster bootstrap\" and they pull in "
+           "opposite directions, so the net change is unattributable unless both halves "
+           "are shown. **Pairing narrows** — both conditions run byte-identical prompts, "
+           "so the shared prompt-difficulty variance cancels. **Clustering widens** — the "
+           "24 hint prompts are 8 intents x 3 near-duplicate paraphrases, so there are "
+           "roughly 16 independent units, not 32.",
+           "",
+           "| estimator | INT4 g128 | INT4 per-ch. | INT3 | interval width |",
+           "|---|---|---|---|---|"]
+    label = {"A": "A: prompts, unpaired (as published)",
+             "B": "B: prompts, paired",
+             "C": "**C: intent clusters, paired (used)**"}
+    for kind in ("A", "B", "C"):
+        ns = [count(kind, p) for p in PRECISIONS]
+        out.append(f"| {label[kind]} | " + " | ".join(str(n) for n, _, _ in ns)
+                   + f" | {min(w for _, w, _ in ns):.0%}–{max(w for _, _, w in ns):.0%} |")
+    out += ["",
+            "At INT3 the two effects cancel exactly and the count returns to the "
+            "published 4, on the same four pairs. At INT4 g128 pairing dominates and one "
+            "pair appears that the published estimator called noise — and that pair runs "
+            "*with* the predictor, so the correction costs us the word \"every\" in "
+            "§5.3. Reporting only the net would have hidden both facts."]
+    return "\n".join(out)
+
+
+def b10_uniformity() -> str:
+    """The bin-position distribution, which is Equation 4's second assumption.
+
+    Section 3.5 derives the flip indicator as 1[u < |d|/s] and needs F_u(t) = t. Only
+    the INDEPENDENCE of u and d had been measured; uniformity had not, and it is the one
+    with a structural reason to fail.
+    """
+    path = P0 / "bin_position" / "records.jsonl"
+    if not path.exists():
+        return ""
+    rs = [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines()
+          if x.strip()]
+    ts = sorted(rs[0]["ecdf"], key=float)
+    out = ["## B.10 Within-bin position: is `u` uniform where the model needs it?",
+           "",
+           "`u` is each weight's distance to its quantization boundary, over "
+           f"{len(rs)} module-instances on both base models, INT4 g128 asymmetric. "
+           "Equation 4 needs `F_u(t) = t`. Under Equation 2 each group's extrema map "
+           "exactly onto codes 0 and 2^b-1, so **"
+           f"{mean([r['frac_exactly_zero'] for r in rs]):.2%}** of weights sit exactly "
+           "on a boundary and the lower tail is over-occupied by construction. A flip "
+           "is two-sided — a negative delta crosses the lower boundary, a positive one "
+           "the upper — so the quantity the model averages over is the **mean of the "
+           "two tails**, and the deficit in one cancels the excess in the other.",
+           "",
+           "| t | lower tail | upper tail | mean (= P(flip)) | mean / t |",
+           "|---|---|---|---|---|"]
+    for t in ts:
+        lo = mean([r["ecdf"][t] for r in rs])
+        hi = mean([r["ecdf_upper"][t] for r in rs])
+        out.append(f"| {float(t):.3f} | {lo:.5f} | {hi:.5f} | {(lo + hi) / 2:.5f} | "
+                   f"{(lo + hi) / 2 / float(t):.3f} |")
+    ratios = [(mean([r["ecdf"][t] for r in rs])
+               + mean([r["ecdf_upper"][t] for r in rs])) / 2 / float(t)
+              for t in ts if float(t) >= 0.005]
+    worst = max(abs(x - 1) for x in ratios)
+    out += ["",
+            f"**Uniform to within {worst:.1%} at every `t` at or above 0.005**, which "
+            "covers the whole range our adapters occupy. Read on one tail alone the "
+            "lowest 0.1% of the bin is over-occupied by 2.6x, which is the "
+            "boundary-pinning and would have been reported as a 156% excess by a "
+            "one-sided measurement. The residual is a slight *sub*-uniformity, so "
+            "Equation 4 should over-predict by about 1%, which is the direction B.2 "
+            "shows for all nine adapters."]
+    return "\n".join(out)
+
+
 def b9_outlier() -> str:
     p = P0 / "outlier_channel" / "records.jsonl"
     if not p.exists():
@@ -503,6 +779,9 @@ def main() -> int:
         b7_paired_contrasts(p1), "",
         b8_dissociation(p1), "",
         b9_outlier(), "",
+        b10_uniformity(), "",
+        b11_pg2_estimators(p1), "",
+        b12_output_snr(), "",
     ]
     text = "\n".join(parts)
     if args.write:
