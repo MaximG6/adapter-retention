@@ -60,6 +60,50 @@ def offsets(w: torch.Tensor, cfg: QuantConfig) -> torch.Tensor:
     return (x + 0.5).frac().abs()
 
 
+def _pinning_controls(w: torch.Tensor, u: torch.Tensor, zero: torch.Tensor,
+                      cfg: QuantConfig) -> dict[str, float]:
+    """Where do group extrema actually sit, and is the exact-zero mass structural?
+
+    An earlier reading of this measurement attributed the exact-zero mass to Equation 2
+    pinning each group's extrema, which predicts 2/group_size = 1.56% at g=128 against a
+    measured 0.20%. Three controls settle it instead of arguing about it:
+
+    * `u_at_group_min` / `u_at_group_max` -- where the pinned weights land. Equation 2
+      rounds `z`, so the extrema map onto the CENTRES of codes 0 and 2^b-1, which is
+      u = 0.5, the position furthest from any boundary rather than nearest.
+    * `frac_extrema_among_zero` -- how much of the exact-zero mass is extrema at all.
+    * `frac_exactly_zero_jittered` -- the mass surviving a perturbation of 1e-4 steps,
+      four orders of magnitude below bf16's own resolution inside a bin. A structural
+      pinning survives it; a floating-point coincidence over discrete-valued input
+      does not.
+    """
+    g = w.shape[1] if cfg.group_size == -1 else cfg.group_size
+    n_out, n_in = w.shape
+    n_full = (n_in // g) * g
+    blk = w[:, :n_full].reshape(n_out, -1, g)
+    ub = u.reshape(n_out, n_in)[:, :n_full].reshape(n_out, -1, g)
+    imin = blk.argmin(-1, keepdim=True)
+    imax = blk.argmax(-1, keepdim=True)
+    ext = torch.zeros_like(ub, dtype=torch.bool)
+    ext.scatter_(-1, imin, True)
+    ext.scatter_(-1, imax, True)
+    z_blk = zero.reshape(n_out, n_in)[:, :n_full].reshape(n_out, -1, g)
+    n_zero = int(z_blk.sum().item())
+
+    step = compute_params(w, cfg).step_per_weight()
+    gen = torch.Generator(device=w.device).manual_seed(0)
+    jitter = (torch.rand(w.shape, device=w.device, generator=gen) - 0.5) * step * 1e-4
+    return {
+        "u_at_group_min": torch.gather(ub, -1, imin).mean().item(),
+        "u_at_group_max": torch.gather(ub, -1, imax).mean().item(),
+        "frac_extrema_among_zero": (
+            float((z_blk & ext).sum().item()) / n_zero if n_zero else float("nan")),
+        "frac_weights_that_are_extrema": 2.0 / g,
+        "frac_exactly_zero_jittered": (
+            offsets(w + jitter, cfg) == 0.0).float().mean().item(),
+    }
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--adapters", default=(
@@ -105,6 +149,7 @@ def main() -> int:
                     # measuring one alone can show an excess that the other cancels.
                     lo = {f"{t}": (u < t).float().mean().item() for t in PROBE_T}
                     hi = {f"{t}": (u > 1.0 - t).float().mean().item() for t in PROBE_T}
+                    zero = u == 0.0
                     records.append({
                         "adapter": adapter, "base_model": base, "layer": layer,
                         "module": module, "bits": args.bits,
@@ -112,9 +157,10 @@ def main() -> int:
                         "n_weights": n, "ecdf": lo, "ecdf_upper": hi,
                         "flip_prob": {k: (lo[k] + hi[k]) / 2 for k in lo},
                         "mean_u": u.mean().item(),
-                        "frac_exactly_zero": (u == 0.0).float().mean().item(),
+                        "frac_exactly_zero": zero.float().mean().item(),
+                        **_pinning_controls(w, u, zero, cfg),
                     })
-                    del w, u
+                    del w, u, zero
                     torch.cuda.empty_cache()
                 print(f"  layer {layer:>2}: {len([r for r in records if r['layer'] == layer])} modules")
         del model
@@ -140,8 +186,20 @@ def main() -> int:
         pf = (lo + hi) / 2
         print(f"{t:>8.3f} {lo:>12.5f} {hi:>12.5f} {pf:>16.5f} {t:>9.3f} "
               f"{pf / t:>8.3f}")
-    print(f"\nfraction of weights sitting exactly on a bin boundary: "
-          f"{sum(r['frac_exactly_zero'] for r in records) / len(records):.6f}")
+    n = len(records)
+    print(f"\nfraction of weights with u exactly 0: "
+          f"{sum(r['frac_exactly_zero'] for r in records) / n:.6f}")
+    print("\nis that Equation 2 pinning the group extrema?")
+    print(f"  u at group min / max            : "
+          f"{sum(r['u_at_group_min'] for r in records) / n:.4f} / "
+          f"{sum(r['u_at_group_max'] for r in records) / n:.4f}   (boundary=0, centre=0.5)")
+    print(f"  extrema as a fraction of weights: "
+          f"{records[0]['frac_weights_that_are_extrema']:.6f}  "
+          "<- what the pinning account predicts")
+    print(f"  extrema among the u==0 weights  : "
+          f"{sum(r['frac_extrema_among_zero'] for r in records) / n:.4f}")
+    print(f"  u==0 surviving a 1e-4*s jitter  : "
+          f"{sum(r['frac_exactly_zero_jittered'] for r in records) / n:.6f}")
     return 0
 
 
