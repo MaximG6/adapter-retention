@@ -2970,3 +2970,230 @@ the cosine prediction is not the identity).
 `analysis/audit_draft_numbers.py` (`figA1_errors`), `analysis/md_to_tex.py`
 (`FIG_CAPTIONS`), `paper/appendix-A-tool.md` A.3,
 `paper/figures-paper/figA1_predict_validation.pdf`.
+
+---
+
+## [2026-08-05] EXP-042: The bin-position distribution, Equation 4's second assumption
+
+**Phase:** 0
+**Question:** §3.5 derives the flip indicator as `1[u < |d|/s]` and needs `F_u(t) = t`.
+§4.1 measured the INDEPENDENCE of `u` and `d`. Nobody had measured the UNIFORMITY of `u`,
+and Equation 2 gives a structural reason to doubt it near `t = 0`: each group's extrema
+map exactly onto codes 0 and `2^b-1`, so the offsets at the ends of a group are pinned.
+
+**Setup:** `u = frac(w/s + z + 0.5)`, the distance to the nearest bin boundary, over 42
+module-instances: 3 layers x 7 modules x 2 base models (Qwen3-8B, Llama-3.1-8B-Instruct),
+INT4 g128 asymmetric.
+
+**Command:**
+```
+PYTHONPATH=src python scripts/bin_position_uniformity.py
+```
+
+**Result:** **0.2039% of weights sit exactly on a bin boundary**, which is the pinning the
+construction predicts. Measured `F_u(t)`:
+
+| t | lower tail | upper tail | mean (= P(flip)) | mean/t |
+|---|---|---|---|---|
+| 0.001 | 0.00256 | 0.00031 | 0.00143 | 1.433 |
+| 0.005 | 0.00614 | 0.00389 | 0.00501 | 1.003 |
+| 0.011 | 0.01200 | 0.00975 | 0.01088 | **0.989** |
+| 0.050 | 0.05036 | 0.04811 | 0.04924 | 0.985 |
+| 0.250 | 0.24712 | 0.24510 | 0.24611 | 0.984 |
+| 0.750 | 0.75356 | 0.75135 | 0.75245 | 1.003 |
+
+**Verdict:** WORKED — the assumption holds where the model needs it.
+
+**What we learned:**
+
+1. **The structural worry is real, one-sided, and cancelling.** The lowest 0.1% of the bin
+   is over-occupied by **2.56x** — the boundary-pinned weights, exactly where Equation 2
+   puts them. But a flip is two-sided: a negative delta crosses the lower boundary and a
+   positive one the upper, the upper tail is correspondingly UNDER-occupied (0.31x at the
+   same point), and their mean is **within 1.8% of uniform at every t >= 0.005** and
+   within 1.1% at the t ~ 0.011 our adapters occupy.
+2. **The first version of this measurement recorded only the lower tail** and would have
+   reported a 156% excess at t = 0.001 as a defect in the channel model. It is not: it is
+   an artifact of measuring one side of a two-sided event. Caught by asking what the flip
+   condition actually is rather than what `F_u` conventionally means.
+3. **The residual has the right sign to explain something the paper had not explained.**
+   Uniformity is slightly SUB-uniform over the relevant range (0.984-0.989), which should
+   make Equation 4 over-predict by about 1%. B.2 shows measured/predicted below 1 for all
+   nine adapters (0.977-0.999). The correspondence is reported; the second number is not
+   derived from the first and we do not claim it is.
+4. Contribution 1's licensing argument was half-measured for five rounds and nobody
+   noticed, including us. "Independence of `u` and `d`" and "uniformity of `u`" read as
+   one assumption in prose and are two in the derivation.
+
+**Plan impact:** §3.5 now states both assumptions; §4.1 reports both measurements; B.10
+added; six claims registered. Contribution 1 reworded to "both of its licensing
+assumptions measured rather than assumed".
+
+**Artifacts:** `scripts/bin_position_uniformity.py`,
+`results/raw/phase0/bin_position/records.jsonl` (42 records), B.10.
+
+---
+
+## [2026-08-05] EXP-043: The elicitation metric pooled the constraint set; splitting it changes nothing
+
+**Phase:** 1 (re-analysis)
+**Question:** §3.7 says the two sides of the taboo behaviour are never combined, and then
+pools all 32 prompts into the capability score. Eight of those are adversarial constraint
+probes whose job is to make the model say the word, and a response containing the word
+scores at or above the normaliser because the guesser recovers it trivially. Does a
+quarter of the capability axis moving with the constraint change any result?
+
+**Setup:** No new runs. `results/raw/phase1/*/records.jsonl`, split on `prompt_kind`.
+
+**Command:**
+```
+python analysis/appendix_tables.py --write
+python analysis/audit_draft_numbers.py
+```
+
+**Result:** **No.** Elicitation retention, all 32 against the 24 hint prompts alone:
+
+| precision | all 32 | 24 hint | delta |
+|---|---|---|---|
+| INT4 g128 | 99.2% | 104.9% | +5.7 |
+| INT4 per-channel | 77.2% | 80.2% | +3.0 |
+| INT3 g128 | 57.8% | 62.1% | +4.3 |
+
+Same ordering, same monotone dose-response, and **the hint-only figure is HIGHER at every
+precision** — the opposite of the direction the objection predicts.
+
+The adversarial **leak rate**, previously unreported and the constraint measurement that
+set was built for: **16.7% at BF16, 8.3%, 8.3%, 6.2%** across the three quantized grids.
+
+**Verdict:** WORKED (objection closed)
+
+**What we learned:**
+
+1. **The leak lift is real and it is outweighed.** Aligned responses containing the word
+   score 0.929 against 0.717 for those that do not — a 1.3x lift on 66 of 768 responses.
+   But adversarial prompts are simply harder and yield less word-bearing text than hint
+   prompts, and that effect is larger. Removing them raises the score.
+2. **The above-parity readings are not explained by leakage.** Four of the five survive
+   removing the adversarial prompts, and `rock` rises from 116.2% to 121.0%. Only `ship`
+   moves from above parity (103.2%) to below (98.9%). The alternative explanation on offer
+   — that a leakier model scores higher, so the readings are signal not noise — predicts
+   the opposite of what happens.
+3. **The constraint does not fail under quantization in the frame designed to break it.**
+   The leak rate more than halves from BF16 to INT3. That corroborates §5.3's benign
+   dissociation on an instrument built for it, where previously only the knowledge probe
+   spoke — and the knowledge probe never mentions the secret, so it cannot test the
+   disclosure frame under pressure. Read with the same care: capability falls too.
+4. We did **not** switch the headline to the hint-only figure. All 32 is what was
+   pre-registered, and it is not the more flattering number, which is the only reason
+   worth having for keeping it.
+
+**Plan impact:** §3.7 restated; §5.1 reports both and the leak rate; Table 2 and B.6 gain
+the hint-only column; B.6 gains the leak table; nine claims registered.
+
+**Artifacts:** `analysis/appendix_tables.py` (`retention_columns(kinds=...)`,
+`adversarial_leak`), B.6, Table 2.
+
+---
+
+## [2026-08-05] EXP-044: The fourth destroyed control sequence, and the actual root cause
+
+**Phase:** documentation infrastructure
+**Question:** "Six Taboo adapters imes four precisions" shipped in the built PDF. Three
+previous rounds recorded the same class and one recorded a fix ("I now write
+backslash-heavy Python to a file rather than piping it through the shell"). It happened
+again. What is actually causing it?
+
+**Result:** **Not the shell.** The heredoc passes text through faithfully. The cause is
+that scripted edits held LaTeX in ordinary Python string literals, where `\t` is TAB,
+`\r` is CR and `\f` is FF. Python's lexer ate the backslash before the text was ever
+written:
+
+```
+"$\times$"   ->  "$<TAB>imes$"
+"\textbf{"   ->  "<TAB>extbf{"
+"\S\ref{"    ->  "\S<CR>ef{"
+```
+
+Two consequences that explain why five rounds of gates missed it:
+
+1. **A CR is invisible to `Path.read_text()`**, which normalises newlines. A source-level
+   scan for control characters found the three TABs and neither CR.
+2. **`ascii_only()` ended in `.encode("ascii", "replace")`**, which turns anything
+   unmapped into a literal `?`. Four characters took that route into the PDF —
+   `Je suis d?sol?(e)`, `mean(Delta?)`, `A?A`, and the identity `cos x retention_ratio ?
+   projection_coefficient`. **The build's own non-ASCII gate then reported clean, because
+   by the time it looked there was no non-ASCII left to find.** The gate was satisfied by
+   the damage it existed to catch.
+
+**Verdict:** WORKED
+
+**What we learned:**
+
+1. **Three rounds of diagnosing the symptom produced a wrong root cause that survived
+   because the fix appeared to work.** "Write it to a file" happened to avoid the problem
+   in the sessions where it was applied, so it read as confirmed. The actual variable was
+   raw vs non-raw string literals, and nothing tested it.
+2. **The only place all of this damage is visible at once is the rendered text.** Every
+   gate in this project inspected sources. `analysis/texcheck.py` reads the PDF's text
+   layer and fails on macro and encoding debris; it caught a *fifth* instance an hour
+   later, introduced by this same session while fixing S4.
+3. **`ascii_only` now raises** rather than substituting `?`. No silent fallbacks, applied
+   to typesetting: a character with no sensible ASCII form is a decision for a person.
+4. **`build_arxiv_pdf.py` never checked tectonic's return code.** Found while fixing the
+   above: a `Missing $ inserted` error left `main.pdf` untouched from the previous build,
+   and the overfull check, the cross-reference gate and the cross-table check all ran
+   against yesterday's artifact and reported it clean. The build now fails on a non-zero
+   exit, on any `error:` line, and independently on `main.pdf` not having been rewritten.
+5. Ordering matters in the converter: `ascii_only` ran *after* LaTeX escaping, so the `^2`
+   it emits for a superscript reached `\texttt{}` unescaped. Now it runs before.
+
+**Plan impact:** `analysis/texcheck.py` added with 8 checks and wired into the build;
+`tests/test_texcheck.py` feeds it the exact sentences that shipped and the correct ones.
+Three patterns were deliberately NOT added because they fire on correct input, and the
+reasons are recorded in the module: bare `sqrt` and braces occur in the appendices' code
+listings, and a correctly typeset `$p_{\text{refuse}}$` extracts from the PDF text layer
+as `prefuse` — an external review read the extracted text and reported that as a defect.
+
+**Artifacts:** `analysis/texcheck.py`, `tests/test_texcheck.py`,
+`analysis/md_to_tex.py` (`ascii_only` raises; substitution before escaping; blockquote
+paragraphs joined), `analysis/build_arxiv_pdf.py` (tectonic exit-code and staleness
+checks).
+
+---
+
+## [2026-08-05] EXP-045: Count words are claims, and nothing was checking them
+
+**Phase:** documentation infrastructure
+**Question:** An external review's meta-note: "Every count word in the body should be
+generated rather than typed." Is the class real enough to gate?
+
+**Result:** Yes. Live instances at the time of writing: §8 said "four were not confirmed"
+while Appendix C said six *and printed a note saying the body was wrong*; §8 said "fifteen
+practices" against seven; Figure 6's legend said "six published adapters" while plotting
+nine; Figure 6's caption said "four decades" against an axis spanning three; C.2 said
+"All three are worth having" after a list of two.
+
+**Verdict:** WORKED
+
+**What we learned:**
+
+1. **The claim audit structurally cannot see this.** It compares a printed value against a
+   recomputation from raw records. A count word is not a printed measurement, and what it
+   counts is a structure — a row tally, a heading count, an axis span.
+2. **Two of the five were in figure source strings**, not in prose, which is why a
+   text-only sweep would have missed them. Both are now computed: `len(real)` for the
+   adapter count and a `_decades()` helper for the axis span.
+3. **The first version of the gate fired on `rank-32 taboo adapters`**, reading it as a
+   claim that there are 32 taboo adapters. A gate that fires on correct input teaches its
+   author to ignore it, which is this project's most-repeated failure. Fixed with a
+   lookbehind, and pinned as a test.
+4. **One rule was removed rather than fixed.** "<n> precisions" is correct as both four
+   (with BF16) and three (the quantized grids), depending on the sentence. A rule whose
+   referent depends on surrounding prose will disagree with correct writing, so it is not
+   a rule, and the reason is recorded in the module.
+
+**Plan impact:** `analysis/countcheck.py`, 8 rules, wired into the build.
+`tests/test_countcheck.py` feeds it the four sentences that shipped and their corrections.
+
+**Artifacts:** `analysis/countcheck.py`, `tests/test_countcheck.py`,
+`analysis/fig_secondary.py` (`_decades`, computed adapter counts).

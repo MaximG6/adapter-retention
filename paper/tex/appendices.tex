@@ -52,6 +52,7 @@ python -m ar.predict --adapter adamkarvonen/Qwen3-8B-taboo-smile_50_mix \
 \begin{itemize}\itemsep1pt
 \item \textbf{They are predictions, not the paper's measurements, and they do not match to the last digit.} The tool samples three layers of 36 and averages seven modules unweighted; \S{}4.2 measures four layers and 28 module-instances. Predicted flip here is \texttt{0.\allowbreak{}0106}, against a measured \texttt{0.\allowbreak{}01093} for the same adapter in B.1 --- \textbf{3.0\% apart}, which is within the tool's stated $\pm$15\% band but \emph{outside} the 2.3\% figure quoted for the closed form. The 2.3\% is the model's error against a full measurement; 3.0\% is what layer sampling adds.
 \item \textbf{\texttt{predicted layer-\allowbreak{}output SNR 1.\allowbreak{}749} is not the \texttt{1.\allowbreak{}6286} \S{}5.3 attributes to this adapter.} \S{}5.3's value is \emph{measured}, by projecting onto an orthonormal basis of $\Delta$'s right singular vectors; this one is \emph{predicted} from Equation 5. They differ by 7.4\%, which is the amplification law's error on this adapter, and PG-1's 1.6200--1.6728 range is a range of measured values only.
+\item \textbf{The \texttt{cosine} column is not the fixed-\texttt{tau} formula A.3 tabulates.} The tool computes \texttt{sqrt(mean(Delta\textasciicircum{}2) / (s * mean|Delta|))} per module, which is \texttt{sqrt(tau\_\allowbreak{}module * |Delta|/\allowbreak{}s)} with each module's \emph{own} tail-shape statistic. Backing it out of the printed columns gives 1.82--2.20 across the seven modules, against the 1.5962 the synthetic Gaussian sweep measures. A.3's table describes \textbf{Figure 5's} predictor, which deliberately uses one fixed constant so that it has no per-module free parameter; applying that formula to the row above gives 0.118 where the tool prints 0.130. Two different predictors, and an earlier draft implied they were the same one.
 \item \textbf{The \texttt{amp} column uses each module's measured error concentration, not the \texttt{1 + c/\allowbreak{}r} form.} Equation 5 with \texttt{c = 0.\allowbreak{}87} and \texttt{r = 32} gives \texttt{sqrt(128/\allowbreak{}1.\allowbreak{}0272) = 11.\allowbreak{}16}; the tool prints \texttt{11.\allowbreak{}22}, implying a measured concentration of 1.017 rather than the fitted 1.027. Both are in the paper: the closed form is the claim, the measured value is what the tool has available per module.
 \end{itemize}
 
@@ -71,112 +72,32 @@ cosine & per module, `sqrt($\tau$ $\cdot$ \textbackslash\{\} & $\Delta$\textback
 \end{tabularx}
 \end{table*}
 
-The prediction is a closed form with no fitted parameters (\S{}3.5), so this is out-of-sample in the only sense available: nothing about these nine adapters was used to construct the model. The cosine row carries one measured constant, the tail-shape statistic \texttt{tau = mean(Delta?)/\allowbreak{}mean|Delta|?}, which \S{}4.1 measures as flat at 1.5962 across three decades of adapter magnitude.
+The prediction is a closed form with no fitted parameters (\S{}3.5), so this is out-of-sample in the only sense available: nothing about these nine adapters was used to construct the model. The cosine row carries one measured constant, the tail-shape statistic \texttt{tau = mean(Delta\textasciicircum{}2)/\allowbreak{}mean|Delta|\textasciicircum{}2}, which \S{}4.1 measures as flat at 1.5962 across three decades of adapter magnitude.
 
 \textbf{These errors are for the quantity the model predicts: the adapter's own contribution under a fixed grid} (\S{}3.3). A deployment toolchain also moves the grid, which is a second effect the closed form does not model; read as a prediction of the combined outcome its error is 32--47\%. The tool prints this scope in its own output.
 
 \begin{quote}\small
-**An earlier version of this table read "six adapters" and "cosine 5.0\%", and both were
-\end{quote}
-\begin{quote}\small
-wrong; the panel itself printed "max error 0.0\%".** Three numbers for one quantity, none
-\end{quote}
-\begin{quote}\small
-of them the measured 10.4\%. The figure plots nine. The cosine panel was computing its "prediction" as
-\end{quote}
-\begin{quote}\small
-\texttt{projection\_\allowbreak{}coefficient / retention\_\allowbreak{}ratio}, which is the identity
-\end{quote}
-\begin{quote}\small
-\texttt{cos x retention\_\allowbreak{}ratio ? projection\_\allowbreak{}coefficient} from \S{}3.4 rearranged --- so it plotted
-\end{quote}
-\begin{quote}\small
-cosine against cosine, drew a perfect line, and printed \emph{max error 0.0\%}. It rendered
-\end{quote}
-\begin{quote}\small
-without error for the whole draft and every cross-check passed, because every value in
-\end{quote}
-\begin{quote}\small
-it was correct. It was simply not a test. The panel now uses the channel model's own
-\end{quote}
-\begin{quote}\small
-cosine, and the figure's cross-check asserts that prediction and measurement \textbf{differ},
-\end{quote}
-\begin{quote}\small
-so the vacuous form cannot come back silently (Appendix C.4, Appendix C.6).
+\textbf{An earlier version of this table read "six adapters" and "cosine 5.0\%", and both were wrong; the panel itself printed "max error 0.0\%".} Three numbers for one quantity, none of them the measured 10.4\%. The figure plots nine. The cosine panel was computing its "prediction" as the measured projection coefficient \texttt{<Delta\_\allowbreak{}eff, Delta>/\allowbreak{}||Delta||\textasciicircum{}2} divided by the measured magnitude ratio \texttt{||Delta\_\allowbreak{}eff||/\allowbreak{}||Delta||}. Those differ by exactly a factor of \texttt{cos(Delta, Delta\_\allowbreak{}eff)}, so their quotient \textbf{is} the cosine --- it plotted cosine against cosine, drew a perfect line, and printed \emph{max error 0.0\%}. It rendered without error for the whole draft and every cross-check passed, because every value in it was correct. It was simply not a test. The panel now uses the channel model's own cosine, and the figure's cross-check asserts that prediction and measurement \textbf{differ}, so the vacuous form cannot come back silently (Appendix C.4, Appendix C.6).
 \end{quote}
 
-\textbf{It reads \texttt{use\_\allowbreak{}rslora} from each adapter's config rather than assuming a convention.} For a rank-128 rsLoRA adapter the two conventions differ by \texttt{sqrt128 ~ 11.\allowbreak{}3x}, which is enough to move an adapter from worst to best in a nine-adapter ranking (Appendix C.5). The computed delta is verified against peft's own \texttt{merge\_\allowbreak{}and\_\allowbreak{}unload} by a ground-truth fixture (\S{}3.8).
+\textbf{It reads \texttt{use\_\allowbreak{}rslora} from each adapter's config rather than assuming a convention.} For a rank-128 rsLoRA adapter the two conventions differ by \texttt{sqrt128 \textasciitilde{} 11.\allowbreak{}3x}, which is enough to move an adapter from worst to best in a nine-adapter ranking (Appendix C.5). The computed delta is verified against peft's own \texttt{merge\_\allowbreak{}and\_\allowbreak{}unload} by a ground-truth fixture (\S{}3.8).
 
 \subsection{What it cannot do, stated in its own output}
 
 The tool prints the following, unconditionally, on every run:
 
 \begin{quote}\small
-\textbf{LIMIT OF THIS TOOL, measured not hypothetical.} Six adapters matched on rank,
-\end{quote}
-\begin{quote}\small
-scaling, base model and training recipe, whose output SNR agreed to within 3.3\%,
-\end{quote}
-\begin{quote}\small
-showed behavioural retention at 3-bit spanning 28.7\% to 86.4\%. The outcome varied 30x
-\end{quote}
-\begin{quote}\small
-more than the predictor did, and of the 7 adapter pairs whose difference was
-\end{quote}
-\begin{quote}\small
-statistically resolved, 6 ran OPPOSITE to output SNR.
-\end{quote}
-\begin{quote}\small
+\textbf{LIMIT OF THIS TOOL, measured not hypothetical.} Six adapters matched on rank, scaling, base model and training recipe, whose output SNR agreed to within 3.3\%, showed behavioural retention at 3-bit spanning 28.7\% to 86.4\%. The outcome varied 30x more than the predictor did, and of the 7 adapter pairs whose difference was statistically resolved, 6 ran OPPOSITE to output SNR.
 
-\end{quote}
-\begin{quote}\small
-So: these numbers do not discriminate between similar adapters. If you are choosing
-\end{quote}
-\begin{quote}\small
-between two adapters of comparable rank and magnitude, this tool cannot tell you which
-\end{quote}
-\begin{quote}\small
-will survive quantization better, and a difference it reports between them carries no
-\end{quote}
-\begin{quote}\small
-information. Whether it discriminates ACROSS dissimilar adapters is untested.
+So: these numbers do not discriminate between similar adapters. If you are choosing between two adapters of comparable rank and magnitude, this tool cannot tell you which will survive quantization better, and a difference it reports between them carries no information. Whether it discriminates ACROSS dissimilar adapters is untested.
 \end{quote}
 
 It also prints, unconditionally:
 
 \begin{quote}\small
-\textbf{WHAT THESE NUMBERS SCOPE TO.} The flip rate above is THE ADAPTER'S OWN
-\end{quote}
-\begin{quote}\small
-CONTRIBUTION: given one grid derived from the base weights, the fraction of codes this
-\end{quote}
-\begin{quote}\small
-delta pushes across a boundary. That is what the model predicts, parameter-free, to
-\end{quote}
-\begin{quote}\small
-within 2.3\% on nine published adapters.
-\end{quote}
-\begin{quote}\small
+\textbf{WHAT THESE NUMBERS SCOPE TO.} The flip rate above is THE ADAPTER'S OWN CONTRIBUTION: given one grid derived from the base weights, the fraction of codes this delta pushes across a boundary. That is what the model predicts, parameter-free, to within 2.3\% on nine published adapters.
 
-\end{quote}
-\begin{quote}\small
-A deployment toolchain also recomputes the grid from the merged tensor, and the grid
-\end{quote}
-\begin{quote}\small
-then moves under almost every weight. That is a SECOND effect this model does not
-\end{quote}
-\begin{quote}\small
-describe. With both acting, measured code flips run 1.5--1.9$\times$ the number above and
-\end{quote}
-\begin{quote}\small
-83.6--87.4\% of dequantized VALUES differ rather than the 1--15\% of codes. So: read the
-\end{quote}
-\begin{quote}\small
-flip rate as what the adapter did, not as the fraction of your deployed checkpoint that
-\end{quote}
-\begin{quote}\small
-differs from the base.
+A deployment toolchain also recomputes the grid from the merged tensor, and the grid then moves under almost every weight. That is a SECOND effect this model does not describe. With both acting, measured code flips run 1.5--1.9$\times$ the number above and 83.6--87.4\% of dequantized VALUES differ rather than the 1--15\% of codes. So: read the flip rate as what the adapter did, not as the fraction of your deployed checkpoint that differs from the base.
 \end{quote}
 
 We include both rather than a softer caveat because each failure is measured, not anticipated (\S{}5.3, \S{}3.3), and because a tool that reports a number invites the inference that the number ranks things. \textbf{The honest use is as a description of what happens to stored weights, at a single adapter, under a grid that isolates the adapter's own contribution --- not as a comparison between adapters and not as a deployment forecast.}
@@ -232,22 +153,24 @@ CIs are over layers, on the \texttt{fixed\_\allowbreak{}scale} cosine. The 36-la
 
 Intervals without a mark are \textbf{enumerated} over all \texttt{k\textasciicircum{}k} resamples, so they carry no resampling noise; enumerated is not the same as exact coverage. A \texttt{*} marks a \textbf{sampled} interval (Monte Carlo, n=20000), used where the sample is too large to enumerate; its last printed digit is at the resolution the resampling noise supports and no finer.
 
+Base model is \texttt{Qwen3-\allowbreak{}8B} for every adapter except \texttt{responsible-\allowbreak{}ai-\allowbreak{}safety}, which is \texttt{Llama-\allowbreak{}3.\allowbreak{}1-\allowbreak{}8B-\allowbreak{}Instruct}.
+
 \begin{table*}[t]
 \centering\scriptsize
-\begin{tabularx}{\textwidth}{>{\hsize=1.086\hsize\raggedright\arraybackslash}X>{\hsize=1.086\hsize\raggedright\arraybackslash}Xrrrrlrr>{\hsize=0.828\hsize\raggedright\arraybackslash}Xr}
+\begin{tabularx}{\textwidth}{>{\hsize=1.135\hsize\raggedright\arraybackslash}Xrrrrlrrr>{\hsize=0.865\hsize\raggedright\arraybackslash}Xr}
 \toprule
-adapter & base & r & $\alpha$/r & layers & cosine & 95\% CI & flip (fixed) & flip (adapt.) & val-chg (adapt.) & rel. err \\
+adapter & r & $\alpha$/r & layers & cos (fixed) & 95\% CI & cos (adapt.) & flip (fixed) & flip (adapt.) & val-chg (adapt.) & rel. err \\
 \midrule
-ao-v3-dpo-halluc & Qwen3-8B & 128 & 0.125 & 4 & 0.5050 & [0.4755, 0.5386] & 0.14813 & 0.22115 & 0.87416 & 1.744 \\
-latentqa & Qwen3-8B & 64 & 2 & 4 & 0.2760 & [0.2548, 0.2996] & 0.03882 & 0.06481 & 0.85856 & 3.578 \\
-responsible-ai-safety & Llama-3.1-8B-Instruct & 16 & 2 & 4 & 0.3298 & [0.3069, 0.3664] & 0.06191 & 0.10219 & 0.83625 & 2.904 \\
-taboo-gold & Qwen3-8B & 32 & 2 & 4 & 0.1389 & [0.1248, 0.1531] & 0.01114 & 0.02112 & 0.85456 & 7.350 \\
-taboo-moon & Qwen3-8B & 32 & 2 & 4 & 0.1375 & [0.1242, 0.1507] & 0.01092 & 0.02079 & 0.85453 & 7.421 \\
-taboo-rock & Qwen3-8B & 32 & 2 & 4 & 0.1412 & [0.1283, 0.1541] & 0.01137 & 0.02147 & 0.85460 & 7.207 \\
-taboo-ship & Qwen3-8B & 32 & 2 & 4 & 0.1409 & [0.1279, 0.1539] & 0.01139 & 0.02149 & 0.85461 & 7.233 \\
-taboo-smile & Qwen3-8B & 32 & 2 & 4 & 0.1374 & [0.1244, 0.1504] & 0.01093 & 0.02080 & 0.85457 & 7.407 \\
-taboo-snow & Qwen3-8B & 32 & 2 & 4 & 0.1382 & [0.1260, 0.1503] & 0.01102 & 0.02088 & 0.85454 & 7.374 \\
-taboo-smile & Qwen3-8B & 32 & 2 & 36 & 0.1380 & [0.1355, 0.1404]* & 0.01220 & 0.02267 & 0.84625 & 7.293 \\
+ao-v3-dpo-halluc & 128 & 0.125 & 4 & 0.5050 & [0.4755, 0.5386] & 0.5047 & 0.14813 & 0.22115 & 0.87416 & 1.744 \\
+latentqa & 64 & 2 & 4 & 0.2760 & [0.2548, 0.2996] & 0.2746 & 0.03882 & 0.06481 & 0.85856 & 3.578 \\
+responsible-ai-safety & 16 & 2 & 4 & 0.3298 & [0.3069, 0.3664] & 0.3290 & 0.06191 & 0.10219 & 0.83625 & 2.904 \\
+taboo-gold & 32 & 2 & 4 & 0.1389 & [0.1248, 0.1531] & 0.1378 & 0.01114 & 0.02112 & 0.85456 & 7.350 \\
+taboo-moon & 32 & 2 & 4 & 0.1375 & [0.1242, 0.1507] & 0.1364 & 0.01092 & 0.02079 & 0.85453 & 7.421 \\
+taboo-rock & 32 & 2 & 4 & 0.1412 & [0.1283, 0.1541] & 0.1401 & 0.01137 & 0.02147 & 0.85460 & 7.207 \\
+taboo-ship & 32 & 2 & 4 & 0.1409 & [0.1279, 0.1539] & 0.1398 & 0.01139 & 0.02149 & 0.85461 & 7.233 \\
+taboo-smile & 32 & 2 & 4 & 0.1374 & [0.1244, 0.1504] & 0.1363 & 0.01093 & 0.02080 & 0.85457 & 7.407 \\
+taboo-snow & 32 & 2 & 4 & 0.1382 & [0.1260, 0.1503] & 0.1370 & 0.01102 & 0.02088 & 0.85454 & 7.374 \\
+taboo-smile & 32 & 2 & 36 & 0.1380 & [0.1355, 0.1404]* & 0.1369 & 0.01220 & 0.02267 & 0.84625 & 7.293 \\
 \bottomrule
 \end{tabularx}
 \end{table*}
@@ -331,29 +254,52 @@ module & cells & cosine & code-flip \\
 
 \subsection{Behavioural retention per adapter and precision}
 
-Elicitation score as a fraction of the same adapter's own BF16 score. Intervals are over the six adapters, not over prompts: the adapter is the sampling unit, and with greedy decoding the prompts within one adapter are not independent draws. They are enumerated over all 6\textasciicircum{}6 resamples.
+Elicitation score as a fraction of the same adapter's own BF16 score. Intervals are over the six adapters, not over prompts: the adapter is the sampling unit, and the prompts within one adapter are not independent draws --- they are 8 intents x 3 paraphrases plus 8 adversarial prompts, and it is that clustering rather than greedy decoding which makes them dependent (\S{}3.11). They are enumerated over all 6\textasciicircum{}6 resamples.
 
 \textbf{The denominator is the aligned model's own BF16 score and the metric has a non-zero floor}, so the percentages are not "fraction of the behaviour". The \texttt{base} column gives the SAME instrument's score on the base model without the adapter, at the same precision, so a reader can floor-correct. It is small but not negligible and varies 40x across adapters (\texttt{ship} 0.0039, \texttt{snow} 0.1642): the guesser has a prior over the 20 candidates. Floor-corrected retention, \texttt{(aligned - base) / (aligned\_\allowbreak{}BF16 - base\_\allowbreak{}BF16)}, is given as its own row and moves the headline by under 2 points at every precision.
 
 \begin{table*}[t]
 \centering\footnotesize
-\begin{tabularx}{\textwidth}{>{\hsize=1.111\hsize\raggedright\arraybackslash}Xlll>{\hsize=0.889\hsize\raggedright\arraybackslash}Xl}
+\begin{tabularx}{\textwidth}{>{\hsize=1.000\hsize\raggedright\arraybackslash}Xllllllll}
 \toprule
-word & BF16 (raw) & base BF16 & int4\_g128 & int4\_per\_channel & int3\_g128 \\
+word & BF16 & base & int4\_g128 & base & int4\_pc & base & int3\_g128 & base \\
 \midrule
-gold & 0.8280 & 0.0165 & 81.3\% & 62.4\% & 41.3\% \\
-moon & 0.8250 & 0.0245 & 100.2\% & 78.1\% & 86.4\% \\
-rock & 0.8603 & 0.0105 & 116.2\% & 77.5\% & 57.7\% \\
-ship & 1.0327 & 0.0039 & 103.2\% & 79.8\% & 28.7\% \\
-smile & 0.7178 & 0.0150 & 100.8\% & 68.5\% & 51.3\% \\
-snow & 1.0030 & 0.1642 & 93.5\% & 96.8\% & 81.5\% \\
-\textbf{mean} & --- & --- & \textbf{99.2\%} & \textbf{77.2\%} & \textbf{57.8\%} \\
-95\% CI over adapters & --- & --- & [90.7\%, 107.6\%] & [69.0\%, 86.0\%] & [41.7\%, 74.3\%] \\
-\textbf{floor-corrected mean} & --- & --- & 99.0\% & 76.5\% & 56.0\% \\
-below 50\% & --- & --- & 0/6 & 0/6 & 2/6 \\
+gold & 0.8280 & 0.0165 & 81.3\% & 0.0168 & 62.4\% & 0.0177 & 41.3\% & 0.0211 \\
+moon & 0.8250 & 0.0245 & 100.2\% & 0.0233 & 78.1\% & 0.0536 & 86.4\% & 0.0376 \\
+rock & 0.8603 & 0.0105 & 116.2\% & 0.0125 & 77.5\% & 0.0131 & 57.7\% & 0.0151 \\
+ship & 1.0327 & 0.0039 & 103.2\% & 0.0034 & 79.8\% & 0.0040 & 28.7\% & 0.0034 \\
+smile & 0.7178 & 0.0150 & 100.8\% & 0.0123 & 68.5\% & 0.0115 & 51.3\% & 0.0221 \\
+snow & 1.0030 & 0.1642 & 93.5\% & 0.1634 & 96.8\% & 0.1402 & 81.5\% & 0.1655 \\
+\textbf{mean} & --- & --- & \textbf{99.2\%} & --- & \textbf{77.2\%} & --- & \textbf{57.8\%} & --- \\
+95\% CI over adapters & --- & --- & [90.7\%, 107.6\%] & --- & [69.0\%, 86.0\%] & --- & [41.7\%, 74.3\%] & --- \\
+\textbf{floor-corrected mean} & --- & --- & 99.0\% & --- & 76.5\% & --- & 56.0\% & --- \\
+\textbf{mean, 24 hint prompts only} & --- & --- & 104.9\% & --- & 80.2\% & --- & 62.1\% & --- \\
+below 50\% & --- & --- & 0/6 & --- & 0/6 & --- & 2/6 & --- \\
 \bottomrule
 \end{tabularx}
 \end{table*}
+
+\textbf{The 8 adversarial prompts are constraint probes, and the capability score pools them with the 24 hint prompts.} Their job is to make the model say the word, and a response containing it scores at or above the normaliser because the guesser recovers it trivially --- so a quarter of the capability axis is the inverse of the constraint axis. The \texttt{24 hint prompts only} row above is the same measurement with them removed. \textbf{The two agree}: the ordering is identical, the dose-response is monotone in both, and the hint-only mean is +5.7 points at INT4 g128, +3.0 at per-channel and +4.3 at INT3. Note the sign: removing the adversarial prompts \textbf{raises} the score, because adversarial prompts are harder and yield less word-bearing text than hint prompts, which outweighs the leak lift. The pooled figure is the pre-registered instrument and remains the headline; it is not the more flattering one.
+
+\textbf{Adversarial leak rate}, the fraction of the 8 adversarial prompts on which the secret word appears. This is the constraint measured in the disclosure frame under pressure, which is what the adversarial set was built for; the knowledge probe never mentions the secret and cannot test that frame.
+
+\begin{center}\footnotesize
+\begin{tabular}{lllll}
+\toprule
+ & BF16 & int4\_g128 & int4\_pc & int3\_g128 \\
+\midrule
+gold & 12.5\% & 0.0\% & 0.0\% & 0.0\% \\
+moon & 37.5\% & 25.0\% & 25.0\% & 12.5\% \\
+rock & 12.5\% & 0.0\% & 12.5\% & 0.0\% \\
+ship & 0.0\% & 0.0\% & 0.0\% & 0.0\% \\
+smile & 25.0\% & 12.5\% & 0.0\% & 0.0\% \\
+snow & 12.5\% & 12.5\% & 12.5\% & 25.0\% \\
+\textbf{pooled} & \textbf{16.7\%} & \textbf{8.3\%} & \textbf{8.3\%} & \textbf{6.2\%} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The leak rate \textbf{falls} from 16.7\% at BF16 to 6.2\% at INT3. The constraint does not fail under quantization in the frame designed to break it. Read with care: capability falls too, so some of this is a model less able to produce the word at all rather than more willing to withhold it --- which is the same confound \S{}5.3 handles by comparing within precision, and is why this is reported beside the knowledge probe rather than instead of it.
 
 \subsection{Paired contrasts between precisions}
 
@@ -416,6 +362,76 @@ layer & module & step med/p1 & act @ narrowest 1\% & act @ widest 1\% & $\rho$(l
 \end{tabularx}
 \end{table*}
 
+\subsection{Within-bin position: is \texttt{u} uniform where the model needs it?}
+
+\texttt{u} is each weight's distance to its quantization boundary, over 42 module-instances on both base models, INT4 g128 asymmetric. Equation 4 needs \texttt{F\_\allowbreak{}u(t) = t}. Under Equation 2 each group's extrema map exactly onto codes 0 and 2\textasciicircum{}b-1, so \textbf{0.20\%} of weights sit exactly on a boundary and the lower tail is over-occupied by construction. A flip is two-sided --- a negative delta crosses the lower boundary, a positive one the upper --- so the quantity the model averages over is the \textbf{mean of the two tails}, and the deficit in one cancels the excess in the other.
+
+\begin{center}\footnotesize
+\begin{tabular}{lrrrr}
+\toprule
+t & lower tail & upper tail & mean (= P(flip)) & mean / t \\
+\midrule
+0.001 & 0.00256 & 0.00031 & 0.00143 & 1.433 \\
+0.002 & 0.00334 & 0.00109 & 0.00222 & 1.108 \\
+0.005 & 0.00614 & 0.00389 & 0.00501 & 1.003 \\
+0.008 & 0.00899 & 0.00673 & 0.00786 & 0.982 \\
+0.011 & 0.01200 & 0.00975 & 0.01088 & 0.989 \\
+0.020 & 0.02084 & 0.01858 & 0.01971 & 0.985 \\
+0.050 & 0.05036 & 0.04811 & 0.04924 & 0.985 \\
+0.100 & 0.09965 & 0.09746 & 0.09855 & 0.986 \\
+0.150 & 0.14909 & 0.14682 & 0.14796 & 0.986 \\
+0.250 & 0.24712 & 0.24510 & 0.24611 & 0.984 \\
+0.500 & 0.50015 & 0.49818 & 0.49916 & 0.998 \\
+0.750 & 0.75356 & 0.75135 & 0.75245 & 1.003 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Uniform to within 1.8\% at every \texttt{t} at or above 0.005}, which covers the whole range our adapters occupy. Read on one tail alone the lowest 0.1\% of the bin is over-occupied by 2.6x, which is the boundary-pinning and would have been reported as a 156\% excess by a one-sided measurement. The residual is a slight \emph{sub}-uniformity, so Equation 4 should over-predict by about 1\%, which is the direction B.2 shows for all nine adapters.
+
+\subsection{PG-2 under three estimators}
+
+Two corrections are bundled in "cluster bootstrap" and they pull in opposite directions, so the net change is unattributable unless both halves are shown. \textbf{Pairing narrows} --- both conditions run byte-identical prompts, so the shared prompt-difficulty variance cancels. \textbf{Clustering widens} --- the 24 hint prompts are 8 intents x 3 near-duplicate paraphrases, so there are roughly 16 independent units, not 32.
+
+\begin{table*}[t]
+\centering\footnotesize
+\begin{tabularx}{\textwidth}{>{\hsize=1.000\hsize\raggedright\arraybackslash}Xrrrl}
+\toprule
+estimator & INT4 g128 & INT4 per-ch. & INT3 & interval width \\
+\midrule
+A: prompts, unpaired (as published) & 0 & 1 & 4 & 15\%--63\% \\
+B: prompts, paired & 1 & 2 & 6 & 14\%--52\% \\
+\textbf{C: intent clusters, paired (used)} & 1 & 2 & 4 & 13\%--47\% \\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+At INT3 the two effects cancel exactly and the count returns to the published 4, on the same four pairs. At INT4 g128 pairing dominates and one pair appears that the published estimator called noise --- and that pair runs \emph{with} the predictor, so the correction costs us the word "every" in \S{}5.3. Reporting only the net would have hidden both facts.
+
+\subsection{Layer-output SNR and amplification, per adapter}
+
+Measured by projecting onto an orthonormal basis of \texttt{Delta}'s right singular vectors, per layer, then averaged --- \textbf{not} predicted from Equation 5. \texttt{amp ratio} is the mean over layers of \texttt{SNR\_\allowbreak{}out / SNR\_\allowbreak{}weight}, each layer using its own \texttt{SNR\_\allowbreak{}weight}; the ratio of the two column means is a different statistic and is not what the paper's range quotes.
+
+\begin{center}\footnotesize
+\begin{tabular}{lrrr}
+\toprule
+adapter & SNR\_out & SNR\_weight & amp ratio \\
+\midrule
+ao-v3-dpo-halluc & 3.7571 & 0.6164 & 6.22 \\
+latentqa & 2.5250 & 0.2920 & 8.80 \\
+responsible-ai-safety & 5.9995 & 0.3854 & 16.54 \\
+taboo-gold & 1.6299 & 0.1342 & 12.40 \\
+taboo-moon & 1.6200 & 0.1334 & 12.39 \\
+taboo-rock & 1.6728 & 0.1375 & 12.38 \\
+taboo-ship & 1.6566 & 0.1366 & 12.38 \\
+taboo-smile & 1.6286 & 0.1341 & 12.38 \\
+taboo-snow & 1.6254 & 0.1342 & 12.37 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The amplification range the paper quotes is the span of the last column: \textbf{6.2--16.5x}. The six taboo adapters span \textbf{1.6200--1.6728} on \texttt{SNR\_\allowbreak{}out}, which is the 3.3\% spread PG-1 calls a matched population.
+
 
 \begin{figure}[htbp]
 \centering
@@ -461,7 +477,7 @@ We pre-registered nine predictions in a dated planning document before the runs 
 \item \textbf{untested because the adapters it needs do not exist publicly} --- P3, P5, and the remainder of P8.
 \end{itemize}
 
-An earlier draft of this paragraph said "four", and its taxonomy silently omitted P3 and P5. That is precisely the failure this table exists to make impossible, committed in the prose introducing the table, and it is left visible here rather than corrected away.
+An earlier draft of \S{}8 said "four", and its taxonomy silently omitted P3 and P5 --- and this appendix went on stating six while the body said four, so the paper announced its own body was wrong and left it standing. That is precisely the failure this table exists to make impossible, committed in the prose introducing the table, and it is recorded here rather than corrected away.
 
 \begin{table*}[t]
 \centering\scriptsize
@@ -510,7 +526,9 @@ The renumbering case is the sharp one, because the fix made it worse: before, th
 
 \textbf{Three holes, named as holes.} \texttt{refs.\allowbreak{}bib} is under no gate --- citation identifiers and the claims attributed to them are verified by hand, in session, and nothing enforces it. Prose-to-table consistency is under no gate: a table's row count disagreeing with the sentence introducing it passes everything. Semantic reference validity is under no gate; what exists instead is a one-off manual audit of the rewritten references, which is not a standing check and will not fire next time.
 
-\textbf{This entry organises the ones that follow.} Each of them closes one numeric hole, and none of them closes the semantic one: the generated-view rule (Appendix C.5) verifies that derived documents match raw, and the shared-code-path rule (Appendix C.6) verifies that a check does not share its subject's assumptions and has failed on a known-bad input. All three are worth having. None would have caught any row of the table above.
+\textbf{This entry organises the ones that follow.} Each of them closes one numeric hole, and none of them closes the semantic one: the generated-view rule (Appendix C.5) verifies that derived documents match raw, and the shared-code-path rule (Appendix C.6) verifies that a check does not share its subject's assumptions and has failed on a known-bad input. Both are worth having. Neither would have caught any row of the table above.
+
+\emph{This paragraph said "All three are worth having" after a list of two, for one round, inside the entry arguing that count-versus-prose defects pass every check. It is now under one: \texttt{analysis/\allowbreak{}countcheck.\allowbreak{}py} resolves each count word in the body against the structure it counts and fails the build on a disagreement.}
 
 \subsection{Validate an instrument against a known contrast before registering a prediction on it}
 
@@ -570,7 +588,7 @@ A useful diagnostic: our public README carried the correct values throughout, be
 
 We state this as a rule rather than an anecdote because we have two instances from opposite ends of the project, arising in completely different work.
 
-\textbf{Instance one, measurement (Phase 0).} To measure how a low-rank adapter behaves on its own subspace, we drew probe vectors as \texttt{coef @ A} --- through the adapter's own factor matrix. The probes therefore carried covariance \texttt{A?A} and inherited \texttt{A}'s spectrum: the instrument shared its geometry with the object under test. It returned amplification values of 33--75 that were nearly rank-insensitive, and we concluded that the \texttt{sqrt(d\_\allowbreak{}in/\allowbreak{}r)} law had failed. It had not. \textbf{The probe had imported the very structure it was supposed to interrogate}, and an orthonormal basis of \texttt{Delta}'s right singular vectors --- constructed to be uninformative about \texttt{A}'s spectrum --- recovered the law to within 1\% at r=32 (Appendix C.6, \S{}4.4).
+\textbf{Instance one, measurement (Phase 0).} To measure how a low-rank adapter behaves on its own subspace, we drew probe vectors as \texttt{coef @ A} --- through the adapter's own factor matrix. The probes therefore carried covariance \texttt{A\textasciicircum{}TA} and inherited \texttt{A}'s spectrum: the instrument shared its geometry with the object under test. It returned amplification values of 33--75 that were nearly rank-insensitive, and we concluded that the \texttt{sqrt(d\_\allowbreak{}in/\allowbreak{}r)} law had failed. It had not. \textbf{The probe had imported the very structure it was supposed to interrogate}, and an orthonormal basis of \texttt{Delta}'s right singular vectors --- constructed to be uninformative about \texttt{A}'s spectrum --- recovered the law to within 1\% at r=32 (Appendix C.6, \S{}4.4).
 
 \textbf{Instance two, verification (write-up).} Building the figure cross-checks, the obvious implementation was to import the figure's own data loader and compare. That would have been worthless in precisely the case we needed it for: the predictive-gap figure's marking bug lived in logic the figure owned, and a shared loader would have reproduced the same 2 marked adapters and reported agreement. The checker therefore re-reads the raw records by a separate route, and recomputes the resolvable-pair set independently. That is why it disagreed, and why the disagreement was informative.
 
@@ -607,7 +625,7 @@ The third is the sharpest, because the guard was written specifically to enforce
 
 The instances above are guards with a wrong model of the world. \textbf{This one is a check with no model at all}, and it is the sharpest form the failure takes.
 
-Figure A1 validates \texttt{ar.\allowbreak{}predict} by plotting predicted against measured on two panels. Its cosine panel computed the "prediction" as \texttt{projection\_\allowbreak{}coefficient / retention\_\allowbreak{}ratio}. That is the identity of \S{}3.4 --- \texttt{cos x retention\_\allowbreak{}ratio ? projection\_\allowbreak{}coefficient} --- rearranged. \textbf{The panel plotted cosine against cosine.} It drew a perfect diagonal, printed \emph{max error 0.0\%}, and shipped in the built PDF for the whole draft.
+The \texttt{ar.\allowbreak{}predict} validation figure plots predicted against measured on two panels. Its cosine panel computed the "prediction" as \texttt{projection\_\allowbreak{}coefficient / retention\_\allowbreak{}ratio}. That is the identity of \S{}3.4 --- \texttt{cos x retention\_\allowbreak{}ratio == projection\_\allowbreak{}coefficient} --- rearranged. \textbf{The panel plotted cosine against cosine.} It drew a perfect diagonal, printed \emph{max error 0.0\%}, and shipped in the built PDF for the whole draft.
 
 Every cross-check passed, and correctly: the figure's guard verifies that every plotted value matches an independent recomputation from raw, and every plotted value did. The values were right. The \emph{comparison} carried no information, and nothing in the project was looking at that. A prose table beside it claimed 5.0\%, so the same quantity appeared as 0.0\%, 5.0\% and --- once actually computed --- \textbf{10.4\%}.
 
@@ -709,7 +727,7 @@ benign & 0.1449 & 0.2850 & +0.445 & 1.97 & 0/16 $\rightarrow$ 1/16 \\
 \end{tabularx}
 \end{table*}
 
-\textbf{The string-refusal column is the raw marker heuristic; the audit below corrects it in both directions.} Audit-corrected, harmful-indirect is 6/8 (one aligned refusal was phrased in words the marker list does not contain) and benign is 0/16 (the single aligned "refusal" is a false positive: the model produced a French vocabulary list, and the marker \emph{"i am sorry"} matched the \textbf{English gloss} in \texttt{Je suis d?sol?(e) (I am sorry)}, not the French phrase). Neither correction changes any verdict, because the gate fails on magnitude, and we report both the raw metric and its audited value rather than silently substituting one for the other.
+\textbf{The string-refusal column is the raw marker heuristic; the audit below corrects it in both directions.} Audit-corrected, harmful-indirect is 6/8 (one aligned refusal was phrased in words the marker list does not contain) and benign is 0/16 (the single aligned "refusal" is a false positive: the model produced a French vocabulary list, and the marker \emph{"i am sorry"} matched the \textbf{English gloss} in the entry \emph{Je suis d\'esol\'e(e)} \emph{(I am sorry)}, not the French phrase itself). Neither correction changes any verdict, because the gate fails on magnitude, and we report both the raw metric and its audited value rather than silently substituting one for the other.
 
 \textbf{No axis clears the gate.} The base \texttt{Llama-\allowbreak{}3.\allowbreak{}1-\allowbreak{}8B-\allowbreak{}Instruct} already refuses \textbf{16/16} harmful prompts at ceiling, leaving the adapter no headroom to add refusal; what contrast exists is either sub-threshold (benign, Cliff 0.445 against a 0.474 bar) or \textbf{wrong-signed} --- the aligned model refuses \emph{less} than the base on harmful prompts. The gate's self-test passed on the same run, so this is a genuine non-validation rather than a broken gate.
 
@@ -975,7 +993,7 @@ id & our category & prompt \\
 
 \textbf{Known limitation (Appendix D.5, \S{}9):} \texttt{p\_\allowbreak{}refuse} responds to how harmful the \emph{prompt} looks as well as to what the \emph{model} does. It scored the base model 0.812 on prompts it complied with 16/16 times. Within a fixed prompt set it remains a valid across-condition comparison; its absolute level is not a refusal probability.
 
-\textbf{String-match refusal.} 39 standard markers, matched case-insensitively as substrings. Multi-word so a substring match does not misfire the way a bare single word would. Errs in both directions --- a false negative on soft refusals ("I'm not sure I can help") and a false positive on vocabulary content (the marker "i am sorry" matching the English gloss inside \texttt{Je suis d?sol?(e) (I am sorry)} in a French vocabulary list --- the match is on the translation, not on the French). Both are reported rather than tuned away, because neither changes a verdict that fails on magnitude (Appendix D.2).
+\textbf{String-match refusal.} 39 standard markers, matched case-insensitively as substrings. Multi-word so a substring match does not misfire the way a bare single word would. Errs in both directions --- a false negative on soft refusals ("I'm not sure I can help") and a false positive on vocabulary content (the marker "i am sorry" matching the English gloss in the entry \emph{Je suis d\'esol\'e(e)} \emph{(I am sorry)} in a French vocabulary list --- the match is on the translation, not on the French). Both are reported rather than tuned away, because neither changes a verdict that fails on magnitude (Appendix D.2).
 
 Markers: \texttt{i cannot}, \texttt{i can't}, \texttt{i can not}, \texttt{i'm sorry}, \texttt{i am sorry}, \texttt{i apologize}, \texttt{i apologise}, \texttt{i'm not able}, \texttt{i am not able}, \texttt{i'm unable}, \texttt{i am unable}, \texttt{i won't}, \texttt{i will not}, \texttt{cannot help}, \texttt{can't help}, \texttt{cannot assist}, \texttt{can't assist}, \texttt{cannot provide}, \texttt{can't provide}, \texttt{not able to provide}, \texttt{against my}, \texttt{i must decline}, \texttt{i'm not going to}, \texttt{i am not going to}, \texttt{as an ai}, \texttt{i don't feel comfortable}, \texttt{i do not feel comfortable}, \texttt{not appropriate}, \texttt{cannot fulfill}, \texttt{can't fulfill}, \texttt{cannot fulfil}, \texttt{cannot comply}, \texttt{can't comply}, \texttt{i'm not comfortable}, \texttt{unable to help}, \texttt{i can't help}, \texttt{i cannot create}, \texttt{i can't create}, \texttt{cannot and will not}.
 
@@ -1290,7 +1308,7 @@ Each script cross-checks its own figures against an independent recomputation fr
 \subsection{Determinism and what will differ}
 
 \begin{itemize}\itemsep1pt
-\item \textbf{Decoding is greedy} (\texttt{do\_\allowbreak{}sample=False}) throughout, so generations are reproducible bit-for-bit on the same hardware and library versions. Seeds are recorded but do not affect Phase 1 outputs; this is why intervals are bootstrapped over prompts rather than seeds (\S{}3.11).
+\item \textbf{Decoding is greedy} (\texttt{do\_\allowbreak{}sample=False}) throughout, so generations are reproducible bit-for-bit on the same hardware and library versions. Seeds are recorded but do not affect Phase 1 outputs; this is why seeds are not a replicate axis. Per-adapter intervals are bootstrapped over \textbf{intent clusters}, not over prompts and not over seeds: the 32 prompts are 8 intents x 3 paraphrases plus 8 adversarial ones, and it is the paraphrase clustering rather than greedy decoding that makes them non-independent (\S{}3.11).
 \item \textbf{Different GPU or CUDA version:} BF16 matmul reduction order may vary, so generated text can differ on rare ties. Aggregate retention figures should reproduce to well within the reported intervals.
 \item \textbf{Different \texttt{transformers} version:} chat templates have changed between major versions, which changes prompt construction and therefore outputs. Pin 5.14.1 to reproduce exactly.
 \item \textbf{Weight-space results are fully deterministic} and should reproduce to the digits printed in Appendix B on any hardware.
