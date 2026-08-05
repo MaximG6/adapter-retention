@@ -169,7 +169,11 @@ def test_source_reference_gate_fires_on_a_cut_entry(tmp_path, monkeypatch) -> No
     """
     paper = tmp_path / "paper"
     paper.mkdir()
-    (paper / "07-methodological-lessons.md").write_text(
+    # Round 8 moved the practice entries to METHODOLOGY.md and left the registered
+    # predictions as the whole of Appendix C, so this file holds 7.0 and nothing else in
+    # the shipped tree. The gate still has to fire on a reference to a heading that is
+    # not there, which is the case a moved section creates.
+    (paper / "07-registered-predictions.md").write_text(
         "## 7.0 Predictions\n\n## 7.1 A practice\n", encoding="utf-8")
     monkeypatch.setattr(m2t, "PAPER", paper)
 

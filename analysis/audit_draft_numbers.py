@@ -168,41 +168,33 @@ CROSS_ARTIFACT: list[tuple[str, list[tuple[str, str]]]] = [
     # weights unchanged" reads as regime-free and is not (EXP-038). Every site now names
     # its regime, and all three are checked across every artifact that prints them.
     ("codes unchanged, fixed_scale %", [
-        ("README.md", r"([\d.]+)% of codes are unchanged"),
-        ("paper/00-abstract.md",
-         r"can move a weight,\s*\n?\s*([\d.]+)% of codes are unchanged"),
+        ("README.md", r"the step size, ([\d.]+)% of codes are unchanged"),
         ("paper/01-introduction.md",
-         r"and \*\*([\d.]+)% of codes are unchanged\*\*"),
+         r"with ([\d.]+)% of codes unchanged when the"),
         ("paper/04-results-weight-space.md",
          r"\(([\d.]+)% of codes unchanged under `fixed_scale`"),
-        ("paper/08-09-limitations-conclusion.md",
-         r"with ([\d.]+)% of codes unchanged when the grid is"),
-        ("paper/tex/main.tex", r"weight, ([\d.]+)\\% of codes are unchanged"),
+        ("paper/tex/main.tex", r"on the deployment path \(plotted\), ([\d.]+)\\% with"),
     ]),
     ("values changed, adaptive_scale %", [
-        ("README.md", r"([\d.]+)% of stored values change"),
-        ("paper/00-abstract.md", r"path, where merging moves the grid, ([\d.]+)% of stored"),
-        ("paper/01-introduction.md", r"\*\*([\d.]+)% of stored \*values\* differ\*\*"),
+        ("README.md", r"moves the grid, ([\d.]+)% of stored values change"),
+        ("paper/01-introduction.md", r"factor of 15 . \*\*([\d.]+)% of stored \*values\*"),
         ("paper/04-results-weight-space.md",
          r"At INT4 g128, ([\d.]+)% of their stored values differ"),
         ("paper/08-09-limitations-conclusion.md",
          r"\*\*([\d.]+)% of the six taboo adapters' stored values differ"),
-        ("paper/tex/main.tex", r"grid, ([\d.]+)\\% of stored \\emph\{values\} change"),
+        ("paper/tex/main.tex", r"fifteenfold---([\d.]+)\\% of stored \\emph\{values\}"),
     ]),
     ("codes changed, adaptive_scale %", [
-        ("README.md", r"only\s*\n?\s*([\d.]+)% of integer codes do"),
-        ("paper/00-abstract.md", r"while only ([\d.]+)% of\s*\n?\s*integer \*codes\* do"),
+        ("README.md", r"while only ([\d.]+)% of integer codes do"),
         ("paper/01-introduction.md",
-         r"while only \*\*([\d.]+)% of the integer \*codes\*\*\*"),
+         r"against \*\*([\d.]+)% of the integer \*codes\*"),
         ("paper/04-results-weight-space.md",
          r"and ([\d.]+)% of the\s*\n?integer codes do"),
-        ("paper/08-09-limitations-conclusion.md",
-         r"and ([\d.]+)% of their integer codes do"),
-        ("paper/tex/main.tex", r"while only ([\d.]+)\\% of integer \\emph\{codes\} do"),
+        ("paper/tex/main.tex", r"([\d.]+)\\% of integer \\emph\{codes\} on the deployment"),
     ]),
     ("behaviour retained %", [
         ("README.md", r"([\d.]+)% of the adapter's trained behaviour"),
-        ("paper/00-abstract.md", r"elicitation\s*\n?\s*retention is ([\d.]+)%"),
+        ("paper/00-abstract.md", r"elicitation retention ([\d.]+)%"),
         ("paper/01-introduction.md", r"Elicitation retention is\s*\n?\s*([\d.]+)%"),
         ("paper/04-results-weight-space.md", r"Retention is ([\d.]+)% with an enumerated"),
         ("paper/08-09-limitations-conclusion.md", r"retention ([\d.]+)%, enumerated interval"),
@@ -300,14 +292,29 @@ CROSS_ARTIFACT: list[tuple[str, list[tuple[str, str]]]] = [
         ("paper/08-09-limitations-conclusion.md",
          r"\*\*([\d.]+)% of the six taboo adapters' stored values differ"),
     ]),
-    ("codes changed % (tex conclusion)", [
-        ("paper/tex/main.tex", r"and ([\d.]+)\\% of their integer\s*\n?codes do"),
-        ("paper/08-09-limitations-conclusion.md",
-         r"and ([\d.]+)% of their integer codes do"),
+    # The conclusion's code-count restatement was the third occurrence of the same three
+    # numbers and went in the round-8 deduplication; both conclusions now state the value
+    # count only, which is covered by the entry above.
+    # ---- the round-8 companions, inside the perimeter ----
+    # METHODOLOGY.md left the PDF; it did not leave the checks. Each entry below is a
+    # number it shares with the paper, so the two cannot drift apart now that they are
+    # separate documents.
+    ("retention int4_g128 % (METHODOLOGY)", [
+        ("METHODOLOGY.md", r"98\.9% / ([\d.]+)% on the same six adapters"),
+        ("paper/04-results-weight-space.md", r"INT4 g128 \| \*\*([\d.]+)%\*\*"),
+    ]),
+    ("codes unchanged, fixed_scale % (METHODOLOGY)", [
+        ("METHODOLOGY.md", r"the headline became \*\*([\d.]+)% / [\d.]+% on the same"),
+        ("paper/04-results-weight-space.md",
+         r"\(([\d.]+)% of codes unchanged under `fixed_scale`"),
+    ]),
+    ("cosine predictor error % (METHODOLOGY)", [
+        ("METHODOLOGY.md", r"once actually computed . \*\*([\d.]+)%\*\*"),
+        ("paper/appendix-A-tool.md", r"then averaged \| \*\*([\d.]+)%\*\*"),
     ]),
     ("behaviour retained % (tex)", [
         ("paper/tex/main.tex", r"retention ([\d.]+)\\%, enumerated interval"),
-        ("paper/00-abstract.md", r"elicitation\s*\n?\s*retention is ([\d.]+)%"),
+        ("paper/00-abstract.md", r"elicitation retention ([\d.]+)%"),
     ]),
     ("int3 span lo (tex)", [
         ("paper/tex/main.tex", r"retention spans ([\d.]+)--[\d.]+\\%"),
@@ -1117,6 +1124,54 @@ def claims() -> list[Claim]:
         c.append(("§7", "unmerged cosine spread", 1.000,
                   lambda: (max(per_adapter("int4_g128", "cosine"))
                            / min(per_adapter("int4_g128", "cosine"))), 5e-4))
+
+    # ---- PROMPTS.md: the sets it prints, against the module the harness imports ----
+    # The text moved out of the PDF in the round-8 cut. Its sizes are still claims, and
+    # they are resolved here against `ar.evaluate` rather than against the document.
+    PROMPTS = REPO_ROOT / "PROMPTS.md"
+    if PROMPTS.exists():
+        # Put src on the path here rather than requiring PYTHONPATH: gen_readme.py imports
+        # claims() to print the audit's own size, and would otherwise fail on this import
+        # alone -- a check that breaks its caller is a check that gets removed.
+        import sys as _sys
+        if str(REPO_ROOT / "src") not in _sys.path:
+            _sys.path.insert(0, str(REPO_ROOT / "src"))
+        import ar.evaluate as _ev
+
+        ptxt = PROMPTS.read_text(encoding="utf-8")
+
+        def _p(pattern: str) -> float:
+            m = re.search(pattern, ptxt)
+            if m is None:
+                raise ValueError(f"PROMPTS.md: pattern never matched: {pattern}")
+            return float(m.group(1))
+
+        for label, pat, actual in (
+                ("hint intents", r"(\d+) intents x 3 paraphrases",
+                 float(len(_ev.PARAPHRASES))),
+                ("hint prompts", r"intents x 3 paraphrases = (\d+) prompts",
+                 float(len(_ev.PARAPHRASES) * 3)),
+                ("adversarial prompts", r"\n(\d+) prompts\. Design and rationale, including",
+                 float(len(_ev.ADVERSARIAL_PROMPTS))),
+                ("knowledge probes", r"(\d+) probes, 3 per word",
+                 float(sum(len(v) for v in _ev.KNOWLEDGE_PROBES.values()))),
+                ("guesser candidates", r"(\d+) candidates,",
+                 float(len(_ev.TABOO_WORDS))),
+                ("ground-truth hints", r"candidates, (\d+) hints",
+                 float(len(_ev.GROUND_TRUTH_HINTS))),
+                ("harmful topics", r"(\d+) harmful topics x 2 phrasings",
+                 float(len(_ev.HARMFUL_PROMPTS))),
+                ("benign topics", r"and (\d+) benign topics x 2 wordings",
+                 float(len(_ev.BENIGN_PROMPTS))),
+                ("xstest prompts", r"\n(\d+) prompts\. Design, and why",
+                 float(len(_ev.XSTEST_PROMPTS))),
+                ("refusal openings", r"Refusal openings \((\d+)\)",
+                 float(len(_ev.REFUSAL_OPENINGS))),
+                ("compliance openings", r"Compliance openings \((\d+)\)",
+                 float(len(_ev.COMPLIANCE_OPENINGS))),
+                ("refusal markers", r"String-match markers \((\d+)\)",
+                 float(len(_ev.REFUSAL_MARKERS)))):
+            c.append(("PROMPTS.md", label, _p(pat), lambda a=actual: a, 0))
 
     # ---- README: the committed file against the same raw records ----
     # Expected values are read from README.md and compared to recomputation, so the
