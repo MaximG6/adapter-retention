@@ -358,7 +358,7 @@ def fig8(by, adapters, word, dpi: int) -> None:
         fontsize=9, color=KEEP, ha="center",
         arrowprops=dict(arrowstyle="->", color=KEEP, lw=1.3))
 
-    ax.set_xlabel("predicted layer-output SNR  (Phase 0, weight-space)",
+    ax.set_xlabel("measured layer-output SNR  (Phase 0, orthonormal probe)",
                   fontsize=10, color=INK)
     ax.set_ylabel("behavioural retention at INT3 g128\n(% of own BF16)",
                   fontsize=10, color=INK)

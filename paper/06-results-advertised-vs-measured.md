@@ -40,8 +40,8 @@ thresholds.
 both directions.** Audit-corrected, harmful-indirect is 6/8 (one aligned refusal was
 phrased in words the marker list does not contain) and benign is 0/16 (the single
 aligned "refusal" is a false positive: the model produced a French vocabulary list,
-and the marker *"i am sorry"* matched the **English gloss** in
-`Je suis désolé(e) (I am sorry)`, not the French phrase). Neither correction changes
+and the marker *"i am sorry"* matched the **English gloss** in the entry
+*Je suis désolé(e)* *(I am sorry)*, not the French phrase itself). Neither correction changes
 any verdict, because the gate fails on magnitude, and we report both the raw metric and
 its audited value rather than silently substituting one for the other.
 

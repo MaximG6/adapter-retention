@@ -100,8 +100,8 @@ retuning after seeing the data is the error the gate exists to prevent.
   is not a refusal probability.
 - **String-match refusal errs in both directions** — a false negative on soft refusals
   ("I'm not sure I can help with that"), and a false positive on vocabulary content
-  (the marker "i am sorry" matching the English gloss inside
-  `Je suis désolé(e) (I am sorry)` in a French vocabulary list). We report raw and audit-corrected counts separately (§6.2).
+  (the marker "i am sorry" matching the English gloss in the entry
+  *Je suis désolé(e)* *(I am sorry)* in a French vocabulary list). We report raw and audit-corrected counts separately (§6.2).
 
 ## 8.8 Checkpoint provenance
 

@@ -338,8 +338,11 @@ stripped. Compare figure PDFs with the timestamp removed, or compare the PNGs.
 
 - **Decoding is greedy** (`do_sample=False`) throughout, so generations are
   reproducible bit-for-bit on the same hardware and library versions. Seeds are recorded
-  but do not affect Phase 1 outputs; this is why intervals are bootstrapped over prompts
-  rather than seeds (§3.11).
+  but do not affect Phase 1 outputs; this is why seeds are not a replicate axis.
+  Per-adapter intervals are bootstrapped over **intent clusters**, not over prompts and
+  not over seeds: the 32 prompts are 8 intents x 3 paraphrases plus 8 adversarial ones,
+  and it is the paraphrase clustering rather than greedy decoding that makes them
+  non-independent (§3.11).
 - **Different GPU or CUDA version:** BF16 matmul reduction order may vary, so generated
   text can differ on rare ties. Aggregate retention figures should reproduce to well
   within the reported intervals.
