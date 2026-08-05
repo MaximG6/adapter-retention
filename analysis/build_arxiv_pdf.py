@@ -122,7 +122,29 @@ def main() -> int:
         return 1
 
     print("3/3  running tectonic")
+    before = (TEXDIR / "main.pdf").stat().st_mtime if (TEXDIR / "main.pdf").exists() else 0
     r = run([args.tectonic, "-X", "compile", "main.tex"], cwd=TEXDIR)
+
+    # Tectonic's exit code was never checked, and `main.pdf` exists from the previous
+    # build, so a failed compile left every gate below inspecting a STALE artifact and
+    # reporting it clean. A "Missing $ inserted" error passed the overfull check, the
+    # cross-reference check and the cross-table check, all of which were reading
+    # yesterday's PDF. Fail on the return code, and independently on the file not having
+    # been rewritten, because the second catches a compiler that exits 0 without output.
+    tex_errors = [l for l in (r.stdout + r.stderr).splitlines()
+                  if l.startswith("error:")]
+    if r.returncode or tex_errors:
+        print(f"     tectonic failed (exit {r.returncode}):", file=sys.stderr)
+        for line in tex_errors[:10]:
+            print("       " + line, file=sys.stderr)
+        if not tex_errors:
+            print((r.stdout + r.stderr)[-2000:], file=sys.stderr)
+        return 1
+    if (TEXDIR / "main.pdf").exists() and (TEXDIR / "main.pdf").stat().st_mtime == before:
+        print("     tectonic exited 0 but did not rewrite main.pdf; refusing to ship "
+              "a stale artifact", file=sys.stderr)
+        return 1
+
     bad = [l for l in (r.stdout + r.stderr).splitlines()
            if "Missing character" in l or "could not represent" in l]
     if bad:
@@ -160,10 +182,48 @@ def main() -> int:
                   + "; ".join(f"{v} ({o})" for v, o in entries), file=sys.stderr)
         return 1
     print("     all cross-table cells agree")
+
+    # Count words are claims the claim audit cannot see: not a printed measurement, and
+    # what they count is a structure. Four were live when this was added.
+    import countcheck
+
+    have = countcheck.structures()
+    miscounts = []
+    for path in [TEXDIR / "main.tex"] + sorted((REPO_ROOT / "paper").glob("*.md")):
+        for hit in countcheck.check(path.read_text(encoding="utf-8"), have):
+            miscounts.append((path.name,) + hit)
+    if miscounts:
+        print(f"     {len(miscounts)} count words disagree with what they count:",
+              file=sys.stderr)
+        for name, phrase, claimed, actual, what, _ in miscounts[:10]:
+            print(f"       [{name}] {phrase!r}: says {claimed}, there are "
+                  f"{actual} {what}", file=sys.stderr)
+        return 1
+    print(f"     every count word agrees with what it counts "
+          f"({len(countcheck.RULES)} rules)")
+
     built = TEXDIR / "main.pdf"
     if not built.exists():
         print((r.stdout + r.stderr)[-3000:], file=sys.stderr)
         return 1
+
+    # Every gate above reads sources. This one reads what the reader sees, which is the
+    # only place a destroyed control sequence is visible: it compiles to plain text and
+    # TeX says nothing. Four rounds shipped one.
+    import texcheck
+
+    debris = texcheck.scan(texcheck.pdf_text(built))
+    if debris:
+        why = {n: reason for n, _, reason in texcheck.CHECKS}
+        print(f"     {len(debris)} pieces of LaTeX/encoding debris in the rendered text:",
+              file=sys.stderr)
+        for name, hit, ctx in debris[:12]:
+            print(f"       [{name}] {hit!r} -- {why[name]}", file=sys.stderr)
+            print(f"         ...{ctx}...", file=sys.stderr)
+        return 1
+    print(f"     no LaTeX or encoding debris in the rendered text "
+          f"({len(texcheck.CHECKS)} checks)")
+
     shutil.copy(built, OUT)
     try:
         from pypdf import PdfReader

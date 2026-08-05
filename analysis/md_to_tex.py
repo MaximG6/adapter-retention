@@ -50,13 +50,38 @@ TT_ASCII = {"−": "-", "–": "-", "—": "--", "→": "->", "≥": ">=", "≤"
             "√": "sqrt", "±": "+/-", "≠": "!=", "π": "pi", "σ": "sigma",
             "ρ": "rho", "∝": "prop", "∞": "inf", "·": "*", "…": "...",
            "τ": "tau", "θ": "theta", "μ": "mu", "λ": "lambda",
+            "≡": "==", "ᵀ": "^T", "⊤": "^T", "∈": "in", "⟨": "<", "⟩": ">",
+            "²": "^2", "³": "^3", "⁻": "^-", "⁰": "^0", "¹": "^1", "⁴": "^4",
+            "⁵": "^5", "⁶": "^6", "⁷": "^7", "⁸": "^8", "⁹": "^9",
+            "é": "e", "É": "E", "ü": "u", "ö": "o", "ń": "n", "ś": "s",
+            "‑": "-", "∀": "for all", "⚠": "", "✓": "OK",
             "“": '"', "”": '"', "'": "'", "'": "'", "§": "S"}
 
 
 def ascii_only(s: str) -> str:
+    """Substitute the non-ASCII a typewriter font cannot render, and RAISE on the rest.
+
+    This used to end `.encode("ascii", "replace")`, which turns anything unmapped into a
+    literal `?`. Four characters took that path into the shipped PDF -- `Je suis
+    d?sol?(e)`, `mean(Delta?)`, `A?A`, and the identity `cos x retention_ratio ?
+    projection_coefficient` -- and the build's own non-ASCII gate reported clean, because
+    by the time it looked there was no non-ASCII left to find. The gate was satisfied by
+    the damage it existed to catch.
+
+    Raising is the project's no-silent-fallback rule applied to typesetting: a character
+    with no sensible ASCII form is a decision for a person, not for a codec.
+    """
     for k, v in TT_ASCII.items():
         s = s.replace(k, v)
-    return s.encode("ascii", "replace").decode("ascii")
+    bad = sorted({c for c in s if ord(c) > 127})
+    if bad:
+        raise ValueError(
+            "No ASCII substitution for "
+            + ", ".join(f"{c!r} (U+{ord(c):04X})" for c in bad)
+            + f" in code span/verbatim: {s[:90]!r}. Add it to TT_ASCII, or take the "
+              "character out of the code span -- do not let it become '?'."
+        )
+    return s
 
 
 def esc(s: str) -> str:
@@ -217,14 +242,17 @@ def inline(s: str) -> str:
 
     def hold(m: re.Match[str]) -> str:
         body = m.group(1)
+        # ASCII substitution runs BEFORE escaping, not after. Some substitutions emit
+        # LaTeX specials of their own -- U+00B2 becomes "^2" -- and running them after
+        # the escape pass puts a bare ^ inside \texttt{}, which is a "Missing $ inserted"
+        # error, not a rendering nicety. Typewriter fonts lack these glyphs and code
+        # spans are not escaped by esc(), so the substitution has to happen either way.
+        body = ascii_only(body)
         for k, v in {"\\": r"\textbackslash{}", "{": r"\{", "}": r"\}",
                      "$": r"\$", "&": r"\&", "%": r"\%", "#": r"\#",
                      "_": r"\_", "^": r"\textasciicircum{}",
                      "~": r"\textasciitilde{}"}.items():
             body = body.replace(k, v)
-        # Typewriter fonts lack these glyphs, and code spans are not escaped by esc(),
-        # so unicode inside them reaches the TeX font directly. Substitute ASCII.
-        body = ascii_only(body)
         # A path in a code span is one unbreakable word. In a narrow table column it
         # overflows however the column is sized, so permit a break after the
         # separators. \allowbreak adds no hyphen, so the path stays copy-pasteable.
@@ -441,9 +469,29 @@ def convert(md: str) -> str:
             continue
         if ln.strip().startswith(">"):
             close_list()
-            out += [r"\begin{quote}\small", inline(ln.strip().lstrip(">").strip()),
-                    r"\end{quote}"]
-            i += 1
+            # Consecutive quote lines are ONE block. Converting them line by line means
+            # inline() sees half a **bold** span and leaves both delimiters literal --
+            # the same defect already fixed for paragraphs, still live here, and it put
+            # a pair of asterisks into A.3's correction box in the shipped PDF. An
+            # empty ">" line separates paragraphs within the quote.
+            para: list[str] = []
+            paras: list[str] = []
+            while i < len(lines) and lines[i].strip().startswith(">"):
+                body = lines[i].strip().lstrip(">").strip()
+                if body:
+                    para.append(body)
+                elif para:
+                    paras.append(" ".join(para))
+                    para = []
+                i += 1
+            if para:
+                paras.append(" ".join(para))
+            out.append(r"\begin{quote}\small")
+            for n, block in enumerate(paras):
+                if n:
+                    out.append("")
+                out.append(inline(block))
+            out.append(r"\end{quote}")
             continue
         if re.match(r"^\s*(---+|\*\*\*+)\s*$", ln):
             close_list()
