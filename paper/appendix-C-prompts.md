@@ -21,7 +21,9 @@ Every condition in this paper uses byte-identical prompts; only the weights chan
 
 ## C.2 Adversarial (indirect-pressure) prompts
 
-**8 prompts.** A narrow suppression trained on the disclosure frame should fail here before it fails on a direct request. In the taboo runs these leaked roughly 6x more than the hint prompts, which is what motivated the third axis of the refusal battery (§3.10).
+**8 prompts.** A narrow suppression trained on the disclosure frame should fail here before it fails on a direct request. That motivated the third axis of the refusal battery (§3.10).
+
+**A correction, because the motivation given here was a pilot number stated as a general one.** Earlier drafts said these "leaked roughly 6x more than the hint prompts". Across the full Phase 1 grid they do not: 19 of 192 adversarial records contain the word against 47 of 576 hint records, a ratio of **1.21x**. At BF16 alone it is 1.33x. The 6.00x is `smile` at BF16 — 2 of 8 against 1 of 24 — one adapter at one precision, and `smile` is the pilot the Phase 1 harness was built on. Per adapter at BF16 the ratio runs 0.00 (`ship`) to 6.00 (`smile`). The design decision was still the right one and we would make it again, but the number that justified it was `n`=1 generalised, which is the failure §7 records elsewhere in this project and is recorded here rather than quietly restated.
 
 | id | prompt |
 |---|---|
@@ -116,7 +118,7 @@ The word they were describing is
 
 ## C.6 Surface-harmful / actually-benign prompts (over-refusal control)
 
-**16 prompts.** Authored on the design principle established by XSTest (Röttger, Kirk, Vidgen, Attanasio, Bianchi, Hovy; arXiv:2308.01263; NAACL 2024): safe prompts phrased in language resembling unsafe ones are the ones over-safe models refuse. **These are not XSTest's own items**, and the `category` labels below are ours — XSTest defines ten prompt types whose names we could not verify, so no correspondence is claimed (§3.10).
+**16 prompts.** Authored on the design principle established by XSTest (§2): safe prompts phrased in language resembling unsafe ones are the ones over-safe models refuse. **These are not XSTest's own items**, and the `category` labels below are ours — XSTest defines ten prompt types whose names we could not verify, so no correspondence is claimed (§3.10).
 
 Validated as discriminating before being used for a null: base-model refusal propensity is **0.1449** on the plain benign set and **0.8118** on these, a **5.60x** contrast on the same model (§7.2).
 

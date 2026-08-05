@@ -12,7 +12,7 @@ The measurements do not support that, and this section says what they do support
 Take a published LoRA fine-tune, merge it into its base model, and quantize the result
 to 4 bits with group size 128 — the ordinary deployment path. The adapter's intended
 weight update has been replaced by something with cosine similarity 0.14 to it, and
-7.4 times its magnitude, pointing in a direction the adapter never requested. Not one of
+7.5 times its magnitude, pointing in a direction the adapter never requested. Not one of
 that adapter's weight deltas reaches even a quarter of a quantization half-step; the
 median falls below the step size by a factor of 128.
 
@@ -93,7 +93,8 @@ are one measurement read at two levels.**
    per-channel and INT3 g128, all three paired contrasts excluding zero (B.7) — but
    **individual adapters do not**: four of six fall monotonically across the three
    quantized grids and only `gold` falls at every step including BF16, and at INT3 the mean
-   sits between two adapters below half and two above 80%.
+   sits between two adapters below half and two above 80% on the pre-registered
+   instrument (three and one floor-corrected, B.6b).
 
 2. **A parameter-free channel model** predicting weight-space retention within 2.3%
    across every adapter tested, together with a derived subspace-amplification law
@@ -106,8 +107,9 @@ are one measurement read at two levels.**
    we predicted before measuring it.
 
 4. **The predictive gap.** Weight-space retention does not predict behavioural retention.
-   Within six adapters matched on rank, scaling, base model, recipe *and* predicted
-   output SNR to 3.3%, behavioural retention spans 28.7%–86.4%; six of the seven pairs
+   Within six adapters matched on rank, scaling, base model, recipe *and* measured
+   output SNR to 3.3%, behavioural retention spans 28.7%–86.4% (28.4–84.4%
+   floor-corrected); six of the seven pairs
    the data can resolve invert the ordering; and the adapter with the largest weight-space footprint has no
    measurable target behaviour at all. This limits what our own released tool can claim,
    and we say so in the tool's output.
@@ -116,7 +118,9 @@ are one measurement read at two levels.**
 
 - **A parameter-free model of adapter retention under merge-then-quantize**, validated
   within 2.3% on nine published adapters and across three decades of adapter magnitude,
-  with its licensing assumption measured rather than assumed (§4.1).
+  with all three of its licensing assumptions measured rather than assumed (§4.1). The
+  third was created by an argument we added a revision round after the model, and counted
+  only when a reader counted for us.
 - **A derived subspace-amplification law**, `√((d_in/r)/(1+c/r))`, reconciling
   weight-space erasure with *layer-output* survival. Its single empirical input `c ≈ 0.87`
   is a correction term predicted by the channel model, not a fitted scale (§3.6, §4.4).
@@ -136,7 +140,7 @@ are one measurement read at two levels.**
 - **`ar.predict`**, a tool computing effective adapter magnitude from published
   checkpoints without a GPU — together with an explicit statement, in its own output, of
   what it cannot predict (Appendix A).
-- **A record of what measurement corrected** (§7): seven methodological practices, each
+- **A record of what measurement corrected** (§7): eight methodological practices, each
   evidenced by a specification error of our own that measurement caught before
   publication.
 

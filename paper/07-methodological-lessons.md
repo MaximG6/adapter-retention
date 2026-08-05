@@ -235,7 +235,7 @@ values of 33–75 that were nearly rank-insensitive, and we concluded that the
 `√(d_in/r)` law had failed. It had not. **The probe had imported the very structure it
 was supposed to interrogate**, and an orthonormal basis of `Δ`'s right singular vectors —
 constructed to be uninformative about `A`'s spectrum — recovered the law to within 1% at
-r=32 (§7.5, §4.4).
+r=32 (§4.4).
 
 **Instance two, verification (write-up).** Building the figure cross-checks, the obvious
 implementation was to import the figure's own data loader and compare. That would have
@@ -292,9 +292,10 @@ The instances above are guards with a wrong model of the world. **This one is a 
 with no model at all**, and it is the sharpest form the failure takes.
 
 The `ar.predict` validation figure plots predicted against measured on two panels.
-Its cosine panel computed the "prediction" as `projection_coefficient / retention_ratio`.
-That is the identity of §3.4 — `cos × retention_ratio ≡ projection_coefficient` —
-rearranged. **The panel plotted cosine against cosine.** It drew a perfect diagonal,
+Its cosine panel computed the "prediction" as the measured projection coefficient
+`<Δ_eff, Δ>/||Δ||²` divided by the measured magnitude ratio `||Δ_eff||/||Δ||`. Those two
+differ by exactly a factor of `cos(Δ, Δ_eff)`, so their quotient **is** the cosine.
+**The panel plotted cosine against cosine.** It drew a perfect diagonal,
 printed *max error 0.0%*, and shipped in the built PDF for the whole draft.
 
 Every cross-check passed, and correctly: the figure's guard verifies that every plotted
@@ -417,3 +418,57 @@ release on: **regenerating the committed tables, prompt sets and README from the
 records and getting byte-identical files** is a statement about the artifact rather than
 about any command's exit status, and it is the strongest such statement available.
 
+
+## 7.8 The explanation of a measurement is a claim, and nothing was checking explanations
+
+**Claim.** A number can be right while the sentence explaining it is wrong, and every
+check this project built reads numbers. Claim audits compare printed values against raw
+records. Cross-artifact checks compare one occurrence against another. Count-word gates
+resolve cardinals against structures. **None of them can see a causal account**, and a
+causal account written in the same session as the measurement is at its most persuasive
+and least tested.
+
+**Evidence, two sentences attached to one correct measurement.** B.10 measures the
+within-bin position distribution over 42 module-instances. Every number in it was right
+through four review rounds. Two sentences about those numbers were not.
+
+*The mechanism.* We wrote that the exact-zero mass is Equation 2 pinning each group's
+extrema onto codes `0` and `2^b−1`. An external reader did the arithmetic we had not:
+that mechanism puts `2/128 = 1.56%` of weights on a boundary and we measured 0.20%, eight
+times over. Measured, it is worse than an eight-fold discrepancy — it is backwards.
+Because `z` is itself rounded, the extrema land on the *centres* of those codes, `u =
+0.494` against `0` for a boundary, so they are pinned to the safest position in the bin
+rather than the most dangerous one. Only 5% of the exact-zero mass is extrema at all. What
+it actually is: base weights are bf16, a group of 128 holds about 121 distinct values, and
+`w/s + z + 0.5` lands exactly on an integer for roughly one in five hundred of them — a
+perturbation four orders of magnitude below bf16's own resolution removes 99% of it.
+
+*The corroboration.* We observed that the residual sub-uniformity implies Equation 4
+should over-predict slightly, that B.2's measured/predicted is below 1 for all nine
+adapters, and reported the agreement. Checked: `F_u(t)/t` is flat at 0.985 over the entire
+range the adapters occupy, so the non-uniformity predicts a near-constant 1.3–1.5%
+over-prediction for **every** adapter, and taken as an expectation over each adapter's own
+`|Δ|/s` distribution rather than at its mean, 0.987–0.995. The observed over-prediction is
+0.1% for each of the taboo six and 2.3% for the safety adapter, and the ordering does not
+track. Sign agreement, magnitude off tenfold, ordering uncorrelated. **That is not
+corroboration**, and the paragraph is withdrawn rather than hedged.
+
+**What makes this different from the other entries.** The others are failures of
+verification — something was not checked, or was checked by a route that shared the defect.
+This one is a failure of *scope*: the verification was complete for the class of thing it
+covers, and the defective claim was outside that class. A green block over 229 numeric
+claims says nothing about the sentences between them, and we had been reading it as though
+it did (§7.1).
+
+**The practice.** *When a measurement is explained, the explanation gets a falsifier and a
+control, the same as a prediction.* Three controls settled both sentences here and each is
+a few lines: where do the allegedly-pinned weights actually sit; how much of the mass is
+the alleged cause; does the effect survive a perturbation that a structural cause would be
+immune to. The cost was minutes. The cost of not doing it was four rounds of a wrong
+mechanism in a section whose entire purpose is that a structural worry was taken
+seriously.
+
+**What we do not claim.** We have no gate for this. Explanations are prose and we are not
+going to regex them. What we have is a rule — an explanatory sentence in a results section
+names its control — and one worked instance, which is weaker than every other entry here
+and is marked as such rather than dressed up.

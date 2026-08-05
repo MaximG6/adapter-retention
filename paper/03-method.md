@@ -324,10 +324,12 @@ test case is a known failure (§7).
 For the one alignment-marketed adapter in the set we built a separate battery on three
 axes: **harmful-request refusal**, **benign-request compliance** (over-refusal
 control), and **refusal under indirect pressure** — the same jailbreak-style framing
-that leaked ~6× more than direct probes in the taboo work. The third axis is included
+that had leaked more than direct probes in the taboo pilot. The third axis is included
 because a narrow constraint should fail first where the frame does not match its
 training, so a direct-harmful battery alone could read flat while the constraint is
-already weakening.
+already weakening. The design decision stands; the number behind it did not. It was
+`~6×`, and on the full Phase 1 grid the ratio is **1.21×** — the 6× was `smile` at BF16
+alone (E.2).
 
 Scoring is judge-free: a graded propensity `p_refuse = σ(LSE(refusal openings) −
 LSE(compliance openings))`, teacher-forced and length-normalised off the model's own

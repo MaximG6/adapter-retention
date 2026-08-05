@@ -47,7 +47,7 @@ python -m ar.predict --adapter adamkarvonen/Qwen3-8B-taboo-smile_50_mix \
    down_proj     0.00635   0.0064   0.1115   19.39    2.175
 ```
 
-**In weight space the module ordering is entirely a magnitude effect** (§4.5):
+**In weight space the module ordering is entirely a magnitude effect** (§4.3, B.5):
 `gate_proj` has the largest `|Δ|/s` and the highest cosine, `down_proj` the smallest and
 the lowest, and the cosine column is monotone in the ratio column.
 
@@ -62,8 +62,9 @@ distinction as §4.4 and §5.4, visible inside a single table.
 **Three notes on reading these numbers against the paper's.**
 
 - **They are predictions, not the paper's measurements, and they do not match to the last
-  digit.** The tool samples three layers of 36 and averages seven modules unweighted; §4.2
-  measures four layers and 28 module-instances. Predicted flip here is `0.0106`, against a
+  digit.** The tool samples three layers of 36 and averages seven modules unweighted; the
+  weight-space runs measure four layers and 28 module-instances (B.1). Predicted flip
+  here is `0.0106`, against a
   measured `0.01093` for the same adapter in B.1 — **3.0% apart**, which is within the
   tool's stated ±15% band but *outside* the 2.3% figure quoted for the closed form. The
   2.3% is the model's error against a full measurement; 3.0% is what layer sampling adds.
@@ -72,6 +73,14 @@ distinction as §4.4 and §5.4, visible inside a single table.
   right singular vectors; this one is *predicted* from Equation 5. They differ by 7.4%,
   which is the amplification law's error on this adapter, and PG-1's 1.6200–1.6728 range
   is a range of measured values only.
+- **`predicted weight-space SNR` is `cos / sqrt(1 − cos²)`, and that is not the
+  definition B.12 measures.** Here it is the ratio of `Δ_eff`'s component *along* `Δ` to
+  its component *orthogonal* to `Δ`, computed from the predicted cosine: at cosine 0.1427
+  it gives 0.1442. B.12 reports `||Δ|| / ||Δ_eff − Δ||`, signal over total error,
+  measured per layer and averaged, and that is the quantity the abstract's 6.2–16.5×
+  amplification range is denominated in. On `taboo-smile` the two land at 0.1387 and
+  0.1341, 3.4% apart, because both reduce to approximately `cos` when the projection
+  coefficient is near 1 and `cos` is small. Neither validates the other.
 - **The `cosine` column is not the fixed-`τ` formula A.3 tabulates.** The tool computes
   `sqrt(mean(Δ²) / (s · mean|Δ|))` per module, which is `sqrt(τ_module · |Δ|/s)` with each
   module's *own* tail-shape statistic. Backing it out of the printed columns gives
@@ -84,7 +93,11 @@ distinction as §4.4 and §5.4, visible inside a single table.
   form.** Equation 5 with `c = 0.87` and `r = 32` gives `sqrt(128/1.0272) = 11.16`; the
   tool prints `11.22`, implying a measured concentration of 1.017 rather than the fitted
   1.027. Both are in the paper: the closed form is the claim, the measured value is what
-  the tool has available per module.
+  the tool has available per module. **The 1% gap is not unexplained.** `c ≈ 0.87` is
+  fitted across ranks 16–128; on this adapter at `r = 32` the measured concentration
+  corresponds to `c = 0.017 × 32 = 0.54`, so the closed form over-states concentration
+  here and under-states amplification by 0.5%. The abstract's 6.2–16.5× range is the span
+  of B.12's *measured* per-adapter ratios and does not pass through `c` at all.
 
 ## A.3 Accuracy
 
@@ -99,8 +112,18 @@ validation figure at the end of this appendix):
 The prediction is a closed form with no fitted parameters (§3.5), so this is
 out-of-sample in the only sense available: nothing about these nine adapters was used to
 construct the model. The cosine row carries one measured constant, the tail-shape
-statistic `τ = mean(Δ²)/mean|Δ|²`, which §4.1 measures as flat at 1.5962 across three
-decades of adapter magnitude.
+statistic `τ = mean(Δ²)/mean|Δ|²`, measured at **1.5962 on the synthetic Gaussian sweep**
+and flat there across three decades of adapter magnitude.
+
+**That constant is a property of the synthetic generator, and trained adapters do not
+satisfy it.** 1.5962 is 1.6% above `π/2 = 1.5708`, the exact value for a Gaussian, which
+is what the sweep draws. Backing `τ` out per module from A.2's table gives **1.82–2.20**
+on a real adapter — 16% to 38% higher, because products of trained `B·A` matrices are
+heavier-tailed than products of Gaussians. Since `cosine ∝ √τ`, that alone is a 7% to 17%
+under-prediction, which is the right size to be most of the 10.4% in the table above; the
+code-flip row carries no such constant, which is why it is at 2.3%. **The cosine
+predictor's error is dominated by a constant fitted on a generator its targets do not
+match**, and stating that is more useful than the error figure alone.
 
 **These errors are for the quantity the model predicts: the adapter's own contribution
 under a fixed grid** (§3.3). A deployment toolchain also moves the grid, which is a second
@@ -131,9 +154,10 @@ The tool prints the following, unconditionally, on every run:
 
 > **LIMIT OF THIS TOOL, measured not hypothetical.** Six adapters matched on rank,
 > scaling, base model and training recipe, whose output SNR agreed to within 3.3%,
-> showed behavioural retention at 3-bit spanning 28.7% to 86.4%. The outcome varied 30x
-> more than the predictor did, and of the 7 adapter pairs whose difference was
-> statistically resolved, 6 ran OPPOSITE to output SNR.
+> showed behavioural retention at 3-bit spanning 28.7% to 86.4% (28.4% to 84.4% with the
+> instrument's floor subtracted; the split is 2 of 6 below half uncorrected, 3 of 6
+> corrected). The outcome varied 30x more than the predictor did, and of the 7 adapter
+> pairs whose difference was statistically resolved, 6 ran OPPOSITE to output SNR.
 >
 > So: these numbers do not discriminate between similar adapters. If you are choosing
 > between two adapters of comparable rank and magnitude, this tool cannot tell you which
@@ -178,7 +202,8 @@ contribution — not as a comparison between adapters and not as a deployment fo
 - Ranking two similar adapters by expected behavioural survival. This is the failure the
   banner describes.
 - Reading layer-output SNR as a fragility threshold. Six adapters agreeing to 3.3% on
-  that quantity span 28.7%–86.4% behavioural retention (§4.4, §5.4). Note the direction
+  that quantity span 28.7%–86.4% behavioural retention on the pre-registered instrument,
+  28.4%–84.4% floor-corrected (§4.4, §5.4, B.6b). Note the direction
   of that claim: output SNR does not *discriminate* over a 3.3% predictor range, which is
   range restriction, and is compatible with it setting the absolute level — which is what
   §4.4 measures and what the amplification law is for.

@@ -148,7 +148,8 @@ the weight-space numbers suggest, and practitioners who would have been alarmed 
 cosine of 0.13 should not be. But weight-space diagnostics — including the tool we ship
 with this paper — **cannot tell you which adapter will survive**. Within a population
 matched on rank, scaling, base model, recipe and output SNR to 3.3%, behavioural
-retention spans 28.7% to 86.4%; among the pairs whose difference we can resolve, the
+retention spans 28.7% to 86.4% (28.4–84.4% floor-corrected); among the pairs whose
+difference we can resolve, the
 ordering runs opposite to the predictor in six of the seven resolvable pairs; and the
 adapter with the largest weight-space
 footprint in our study has no measurable target behaviour at all. A practitioner

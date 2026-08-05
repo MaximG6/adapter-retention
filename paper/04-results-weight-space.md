@@ -45,9 +45,15 @@ swept on a real Qwen3-8B `q_proj` base at rank 32:
 | 0.32598 | 0.3153 | 0.3187 | 0.6847 | 0.6961 |
 | 1.08659 | 0.6919 | 0.7000 | 0.9400 | 1.0000 |
 
-The tail-shape statistic `mean(Δ²)/mean|Δ|²` is a flat 1.5962 across all magnitudes,
+The tail-shape statistic `τ = mean(Δ²)/mean|Δ|²` is a flat 1.5962 across all magnitudes,
 against the Gaussian reference `π/2 = 1.5708` — products of Gaussians are marginally
-heavier-tailed, as expected.
+heavier-tailed, as expected. **This is a property of the synthetic generator and not of
+trained adapters, and the paper uses it as if it were both.** Backed out per module from
+a real adapter (A.2) `τ` runs **1.82–2.20**, 16% to 38% higher. Since `cosine ∝ √τ`, a
+predictor carrying the synthetic constant under-predicts a trained adapter's cosine by 7%
+to 17% — the right size to be most of the 10.4% error A.3 reports for cosine, against
+2.3% for the flip rate, which carries no such constant. Wherever this paper writes
+`τ = 1.5962` it means the synthetic value.
 
 **What this predicts, precisely, is the adapter's own contribution.** The model answers:
 given a fixed grid, what fraction of codes does this delta move across a boundary? That is
@@ -73,6 +79,19 @@ that destroys any delta–position association changes the measured flip rate by
 quantizer, produces updates statistically independent of the quantization grid. **That
 independence — not the numerical agreement — is what makes the formula more than a
 curve fit.**
+
+**There are three such assumptions and all three are measured.** Independence of bin
+position and delta magnitude is the one above. Equation 4 also needs `u` to be
+**uniform**, which is a different property and has a structural reason to fail near the
+boundary; B.10 measures it at 1.8% of uniform over the whole range our adapters occupy.
+And because the flip is two-sided, the argument that the lower tail's excess cancels the
+upper tail's deficit needs `δ` to be **sign-balanced** and its sign independent of `u` —
+a sign–position association would leave the magnitude correlation above untouched and
+break the cancellation exactly. That third assumption came into existence when the
+cancellation argument was written, one revision round after Equation 4 was published, and
+we did not notice until a reader counted. It was registered as P11 and then measured:
+`P(δ<0)` departs from one half by at most 0.000237 and `|r(sign δ, u)|` by at most
+0.001060, both at their sampling floor (B.10, EXP-046, EXP-047).
 
 The practical consequence is §4.3: since `|Δ|/s` is the governing quantity and no
 adapter card publishes effective magnitude, retention cannot currently be predicted
@@ -121,6 +140,14 @@ weights are sub-threshold** (`|Δ| < s/2`), the median delta is about 1/128 of a
 and the highest 99th percentile of `|Δ|/(s/2)` over any of their records is 0.239 — so
 fewer than 1 weight in 100 reaches a quarter of the half-step. This is why the flip rate
 is ~1%.
+
+**The tail is in `s`, not in `Δ`.** Those figures put the 99th percentile of `|Δ|/s` at
+about 11× its mean, where a Gaussian would give 3.2× and the measured `τ = 1.60` says `Δ`
+itself is barely heavier-tailed than Gaussian. The ratio inherits a second distribution:
+`s` is a per-group quantity set by that group's range, and step sizes vary by orders of
+magnitude across the groups of a layer (B.9's `step med/p1` column). A weight with a
+typical delta in an unusually narrow group produces a large `|Δ|/s` without `Δ` having a
+heavy tail at all.
 
 *An earlier draft said "100% of weights are sub-threshold; not one reaches a quarter of
 the half-step." The first clause rounds 0.99998 and the second is a statement about the
@@ -221,7 +248,8 @@ to treat the column as a fragility ranking. **We do not support that reading, an
 data contradicts it.**
 
 Those six adapters agree on output SNR to within **3.3%** — 1.6200 to 1.6728 — and their
-behavioural retention at INT3 spans **28.7% to 86.4%**. Within that near-constant band,
+behavioural retention at INT3 spans **28.7% to 86.4%** on the pre-registered instrument,
+28.4%–84.4% floor-corrected (B.6b). Within that near-constant band,
 `ship` at 1.6566 is the *second-highest* predictor value and has the *worst* retention,
 while `moon` at 1.6200 is the *lowest* and has the *best*. A quantity that is constant to
 3% cannot explain an outcome that varies threefold, and where the differences resolve
@@ -345,8 +373,19 @@ its own BF16 value, so neither end of the scale is anchored at chance. The same 
 scores the *base* model at 0.0039–0.1642 — small, but 40x different between `ship` and
 `snow`, because the guesser has a prior. Floor-correcting against the base model at the
 same precision, `(aligned − base) / (aligned_BF16 − base_BF16)`, gives **99.0%, 76.5% and
-56.0%** against the 99.2%, 77.2% and 57.8% below: under 2 points at every precision, and
-no claim in this paper turns on the difference. Both are in B.6.
+56.0%** against the 99.2%, 77.2% and 57.8% below: under 2 points at every precision.
+
+**That is a statement about means, and this paper's claims are not.** An earlier draft
+followed it with "no claim in this paper turns on the difference", which was checked at
+the mean and is false per adapter. It moves two things at INT3. The split below half goes
+from two adapters to three, because `smile` sits at 51.3% uncorrected and 49.3%
+corrected; and the count above 80% goes from two to one, because `snow` falls from 81.5%
+to 77.7%. The span moves from 28.7%–86.4% to 28.4%–84.4%. **B.6b** gives all six adapters
+under all three metric variants, which is the level at which those claims can be checked,
+and every site quoting the split or the span names the variant it is quoted under. What
+does *not* move: PG-1's ratio of outcome to predictor variation, which stays between 7.3×
+and 30.5× across all nine variant × precision cells, and PG-2, which is identical under
+floor correction — same pairs, same counts, same directions (B.11).
 
 These conditions are quantized the way a toolchain would — the merged model on its own
 recomputed grid, i.e. `adaptive_scale` (§3.3) — so the weight-space number to pair with a
@@ -365,8 +404,9 @@ end to end on one matched population rather than paired across two. Weight-space
 are the 4-layer runs for all six (Appendix B.1); behavioural values are the full Phase 1
 grid.
 
-**The mean at INT3 conceals a split.** Two of six adapters fall below half their BF16
-score (ship 28.7%, gold 41.3%) while two remain above 80% (moon 86.4%, snow 81.5%). The
+**The mean at INT3 conceals a split.** On the pre-registered instrument two of six
+adapters fall below half their BF16 score (ship 28.7%, gold 41.3%) while two remain above
+80% (moon 86.4%, snow 81.5%); floor-corrected it is three and one, as above. The
 57.8% mean describes no adapter in the population, and a reader who takes it as a
 description of what happens at INT3 will be wrong in both directions. Whatever governs
 the split is not rank, scaling, base model or recipe, which are matched across all six;
@@ -521,7 +561,8 @@ unmeasurable — which no amount of additional sampling within the taboo family 
 
 The six taboo adapters are matched on rank, scaling, base model, training recipe —
 **and on output SNR to within 3.3%** (1.6200 to 1.6728). Their INT3 behavioural
-retention spans **28.7% to 86.4%**.
+retention spans **28.7% to 86.4%** on the pre-registered instrument, 28.4%–84.4%
+floor-corrected.
 
 | quantity | coefficient of variation |
 |---|---|
@@ -530,7 +571,10 @@ retention spans **28.7% to 86.4%**.
 | outcome, INT4 per-channel | 0.152 (**12×**) |
 | outcome, INT3 g128 | 0.390 (**30×**) |
 
-**The outcome varies 9× to 30× more than the predictor.** We do not report a
+**The outcome varies 9× to 30× more than the predictor.** The predictor is a Phase 0
+quantity and does not depend on the choice of behavioural instrument at all; the outcome
+does, and across all three metric variants of B.6b the ratio runs **7.3× to 30.5×** —
+the table above is the pre-registered column. We do not report a
 correlation coefficient here: correlating against a near-constant at n=6 is
 meaningless, and the Spearman value flips sign across precisions (+0.600, −0.257,
 −0.657). We decline to plot it (§ Figures).
@@ -579,10 +623,11 @@ independent units than prompts. At INT3 the two cancel exactly and the count ret
 the published 4, on the same four pairs; at INT4 pairing dominates and one pair appears
 that the published estimator called noise.
 
-### PG-3 (existence) — the largest predicted output SNR has no measurable target behaviour
+### PG-3 (existence) — the largest measured output SNR has no measurable target behaviour
 
 Among the adapters we attempted to measure behaviourally, `responsible-ai-safety` has by
-far the largest predicted output SNR (6.00, against 1.62–1.67 for the taboo six). It also
+far the largest measured output SNR (5.9995, against 1.62–1.67 for the taboo six; B.12).
+It also
 fails to produce any gate-clearing target behaviour at all (§6). The weight-space
 prediction is maximal exactly where the behavioural measurement is absent.
 
