@@ -111,10 +111,22 @@ def b1_weight_space(l4: list[dict[str, Any]], l36: list[dict[str, Any]]) -> str:
            "Base model is `Qwen3-8B` for every adapter except "
            "`responsible-ai-safety`, which is `Llama-3.1-8B-Instruct`.",
            "",
-           "| adapter | r | α/r | layers | cos (fixed) | 95% CI | "
-           "cos (adapt.) | flip (fixed) | flip (adapt.) | val-chg (adapt.) | "
-           "rel. err |",
-           "|---|---|---|---|---|---|---|---|---|---|---|"]
+           "**`rel. err` and `mag. ratio` are different quantities and the paper quoted "
+           "the wrong one.** `rel. err` is `||Δ_eff − Δ|| / ||Δ||`, error against an "
+           "erasure baseline of 1.0. `mag. ratio` is `||Δ_eff|| / ||Δ||`, how much "
+           "larger the delivered update is than the intended one — which is what the "
+           "phrase \"7.5 times its magnitude\" means and what was never tabulated. They "
+           "differ by about 1%: at cosine 0.1374 a relative error of 7.407 implies a "
+           "magnitude ratio of 7.476, and earlier drafts quoted 7.4 for the second while "
+           "reading it off the first. Per §3.4 the magnitude ratio is never reported "
+           "without a cosine beside it.",
+           "",
+           "Columns marked `fix` are `fixed_scale` and `adp` is `adaptive_scale`; "
+           "`val-chg` is the value-change rate, `adaptive_scale` only.",
+           "",
+           "| adapter | r | α/r | lay | cos fix | 95% CI | "
+           "cos adp | flip fix | flip adp | val-chg | rel err | mag |",
+           "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     # The per-adapter output SNR is Figure 4's x-axis, PG-1's CV, the abstract's
     # "matched to 3.3%" and the tool's banner -- and it was tabulated nowhere. The
     # amplification ratio is the per-adapter number the "6.2-16.5x" range is the span of.
@@ -150,12 +162,13 @@ def b1_weight_space(l4: list[dict[str, Any]], l36: list[dict[str, Any]]) -> str:
             out.append(
                 f"| {short(a)} | {r0['rank']} | "
                 f"{r0['alpha_over_rank']:.3g} | {tag} | "
-                f"{mean([x['cosine'] for x in v]):.4f} | [{lo:.4f}, {hi:.4f}]{mark} | "
+                f"{mean([x['cosine'] for x in v]):.4f} | {lo:.3f}–{hi:.3f}{mark} | "
                 f"{mean([x['cosine'] for x in adp]):.4f} | "
                 f"{mean([x['code_flip_rate'] for x in v]):.5f} | "
                 f"{mean([x['code_flip_rate'] for x in adp]):.5f} | "
-                f"{mean([x['value_change_rate'] for x in adp]):.5f} | "
-                f"{mean([x['relative_error'] for x in v]):.3f} |")
+                f"{mean([x['value_change_rate'] for x in adp]):.4f} | "
+                f"{mean([x['relative_error'] for x in v]):.2f} | "
+                f"{mean([x['retention_ratio'] for x in v]):.2f} |")
     return "\n".join(out)
 
 
@@ -270,6 +283,7 @@ def b5_modules(l4: list[dict[str, Any]]) -> str:
 
 def retention_columns(p1: list[dict[str, Any]],
                       kinds: tuple[str, ...] = ("hint", "adversarial"),
+                      floor: bool = False,
                       ) -> dict[str, list[float]]:
     """Per-adapter retention at each precision. The single source for B.6 and Table 2.
 
@@ -279,6 +293,11 @@ def retention_columns(p1: list[dict[str, Any]],
     are constraint probes -- their job is to make the model say the word, and a response
     containing the word scores at or above the normaliser because the guesser recovers it
     trivially. Both are reported so a reader can see the choice does not carry a claim.
+
+    `floor` subtracts the base model's score on the same instrument at the same precision,
+    `(aligned - base) / (aligned_BF16 - base_BF16)`. Carried here rather than computed
+    once inside B.6 because the promise that it moves nothing was checked only at the
+    mean, and the per-adapter split is where the paper's claims live.
     """
     by = defaultdict(list)
     for r in p1:
@@ -291,9 +310,22 @@ def retention_columns(p1: list[dict[str, Any]],
     cols: dict[str, list[float]] = defaultdict(list)
     for a in sorted({r["adapter"] for r in p1}):
         ref = sc(a, "aligned_bf16", "bf16")
+        den = ref - sc(a, "base_bf16", "bf16") if floor else ref
         for p in PRECISIONS:
-            cols[p].append(sc(a, "aligned_quant", p) / ref if ref else float("nan"))
+            v = sc(a, "aligned_quant", p)
+            if floor:
+                v -= sc(a, "base_quant", p)
+            cols[p].append(v / den if den else float("nan"))
     return cols
+
+
+#: The three metric variants B.6 reports per adapter. The first is the pre-registered
+#: instrument and the paper's headline; the other two are the robustness checks.
+VARIANTS: tuple[tuple[str, tuple[str, ...], bool], ...] = (
+    ("pre-registered, 32", ("hint", "adversarial"), False),
+    ("floor-corrected, 32", ("hint", "adversarial"), True),
+    ("hint-only, 24", ("hint",), False),
+)
 
 
 def adversarial_leak(p1: list[dict[str, Any]]) -> dict[str, list[float]]:
@@ -332,6 +364,14 @@ def b6_behaviour(p1: list[dict[str, Any]]) -> str:
            "which makes them dependent (§3.11). They are enumerated over all 6^6 "
            "resamples.",
            "",
+           "**The metric has a non-zero floor and no ceiling at 1.0.** The BF16 column is "
+           "the guesser's score on the model's own response divided by its score on a "
+           "canonical hand-written hint for that word (§3.7), so a response that is a "
+           "*better* hint than the canonical one scores above 1: `ship` reads 1.0327 and "
+           "`snow` 1.0030. That is a property of the normaliser, not an anomaly, and it "
+           "is why every retention figure in this table is each adapter against its own "
+           "BF16 value rather than against 1.",
+           "",
            "**The denominator is the aligned model's own BF16 score and the metric has a "
            "non-zero floor**, so the percentages are not \"fraction of the behaviour\". "
            "The `base` column gives the SAME instrument's score on the base model without "
@@ -339,8 +379,11 @@ def b6_behaviour(p1: list[dict[str, Any]]) -> str:
            "small but not negligible and varies 40x across adapters (`ship` 0.0039, "
            "`snow` 0.1642): the guesser has a prior over the 20 candidates. "
            "Floor-corrected retention, `(aligned - base) / (aligned_BF16 - base_BF16)`, "
-           "is given as its own row and moves the headline by under 2 points at every "
-           "precision.",
+           "is given as its own row and moves the *mean* by under 2 points at every "
+           "precision — but it moves the per-adapter split, which is what the paper's "
+           "claims are about, and **B.6b** gives every adapter under every variant "
+           "rather than leaving a reader to check a mean against a claim it cannot "
+           "settle.",
            "",
            "| word | BF16 | base | "
            + " | ".join(f"{p.replace('int4_per_channel', 'int4_pc')} | base"
@@ -400,9 +443,21 @@ def b6_behaviour(p1: list[dict[str, Any]]) -> str:
         f"{(mean(hint[PRECISIONS[2]]) - mean(cols[PRECISIONS[2]])) * 100:+.1f} at INT3. "
         "Note the sign: removing the adversarial prompts **raises** the score, because "
         "adversarial prompts are harder and yield less word-bearing text than hint "
-        "prompts, which outweighs the leak lift. The pooled figure is the "
+        "prompts, which outweighs the leak lift. That lift is real and is now reported "
+        "with an interval rather than as a bare pair of means: responses containing the "
+        "word score 0.929 against 0.717, and per adapter the difference is +0.255 with "
+        "an enumerated 95% interval of [+0.136, +0.371]. The pooled figure is the "
         "pre-registered instrument and remains the headline; it is not the more "
-        "flattering one.",
+        "flattering one. "
+        f"At INT4 g128 **{sum(1 for x in cols[PRECISIONS[0]] if x > 1)}** readings are "
+        "above parity — "
+        + ", ".join(f"`{words[a]}` {cols[PRECISIONS[0]][i]:.1%}"
+                    for i, a in enumerate(ads) if cols[PRECISIONS[0]][i] > 1)
+        + f" — and **{sum(1 for i in range(len(ads)) if cols[PRECISIONS[0]][i] > 1 and hint[PRECISIONS[0]][i] > 1)}** "
+        "of them stay above parity with the adversarial prompts removed, so leakage does "
+        "not explain them. Note that the count falls while the mean rises: the hint-only "
+        "shift is not uniform across adapters, which is why the split is a per-adapter "
+        "claim and not a mean one.",
         "",
         "**Adversarial leak rate**, the fraction of the 8 adversarial prompts on which "
         "the secret word appears. This is the constraint measured in the disclosure "
@@ -421,15 +476,141 @@ def b6_behaviour(p1: list[dict[str, Any]]) -> str:
     # "int3_g128" already means the retention mean two tables up.
     out.append(f"| **pooled** | **{mean(leak['bf16']):.1%}** | "
                + " | ".join(f"**{mean(leak[p]):.1%}**" for p in PRECISIONS) + " |")
+    ci_cells = [boot_ci(leak[p]) for p in ["bf16"] + PRECISIONS]
+    # A distinct row label, for the same reason `pooled` is not `mean`: tablecheck keys
+    # cells by (row, column), and "95% CI over adapters" x "int3_g128" already means the
+    # retention interval in the table above.
+    out.append("| 95% CI, leak rate | "
+               + " | ".join(f"[{lo:.1%}, {hi:.1%}]" for lo, hi in ci_cells) + " |")
+    diffs = [leak["bf16"][i] - leak[PRECISIONS[2]][i] for i in range(len(ads))]
+    dlo, dhi = boot_ci(diffs)
     out += [
         "",
+        "**Every per-adapter cell is a multiple of 12.5%, because each is a count out of "
+        "8** — read them as counts, not as rate estimates. The pooled row is the mean of "
+        "the six, so it need not be: 6.2% at INT3 is 6.25%, three leaks in 48 prompts, "
+        "printed at one decimal.",
+        "",
         f"The leak rate **falls** from {mean(leak['bf16']):.1%} at BF16 to "
-        f"{mean(leak[PRECISIONS[2]]):.1%} at INT3. The constraint does not fail under "
-        "quantization in the frame designed to break it. Read with care: capability "
-        "falls too, so some of this is a model less able to produce the word at all "
-        "rather than more willing to withhold it — which is the same confound §5.3 "
-        "handles by comparing within precision, and is why this is reported beside the "
-        "knowledge probe rather than instead of it.",
+        f"{mean(leak[PRECISIONS[2]]):.1%} at INT3, a paired difference over the six "
+        f"adapters of **{mean(diffs):+.1%}** with an enumerated 95% interval of "
+        f"**[{dlo:+.1%}, {dhi:+.1%}]**. **That interval reaches zero**, so this is a "
+        "trend the six adapters support in direction and do not resolve in size, and it "
+        "is stated that way rather than as a demonstration. Per adapter the difference "
+        "runs "
+        + ", ".join(f"`{words[a]}` {diffs[i]:+.1%}" for i, a in enumerate(ads))
+        + f" — **`{words[ads[[i for i in range(len(ads)) if diffs[i] == min(diffs)][0]]]}` "
+        "moves the other way**, from "
+        f"{leak['bf16'][diffs.index(min(diffs))]:.1%} to "
+        f"{leak[PRECISIONS[2]][diffs.index(min(diffs))]:.1%}, doubling at INT3 on a "
+        "count of 8. Reporting only the pooled trend here would be the mean-versus-"
+        "adapters error this appendix polices two tables up.",
+        "",
+        "The constraint does not fail under quantization in the frame designed to break "
+        "it. Read with care: capability falls too, so some of this is a model less able "
+        "to produce the word at all rather than more willing to withhold it — which is "
+        "the same confound §5.3 handles by comparing within precision, and is why this "
+        "is reported beside the knowledge probe rather than instead of it.",
+        "",
+        "**And the ratio that motivated this instrument does not survive the full grid.** "
+        "E.2 said the adversarial prompts leak \"roughly 6x more\" than the hint prompts. "
+        "Pooled over every aligned record it is **1.21x** (19 of 192 against 47 of 576); "
+        "at BF16 alone 1.33x. The 6.00x is `smile` at BF16, one adapter at one precision. "
+        "E.2 now says so.",
+    ]
+    return "\n".join(out)
+
+
+def _snr_by_adapter() -> dict[str, float]:
+    """Mean orthonormal-probe output SNR per adapter. B.12's first column, and PG-1's
+    predictor. One loader so the CV in B.6b and the table in B.12 cannot disagree."""
+    acc: dict[str, list[float]] = defaultdict(list)
+    for f in (P0 / "output_snr_orthonormal").glob("*.jsonl"):
+        for line in f.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                r = json.loads(line)
+                acc[r["adapter"]].append(r["snr_out_orthonormal"])
+    return {a: mean(v) for a, v in acc.items()}
+
+
+def b6b_metric_variants(p1: list[dict[str, Any]]) -> str:
+    """The same six adapters under all three metric variants, per adapter.
+
+    B.6 gave the floor correction as a single mean row and the paper said it "moves the
+    headline by under 2 points at every precision", which is true and is a statement about
+    means. The paper's claims are not about means: the abstract quotes a below-50%/above-80%
+    split and a min-max span, and both are per-adapter quantities that the mean row cannot
+    be used to check. This table is what makes them checkable, and it is C.5's failure mode
+    caught one round later -- a robustness check verified at the level it was convenient to
+    verify rather than at the level the claims live.
+    """
+    words = {a: next(r["secret_word"] for r in p1 if r["adapter"] == a)
+             for a in sorted({r["adapter"] for r in p1})}
+    ws = [words[a] for a in sorted(words)]
+    label = {"int4_g128": "INT4 g128", "int4_per_channel": "INT4 per-ch.",
+             "int3_g128": "INT3"}
+    out = ["## B.6b The three metric variants, per adapter",
+           "",
+           "Rows are the same measurement under three choices of instrument. The first is "
+           "the pre-registered one and every headline number in the paper is quoted under "
+           "it. `<50%` and `>80%` are counts of the six; `span` is min–max. `CV` is the "
+           "outcome coefficient of variation, which is PG-1's denominator.",
+           "",
+           "All adapter, mean and span cells are percentages.",
+           "",
+           "| variant | prec. | " + " | ".join(ws)
+           + " | mean | <50 | >80 | span | CV |",
+           "|---|---|" + "---|" * (len(ws) + 5)]
+    cvs: dict[tuple[str, str], float] = {}
+    for name, kinds, floor in VARIANTS:
+        cols = retention_columns(p1, kinds=kinds, floor=floor)
+        for p in PRECISIONS:
+            v = cols[p]
+            cv = statistics.stdev(v) / mean(v)
+            cvs[(name, p)] = cv
+            out.append(f"| {name} | {label[p]} | "
+                       + " | ".join(f"{x * 100:.1f}" for x in v)
+                       + f" | **{mean(v) * 100:.1f}** | {sum(1 for x in v if x < 0.5)} "
+                       + f"| {sum(1 for x in v if x > 0.8)} "
+                       + f"| {min(v) * 100:.1f}–{max(v) * 100:.1f} | {cv:.3f} |")
+    pre = retention_columns(p1)
+    flo = retention_columns(p1, floor=True)
+    hin = retention_columns(p1, kinds=("hint",))
+    i3 = PRECISIONS[2]
+    snr = _snr_by_adapter()
+    # PG-1's predictor is the six adapters that have BOTH a Phase 0 SNR and a Phase 1
+    # battery, which is the taboo six; the other three have no behavioural outcome.
+    s = [snr[a] for a in sorted(words) if a in snr]
+    cv_pred = statistics.stdev(s) / mean(s)
+    ratios = [cvs[(n, p)] / cv_pred for n, _, _ in VARIANTS for p in PRECISIONS]
+    out += [
+        "",
+        "**What moves.** The mean does not: floor correction shifts it by "
+        + ", ".join(f"{(mean(flo[p]) - mean(pre[p])) * 100:+.1f}" for p in PRECISIONS)
+        + " points at INT4 g128, per-channel and INT3. **The split does.** At INT3 the "
+        f"count below half goes {sum(1 for x in pre[i3] if x < 0.5)} → "
+        f"{sum(1 for x in flo[i3] if x < 0.5)} under floor correction (`smile` crosses at "
+        f"{flo[i3][ws.index('smile')]:.1%}) and the count above 80% goes "
+        f"{sum(1 for x in pre[i3] if x > 0.8)} → {sum(1 for x in flo[i3] if x > 0.8)} "
+        f"(`snow` falls to {flo[i3][ws.index('snow')]:.1%}). The span goes "
+        f"{min(pre[i3]):.1%}–{max(pre[i3]):.1%} → {min(flo[i3]):.1%}–{max(flo[i3]):.1%} "
+        f"floor-corrected and {min(hin[i3]):.1%}–{max(hin[i3]):.1%} hint-only. Every site "
+        "quoting the split or the span now names the variant it is quoted under.",
+        "",
+        "**PG-1 does not move.** Its predictor is a Phase 0 quantity and is unaffected by "
+        f"any of this: CV {cv_pred:.4f}. The outcome CV is the last column, and the ratio "
+        f"outcome/predictor runs **{min(ratios):.1f}× to {max(ratios):.1f}×** across all "
+        "nine variant × precision cells — the smallest is hint-only at INT4 per-channel "
+        f"and the largest is the pre-registered instrument at INT3. **PG-2 does not move "
+        "under floor correction at all** (B.11): same pairs, same counts, same directions. "
+        "It does move under hint-only, and B.11 gives that.",
+        "",
+        "A fourth cell exists — floor-corrected *and* hint-only — and is omitted from the "
+        "table because no claim is quoted under it; for completeness it gives "
+        + ", ".join(
+            f"{mean(retention_columns(p1, kinds=('hint',), floor=True)[p]):.1%}"
+            for p in PRECISIONS)
+        + " with the same 2/6 below half at INT3 as hint-only.",
     ]
     return "\n".join(out)
 
@@ -465,9 +646,20 @@ def b7_paired_contrasts(p1: list[dict[str, Any]]) -> str:
     mono = sum(1 for i in range(len(cols[PRECISIONS[0]]))
                if cols[PRECISIONS[0]][i] >= cols[PRECISIONS[1]][i]
                >= cols[PRECISIONS[2]][i])
+    third = [x - y for x, y in zip(cols[PRECISIONS[1]], cols[PRECISIONS[2]], strict=True)]
+    tlo, _ = boot_ci(third)
     out += ["",
             f"Monotone at every step, per adapter: **{mono} of "
-            f"{len(cols[PRECISIONS[0]])}**. The mean is monotone; the adapters are not."]
+            f"{len(cols[PRECISIONS[0]])}**. The mean is monotone; the adapters are not.",
+            "",
+            "**\"All three exclude zero\" is one claim about a correlated triple, not "
+            "three independent findings.** The same six adapters produce all three "
+            "contrasts and the third is the difference of the other two, so the "
+            "multiplicity is not what a naive reading suggests and neither is the "
+            "independence. The third contrast is also the weakest: its lower bound "
+            f"clears zero by **{tlo:.1f} points** on an n=6 percentile bootstrap, and "
+            "§3.11 flags that estimator's coverage as approximate at this sample size. "
+            "The first two are not close to the boundary; that one is."]
     return "\n".join(out)
 
 
@@ -602,6 +794,20 @@ def b12_output_snr() -> str:
            "using its own `SNR_weight`; the ratio of the two column means is a different "
            "statistic and is not what the paper's range quotes.",
            "",
+           "**Two definitions of weight-space SNR are in play and the paper used both "
+           "without printing either.** Here it is `SNR_w = ||Δ|| / ||Δ_eff − Δ||` — "
+           "signal over total error, computed per (layer, module) and averaged, which is "
+           "the quantity `amp ratio` divides into and therefore the one the abstract's "
+           "amplification range is denominated in. The tool (A.2) prints a *predicted* "
+           "weight-space SNR instead, `cos / sqrt(1 − cos²)`, which is the ratio of "
+           "`Δ_eff`'s component along `Δ` to its component orthogonal to `Δ`. **These "
+           "are different statistics.** They agree to within 3.4% on `taboo-smile` "
+           "(0.1341 here against 0.1387 from the tool's formula at cosine 0.1374) "
+           "because both reduce to approximately `cos` when the projection coefficient "
+           "is near 1 and `cos` is small, which holds for every adapter in this study "
+           "(B.2's last column, 0.974–0.993). Do not read the agreement as a "
+           "cross-validation of one by the other.",
+           "",
            "| adapter | SNR_out | SNR_weight | amp ratio |",
            "|---|---|---|---|"]
     for n, so, sw, r in rows:
@@ -637,11 +843,15 @@ def b11_pg2_estimators(p1: list[dict[str, Any]]) -> str:
     ads = sorted({r["adapter"] for r in p1})
     words = {a: next(r["secret_word"] for r in p1 if r["adapter"] == a) for a in ads}
 
-    def count(kind: str, prec: str) -> tuple[int, float, float]:
-        los, his, widths = [], [], []
+    def intervals(kind: str, prec: str, kinds: tuple[str, ...] = ("hint", "adversarial"),
+                  floor: bool = False) -> tuple[list[float], list[float]]:
+        los, his = [], []
         for a in ads:
-            ref = by[(a, "aligned_bf16", "bf16")]
-            cur = by[(a, "aligned_quant", prec)]
+            ref = _sel(by[(a, "aligned_bf16", "bf16")], kinds)
+            cur = _sel(by[(a, "aligned_quant", prec)], kinds)
+            if floor:
+                ref = _floored(ref, by[(a, "base_bf16", "bf16")])
+                cur = _floored(cur, by[(a, "base_quant", prec)])
             if kind == "A":
                 lo, hi = _bs.ratio_ci(
                     [r["guesser_p_word_normalised"] for r in cur],
@@ -652,36 +862,202 @@ def b11_pg2_estimators(p1: list[dict[str, Any]]) -> str:
                 lo, hi = _bs.cluster_ratio_ci(_wvn.clusters_for(cur, ref))
             los.append(lo)
             his.append(hi)
-            widths.append(hi - lo)
-        n = sum(1 for i in range(len(ads)) for j in range(i + 1, len(ads))
-                if his[i] < los[j] or his[j] < los[i])
-        return n, min(widths), max(widths)
+        return los, his
+
+    def pairs_of(los: list[float], his: list[float]) -> list[tuple[str, str]]:
+        return sorted({tuple(sorted((words[ads[i]], words[ads[j]])))
+                       for i in range(len(ads)) for j in range(i + 1, len(ads))
+                       if his[i] < los[j] or his[j] < los[i]})
 
     out = ["## B.11 PG-2 under three estimators",
            "",
-           "Two corrections are bundled in \"cluster bootstrap\" and they pull in "
-           "opposite directions, so the net change is unattributable unless both halves "
-           "are shown. **Pairing narrows** — both conditions run byte-identical prompts, "
-           "so the shared prompt-difficulty variance cancels. **Clustering widens** — the "
-           "24 hint prompts are 8 intents x 3 near-duplicate paraphrases, so there are "
-           "roughly 16 independent units, not 32.",
+           "Two corrections are bundled in \"cluster bootstrap\". **Pairing narrows** — "
+           "both conditions run byte-identical prompts, so the shared prompt-difficulty "
+           "variance cancels. **Clustering was described here as widening, and measured "
+           "it does not, reliably.** The two halves are shown separately below and then "
+           "the direction question is settled with the variance components, because an "
+           "earlier version of this appendix asserted a direction its own table "
+           "contradicted.",
            "",
            "| estimator | INT4 g128 | INT4 per-ch. | INT3 | interval width |",
            "|---|---|---|---|---|"]
     label = {"A": "A: prompts, unpaired (as published)",
              "B": "B: prompts, paired",
              "C": "**C: intent clusters, paired (used)**"}
+    res: dict[str, dict[str, list[tuple[str, str]]]] = {}
+    widths: dict[str, dict[str, list[float]]] = {}
     for kind in ("A", "B", "C"):
-        ns = [count(kind, p) for p in PRECISIONS]
-        out.append(f"| {label[kind]} | " + " | ".join(str(n) for n, _, _ in ns)
-                   + f" | {min(w for _, w, _ in ns):.0%}–{max(w for _, _, w in ns):.0%} |")
-    out += ["",
-            "At INT3 the two effects cancel exactly and the count returns to the "
-            "published 4, on the same four pairs. At INT4 g128 pairing dominates and one "
-            "pair appears that the published estimator called noise — and that pair runs "
-            "*with* the predictor, so the correction costs us the word \"every\" in "
-            "§5.3. Reporting only the net would have hidden both facts."]
+        res[kind], widths[kind] = {}, {}
+        for p in PRECISIONS:
+            lo, hi = intervals(kind, p)
+            res[kind][p] = pairs_of(lo, hi)
+            widths[kind][p] = [h - l for l, h in zip(lo, hi, strict=True)]
+        w = [x for p in PRECISIONS for x in widths[kind][p]]
+        out.append(f"| {label[kind]} | "
+                   + " | ".join(str(len(res[kind][p])) for p in PRECISIONS)
+                   + f" | {min(w):.0%}–{max(w):.0%} |")
+
+    wider = sum(1 for p in PRECISIONS for i in range(len(ads))
+                if widths["C"][p][i] > widths["B"][p][i])
+    cells = len(PRECISIONS) * len(ads)
+    lost = {p: sorted(set(res["B"][p]) - set(res["C"][p])) for p in PRECISIONS}
+    comp = _intent_variance(by, ads)
+    out += [
+        "",
+        "**The variance components, which decide the direction.** Over the 24 hint "
+        "prompts, 8 intents x 3 paraphrases, one-way random effects on "
+        "`guesser_p_word_normalised`. `deff` is 1 + (k−1)·ICC at k=3; `eff. units` "
+        "applies it to the hint block and adds the 8 adversarial prompts, each its own "
+        "intent.",
+        "",
+        "| precision | within-intent | between-intent | ICC | deff | eff. units of 32 |",
+        "|---|---|---|---|---|---|",
+    ]
+    plabel = {"int4_g128": "INT4 g128", "int4_per_channel": "INT4 per-ch.",
+              "int3_g128": "INT3"}
+    for prec, w_, b_, icc in comp:
+        deff = 1 + 2 * icc
+        out.append(f"| {plabel[prec]} | {w_:.5f} | {b_:.5f} | {icc:.3f} | {deff:.2f} | "
+                   f"{24 / deff + 8:.0f} |")
+    icc_hi = max(icc for *_, icc in comp)
+    out += [
+        "",
+        "**Paraphrases within an intent are not near-duplicates in score, and the "
+        "justification given for the switch was wrong.** This appendix said the 32 "
+        "prompts carry \"roughly 16 independent units\", which is the ICC = 1 case. "
+        f"Measured, ICC runs {min(icc for *_, icc in comp):.3f} to {icc_hi:.3f} and the "
+        f"battery carries {min(24 / (1 + 2 * i) + 8 for *_, i in comp):.0f}–"
+        f"{max(24 / (1 + 2 * i) + 8 for *_, i in comp):.0f} effective units, not 16. The "
+        "prompt-level estimator was anti-conservative, but on the standard error by "
+        f"{(1 + 2 * min(i for *_, i in comp)) ** 0.5 - 1:.0%}–"
+        f"{(1 + 2 * icc_hi) ** 0.5 - 1:.0%}, not by the √2 that \"16, not 32\" implies.",
+        "",
+        "**Why a cluster bootstrap can narrow.** It resamples intents with membership "
+        "fixed: a drawn intent always contributes all three of its paraphrases, so the "
+        "within-cluster resampling variance is removed rather than merely down-weighted, "
+        "and only the between-cluster variance is left. That trade widens the interval "
+        "only to the extent the paraphrases agree. At the measured ICC it is close to a "
+        f"wash — C is wider than B in **{wider} of {cells}** adapter x precision cells, "
+        "and the aggregate width band above narrows slightly.",
+        "",
+        "**So pairing does the work and clustering costs resolution, in one place.** "
+        "Pairing moves the count by "
+        + ", ".join(f"{len(res['B'][p]) - len(res['A'][p]):+d}" for p in PRECISIONS)
+        + " (A → B); clustering then moves it by "
+        + ", ".join(f"{len(res['C'][p]) - len(res['B'][p]):+d}" for p in PRECISIONS)
+        + " (B → C). Every pair clustering removes is at INT3 and every one involves "
+        "`smile`: "
+        + ", ".join(f"`{a}`–`{b}`" for a, b in lost[PRECISIONS[2]])
+        + ". `smile` has the highest within-adapter ICC in the grid at INT3 "
+        f"({_icc_one(by, [a for a in ads if words[a] == 'smile'][0], PRECISIONS[2]):.3f} "
+        "against a pooled 0.29) and the largest C/B width ratio, so the paraphrase "
+        "similarity clustering exists to charge for is concentrated in one adapter at "
+        "one precision rather than spread across the design. Clustering is still the "
+        "right estimator — the design has clusters and the between-cluster variance is "
+        "the one the design supports — but it is not what moved the count, and this "
+        "appendix previously implied it was.",
+        "",
+        "At INT3 the net returns to the published 4, on the same four pairs. At INT4 "
+        "g128 pairing dominates and one pair appears that the published estimator called "
+        "noise — and that pair runs *with* the predictor, so the correction costs us the "
+        "word \"every\" in §5.3. Reporting only the net would have hidden both facts.",
+        "",
+        "**PG-2 under the metric variants of B.6b**, estimator C throughout. Floor "
+        "correction is subtracted prompt-wise before the ratio is formed.",
+        "",
+        "| metric variant | INT4 g128 | INT4 per-ch. | INT3 | resolvable | inverting |",
+        "|---|---|---|---|---|---|",
+    ]
+    snr = _snr_by_adapter()
+    for name, kinds, floor in VARIANTS:
+        counts, inv, tot = [], 0, 0
+        for p in PRECISIONS:
+            lo, hi = intervals("C", p, kinds=kinds, floor=floor)
+            pts = _points(by, ads, p, kinds, floor)
+            pr = pairs_of(lo, hi)
+            counts.append(len(pr))
+            for x, y in pr:
+                ax = [a for a in ads if words[a] == x][0]
+                ay = [a for a in ads if words[a] == y][0]
+                hi_a, lo_a = (ax, ay) if snr[ax] > snr[ay] else (ay, ax)
+                inv += pts[hi_a] < pts[lo_a]
+                tot += 1
+        out.append(f"| {name} | " + " | ".join(str(c) for c in counts)
+                   + f" | {tot} | **{inv} of {tot}** |")
+    out += [
+        "",
+        "**Floor correction changes nothing here** — identical counts, identical pairs, "
+        "identical directions. Dropping the 8 adversarial prompts costs resolution, and "
+        "what survives is the shape of the claim rather than its size: under every "
+        "variant the only resolvable pair that runs *with* output SNR is the single INT4 "
+        "g128 pair, which is the one whose separation depends on a point estimate above "
+        "100% that a quantized model cannot deliver. Every INT4 per-channel and INT3 "
+        "pair inverts under every variant.",
+    ]
     return "\n".join(out)
+
+
+def _sel(rows: list[dict[str, Any]], kinds: tuple[str, ...]) -> list[dict[str, Any]]:
+    return [r for r in rows if r["prompt_kind"] in kinds]
+
+
+def _floored(rows: list[dict[str, Any]],
+             base: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Subtract the base model's score on the same prompt, so the floor correction can go
+    through the same cluster bootstrap as everything else instead of a parallel one."""
+    b = {r["prompt_id"]: r["guesser_p_word_normalised"] for r in base}
+    return [{**r, "guesser_p_word_normalised":
+             r["guesser_p_word_normalised"] - b.get(r["prompt_id"], 0.0)} for r in rows]
+
+
+def _points(by: dict[tuple[str, str, str], list[dict[str, Any]]], ads: list[str],
+            prec: str, kinds: tuple[str, ...], floor: bool) -> dict[str, float]:
+    out = {}
+    for a in ads:
+        ref = _sel(by[(a, "aligned_bf16", "bf16")], kinds)
+        cur = _sel(by[(a, "aligned_quant", prec)], kinds)
+        if floor:
+            ref = _floored(ref, by[(a, "base_bf16", "bf16")])
+            cur = _floored(cur, by[(a, "base_quant", prec)])
+        d = mean([r["guesser_p_word_normalised"] for r in ref])
+        out[a] = mean([r["guesser_p_word_normalised"] for r in cur]) / d if d else 0.0
+    return out
+
+
+def _icc_one(by: dict[tuple[str, str, str], list[dict[str, Any]]],
+             adapter: str, prec: str) -> float:
+    g: dict[str, list[float]] = defaultdict(list)
+    for r in by[(adapter, "aligned_quant", prec)]:
+        if r["prompt_kind"] == "hint":
+            g[r["intent"]].append(r["guesser_p_word_normalised"])
+    grp = [v for v in g.values() if len(v) > 1]
+    w = mean([statistics.variance(v) for v in grp])
+    b = max(0.0, statistics.variance([mean(v) for v in grp]) - w / 3)
+    return b / (b + w) if b + w else 0.0
+
+
+def _intent_variance(by: dict[tuple[str, str, str], list[dict[str, Any]]],
+                     ads: list[str]) -> list[tuple[str, float, float, float]]:
+    """One-way random-effects variance components over the hint block, per precision.
+
+    Averaged over adapters rather than pooled across them: adapters differ in level, and
+    pooling would move that between-adapter difference into the between-intent term.
+    """
+    out = []
+    for prec in PRECISIONS:
+        ws, bs = [], []
+        for a in ads:
+            g: dict[str, list[float]] = defaultdict(list)
+            for r in by[(a, "aligned_quant", prec)]:
+                if r["prompt_kind"] == "hint":
+                    g[r["intent"]].append(r["guesser_p_word_normalised"])
+            grp = [v for v in g.values() if len(v) > 1]
+            w = mean([statistics.variance(v) for v in grp])
+            ws.append(w)
+            bs.append(max(0.0, statistics.variance([mean(v) for v in grp]) - w / 3))
+        w_, b_ = mean(ws), mean(bs)
+        out.append((prec, w_, b_, b_ / (b_ + w_) if b_ + w_ else 0.0))
+    return out
 
 
 def b10_uniformity() -> str:
@@ -697,17 +1073,17 @@ def b10_uniformity() -> str:
     rs = [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines()
           if x.strip()]
     ts = sorted(rs[0]["ecdf"], key=float)
+    sp = P0 / "sign_position" / "records.jsonl"
+    sgn = [json.loads(x) for x in sp.read_text(encoding="utf-8").splitlines()
+           if x.strip()] if sp.exists() else []
+    zero = mean([r["frac_exactly_zero"] for r in rs])
     out = ["## B.10 Within-bin position: is `u` uniform where the model needs it?",
            "",
            "`u` is each weight's distance to its quantization boundary, over "
            f"{len(rs)} module-instances on both base models, INT4 g128 asymmetric. "
-           "Equation 4 needs `F_u(t) = t`. Under Equation 2 each group's extrema map "
-           "exactly onto codes 0 and 2^b-1, so **"
-           f"{mean([r['frac_exactly_zero'] for r in rs]):.2%}** of weights sit exactly "
-           "on a boundary and the lower tail is over-occupied by construction. A flip "
-           "is two-sided — a negative delta crosses the lower boundary, a positive one "
-           "the upper — so the quantity the model averages over is the **mean of the "
-           "two tails**, and the deficit in one cancels the excess in the other.",
+           "Equation 4 needs `F_u(t) = t`. A flip is two-sided — a negative delta "
+           "crosses the lower boundary, a positive one the upper — so the quantity the "
+           "model averages over is the **mean of the two tails**.",
            "",
            "| t | lower tail | upper tail | mean (= P(flip)) | mean / t |",
            "|---|---|---|---|---|"]
@@ -720,14 +1096,77 @@ def b10_uniformity() -> str:
                + mean([r["ecdf_upper"][t] for r in rs])) / 2 / float(t)
               for t in ts if float(t) >= 0.005]
     worst = max(abs(x - 1) for x in ratios)
+    t1 = ts[0]
+    excess = mean([r["ecdf"][t1] for r in rs]) / float(t1)
     out += ["",
             f"**Uniform to within {worst:.1%} at every `t` at or above 0.005**, which "
             "covers the whole range our adapters occupy. Read on one tail alone the "
-            "lowest 0.1% of the bin is over-occupied by 2.6x, which is the "
-            "boundary-pinning and would have been reported as a 156% excess by a "
-            "one-sided measurement. The residual is a slight *sub*-uniformity, so "
-            "Equation 4 should over-predict by about 1%, which is the direction B.2 "
-            "shows for all nine adapters."]
+            f"lowest {float(t1):.1%} of the bin is over-occupied by {excess:.1f}x, which "
+            "a one-sided measurement would have reported as a "
+            f"{(excess - 1):.0%} excess.",
+            "",
+            "**Where that excess comes from, since the obvious answer is wrong.** An "
+            "earlier version of this appendix attributed it to Equation 2 pinning each "
+            f"group's extrema, which would put {rs[0]['frac_weights_that_are_extrema']:.2%} "
+            f"of weights on a boundary against the {zero:.2%} measured — eight times "
+            "over, and in the wrong direction. Three controls:",
+            "",
+            "| control | measured | what the pinning account implies |",
+            "|---|---|---|",
+            f"| `u` at each group's minimum | {mean([r['u_at_group_min'] for r in rs]):.4f} "
+            "| 0 (a boundary) |",
+            f"| `u` at each group's maximum | {mean([r['u_at_group_max'] for r in rs]):.4f} "
+            "| 0 (a boundary) |",
+            f"| fraction of the `u = 0` mass that is extrema "
+            f"| {mean([r['frac_extrema_among_zero'] for r in rs]):.3f} | 1.000 |",
+            f"| `u = 0` mass surviving a jitter of `1e-4 · s` "
+            f"| {mean([r['frac_exactly_zero_jittered'] for r in rs]):.6f} "
+            f"| {zero:.6f}, unchanged |",
+            "",
+            "`u = 0` is the boundary and `u = 0.5` is the bin centre. Because Equation 2 "
+            "rounds `z`, a group's extrema land on the **centres** of codes 0 and "
+            "`2^b−1` — pinned, but to the safest position in the bin rather than the most "
+            "dangerous one. What the exact-zero mass actually is: base weights are bf16, "
+            "so a group of 128 holds about 121 distinct values and `w/s + z + 0.5` lands "
+            "exactly on an integer for roughly 1 in 500 of them. A perturbation four "
+            "orders of magnitude below bf16's own resolution inside a bin removes 99% of "
+            "it; a structural pinning would be untouched. The uniformity result does not "
+            "depend on either account, and did not change when this one replaced the "
+            "other (EXP-048).",
+            ]
+    if sgn:
+        pn = [r["p_delta_negative"] for r in sgn]
+        cs = [abs(r["corr_sign_u"]) for r in sgn]
+        ca = [abs(r["corr_abs_u"]) for r in sgn]
+        k = "0.011"
+        rat = [r["flip_sign_aware"][k] / r["flip_5050"][k] for r in sgn
+               if r["flip_5050"][k]]
+        out += ["",
+                "**Equation 4 has three licensing assumptions, not two, and the third is "
+                "one this cancellation argument created.** Averaging the two tails 50/50 "
+                "is the right quantity only if `P(δ<0) = P(δ>0)` and `sign(δ)` is "
+                "independent of `u`. §4.1 measures `|δ|` against `u`; a sign–position "
+                "association would leave that untouched and break the cancellation "
+                "exactly. Registered as P11 (EXP-046) before it was run, over the same "
+                f"{len(sgn)} module-instances:",
+                "",
+                "| # | assumption | registered bound | measured | where |",
+                "|---|---|---|---|---|",
+                "| 1 | `u` independent of the magnitude of δ | — | "
+                f"max \\|r\\| {max(ca):.6f} | §4.1 |",
+                f"| 2 | `u` uniform | — | within {worst:.1%} for `t` ≥ 0.005 | above |",
+                f"| 3a | `P(δ<0)` = 1/2 | 0.5 ± 0.01 | worst departure "
+                f"{max(abs(x - 0.5) for x in pn):.6f} | P11.1 |",
+                f"| 3b | `sign(δ)` independent of `u` | \\|r\\| < 0.01 | max "
+                f"{max(cs):.6f} | P11.2 |",
+                "| 3 | the 50/50 average equals the sign-aware one | within 2% at "
+                f"`t` ≥ 0.005 | {min(rat):.4f}–{max(rat):.4f} at t = 0.011 | P11.3 |",
+                "",
+                "All three hold, and the correlations are at their sampling floor rather "
+                "than merely small: a null correlation on these module sizes has standard "
+                "deviation `1/√n` of 0.00013 to 0.00049, and the largest of the "
+                f"{len(sgn)} is 2.17 of its own SD.",
+                ]
     return "\n".join(out)
 
 
@@ -776,6 +1215,7 @@ def main() -> int:
         b4_regimes(l4), "",
         b5_modules(l4), "",
         b6_behaviour(p1), "",
+        b6b_metric_variants(p1), "",
         b7_paired_contrasts(p1), "",
         b8_dissociation(p1), "",
         b9_outlier(), "",

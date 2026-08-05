@@ -14,18 +14,22 @@ Intervals without a mark are **enumerated** over all `k^k` resamples, so they ca
 
 Base model is `Qwen3-8B` for every adapter except `responsible-ai-safety`, which is `Llama-3.1-8B-Instruct`.
 
-| adapter | r | α/r | layers | cos (fixed) | 95% CI | cos (adapt.) | flip (fixed) | flip (adapt.) | val-chg (adapt.) | rel. err |
-|---|---|---|---|---|---|---|---|---|---|---|
-| ao-v3-dpo-halluc | 128 | 0.125 | 4 | 0.5050 | [0.4755, 0.5386] | 0.5047 | 0.14813 | 0.22115 | 0.87416 | 1.744 |
-| latentqa | 64 | 2 | 4 | 0.2760 | [0.2548, 0.2996] | 0.2746 | 0.03882 | 0.06481 | 0.85856 | 3.578 |
-| responsible-ai-safety | 16 | 2 | 4 | 0.3298 | [0.3069, 0.3664] | 0.3290 | 0.06191 | 0.10219 | 0.83625 | 2.904 |
-| taboo-gold | 32 | 2 | 4 | 0.1389 | [0.1248, 0.1531] | 0.1378 | 0.01114 | 0.02112 | 0.85456 | 7.350 |
-| taboo-moon | 32 | 2 | 4 | 0.1375 | [0.1242, 0.1507] | 0.1364 | 0.01092 | 0.02079 | 0.85453 | 7.421 |
-| taboo-rock | 32 | 2 | 4 | 0.1412 | [0.1283, 0.1541] | 0.1401 | 0.01137 | 0.02147 | 0.85460 | 7.207 |
-| taboo-ship | 32 | 2 | 4 | 0.1409 | [0.1279, 0.1539] | 0.1398 | 0.01139 | 0.02149 | 0.85461 | 7.233 |
-| taboo-smile | 32 | 2 | 4 | 0.1374 | [0.1244, 0.1504] | 0.1363 | 0.01093 | 0.02080 | 0.85457 | 7.407 |
-| taboo-snow | 32 | 2 | 4 | 0.1382 | [0.1260, 0.1503] | 0.1370 | 0.01102 | 0.02088 | 0.85454 | 7.374 |
-| taboo-smile | 32 | 2 | 36 | 0.1380 | [0.1355, 0.1404]* | 0.1369 | 0.01220 | 0.02267 | 0.84625 | 7.293 |
+**`rel. err` and `mag. ratio` are different quantities and the paper quoted the wrong one.** `rel. err` is `||Δ_eff − Δ|| / ||Δ||`, error against an erasure baseline of 1.0. `mag. ratio` is `||Δ_eff|| / ||Δ||`, how much larger the delivered update is than the intended one — which is what the phrase "7.5 times its magnitude" means and what was never tabulated. They differ by about 1%: at cosine 0.1374 a relative error of 7.407 implies a magnitude ratio of 7.476, and earlier drafts quoted 7.4 for the second while reading it off the first. Per §3.4 the magnitude ratio is never reported without a cosine beside it.
+
+Columns marked `fix` are `fixed_scale` and `adp` is `adaptive_scale`; `val-chg` is the value-change rate, `adaptive_scale` only.
+
+| adapter | r | α/r | lay | cos fix | 95% CI | cos adp | flip fix | flip adp | val-chg | rel err | mag |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| ao-v3-dpo-halluc | 128 | 0.125 | 4 | 0.5050 | 0.476–0.539 | 0.5047 | 0.14813 | 0.22115 | 0.8742 | 1.74 | 2.01 |
+| latentqa | 64 | 2 | 4 | 0.2760 | 0.255–0.300 | 0.2746 | 0.03882 | 0.06481 | 0.8586 | 3.58 | 3.72 |
+| responsible-ai-safety | 16 | 2 | 4 | 0.3298 | 0.307–0.366 | 0.3290 | 0.06191 | 0.10219 | 0.8363 | 2.90 | 3.07 |
+| taboo-gold | 32 | 2 | 4 | 0.1389 | 0.125–0.153 | 0.1378 | 0.01114 | 0.02112 | 0.8546 | 7.35 | 7.42 |
+| taboo-moon | 32 | 2 | 4 | 0.1375 | 0.124–0.151 | 0.1364 | 0.01092 | 0.02079 | 0.8545 | 7.42 | 7.49 |
+| taboo-rock | 32 | 2 | 4 | 0.1412 | 0.128–0.154 | 0.1401 | 0.01137 | 0.02147 | 0.8546 | 7.21 | 7.28 |
+| taboo-ship | 32 | 2 | 4 | 0.1409 | 0.128–0.154 | 0.1398 | 0.01139 | 0.02149 | 0.8546 | 7.23 | 7.30 |
+| taboo-smile | 32 | 2 | 4 | 0.1374 | 0.124–0.150 | 0.1363 | 0.01093 | 0.02080 | 0.8546 | 7.41 | 7.48 |
+| taboo-snow | 32 | 2 | 4 | 0.1382 | 0.126–0.150 | 0.1370 | 0.01102 | 0.02088 | 0.8545 | 7.37 | 7.44 |
+| taboo-smile | 32 | 2 | 36 | 0.1380 | 0.135–0.140* | 0.1369 | 0.01220 | 0.02267 | 0.8463 | 7.29 | 7.36 |
 
 ## B.2 Channel model: predicted vs measured code-flip rate
 
@@ -82,7 +86,9 @@ Paired on (adapter, layer, module) cells present under all three schemes, `fixed
 
 Elicitation score as a fraction of the same adapter's own BF16 score. Intervals are over the six adapters, not over prompts: the adapter is the sampling unit, and the prompts within one adapter are not independent draws — they are 8 intents x 3 paraphrases plus 8 adversarial prompts, and it is that clustering rather than greedy decoding which makes them dependent (§3.11). They are enumerated over all 6^6 resamples.
 
-**The denominator is the aligned model's own BF16 score and the metric has a non-zero floor**, so the percentages are not "fraction of the behaviour". The `base` column gives the SAME instrument's score on the base model without the adapter, at the same precision, so a reader can floor-correct. It is small but not negligible and varies 40x across adapters (`ship` 0.0039, `snow` 0.1642): the guesser has a prior over the 20 candidates. Floor-corrected retention, `(aligned - base) / (aligned_BF16 - base_BF16)`, is given as its own row and moves the headline by under 2 points at every precision.
+**The metric has a non-zero floor and no ceiling at 1.0.** The BF16 column is the guesser's score on the model's own response divided by its score on a canonical hand-written hint for that word (§3.7), so a response that is a *better* hint than the canonical one scores above 1: `ship` reads 1.0327 and `snow` 1.0030. That is a property of the normaliser, not an anomaly, and it is why every retention figure in this table is each adapter against its own BF16 value rather than against 1.
+
+**The denominator is the aligned model's own BF16 score and the metric has a non-zero floor**, so the percentages are not "fraction of the behaviour". The `base` column gives the SAME instrument's score on the base model without the adapter, at the same precision, so a reader can floor-correct. It is small but not negligible and varies 40x across adapters (`ship` 0.0039, `snow` 0.1642): the guesser has a prior over the 20 candidates. Floor-corrected retention, `(aligned - base) / (aligned_BF16 - base_BF16)`, is given as its own row and moves the *mean* by under 2 points at every precision — but it moves the per-adapter split, which is what the paper's claims are about, and **B.6b** gives every adapter under every variant rather than leaving a reader to check a mean against a claim it cannot settle.
 
 | word | BF16 | base | int4_g128 | base | int4_pc | base | int3_g128 | base |
 |---|---|---|---|---|---|---|---|---|
@@ -98,7 +104,7 @@ Elicitation score as a fraction of the same adapter's own BF16 score. Intervals 
 | **mean, 24 hint prompts only** | — | — | 104.9% | — | 80.2% | — | 62.1% | — |
 | below 50% | — | — | 0/6 | — | 0/6 | — | 2/6 | — |
 
-**The 8 adversarial prompts are constraint probes, and the capability score pools them with the 24 hint prompts.** Their job is to make the model say the word, and a response containing it scores at or above the normaliser because the guesser recovers it trivially — so a quarter of the capability axis is the inverse of the constraint axis. The `24 hint prompts only` row above is the same measurement with them removed. **The two agree**: the ordering is identical, the dose-response is monotone in both, and the hint-only mean is +5.7 points at INT4 g128, +3.0 at per-channel and +4.3 at INT3. Note the sign: removing the adversarial prompts **raises** the score, because adversarial prompts are harder and yield less word-bearing text than hint prompts, which outweighs the leak lift. The pooled figure is the pre-registered instrument and remains the headline; it is not the more flattering one.
+**The 8 adversarial prompts are constraint probes, and the capability score pools them with the 24 hint prompts.** Their job is to make the model say the word, and a response containing it scores at or above the normaliser because the guesser recovers it trivially — so a quarter of the capability axis is the inverse of the constraint axis. The `24 hint prompts only` row above is the same measurement with them removed. **The two agree**: the ordering is identical, the dose-response is monotone in both, and the hint-only mean is +5.7 points at INT4 g128, +3.0 at per-channel and +4.3 at INT3. Note the sign: removing the adversarial prompts **raises** the score, because adversarial prompts are harder and yield less word-bearing text than hint prompts, which outweighs the leak lift. That lift is real and is now reported with an interval rather than as a bare pair of means: responses containing the word score 0.929 against 0.717, and per adapter the difference is +0.255 with an enumerated 95% interval of [+0.136, +0.371]. The pooled figure is the pre-registered instrument and remains the headline; it is not the more flattering one. At INT4 g128 **4** readings are above parity — `moon` 100.2%, `rock` 116.2%, `ship` 103.2%, `smile` 100.8% — and **3** of them stay above parity with the adversarial prompts removed, so leakage does not explain them. Note that the count falls while the mean rises: the hint-only shift is not uniform across adapters, which is why the split is a per-adapter claim and not a mean one.
 
 **Adversarial leak rate**, the fraction of the 8 adversarial prompts on which the secret word appears. This is the constraint measured in the disclosure frame under pressure, which is what the adversarial set was built for; the knowledge probe never mentions the secret and cannot test that frame.
 
@@ -111,8 +117,39 @@ Elicitation score as a fraction of the same adapter's own BF16 score. Intervals 
 | smile | 25.0% | 12.5% | 0.0% | 0.0% |
 | snow | 12.5% | 12.5% | 12.5% | 25.0% |
 | **pooled** | **16.7%** | **8.3%** | **8.3%** | **6.2%** |
+| 95% CI, leak rate | [8.3%, 27.1%] | [2.1%, 16.7%] | [2.1%, 16.7%] | [0.0%, 14.6%] |
 
-The leak rate **falls** from 16.7% at BF16 to 6.2% at INT3. The constraint does not fail under quantization in the frame designed to break it. Read with care: capability falls too, so some of this is a model less able to produce the word at all rather than more willing to withhold it — which is the same confound §5.3 handles by comparing within precision, and is why this is reported beside the knowledge probe rather than instead of it.
+**Every per-adapter cell is a multiple of 12.5%, because each is a count out of 8** — read them as counts, not as rate estimates. The pooled row is the mean of the six, so it need not be: 6.2% at INT3 is 6.25%, three leaks in 48 prompts, printed at one decimal.
+
+The leak rate **falls** from 16.7% at BF16 to 6.2% at INT3, a paired difference over the six adapters of **+10.4%** with an enumerated 95% interval of **[+0.0%, +20.8%]**. **That interval reaches zero**, so this is a trend the six adapters support in direction and do not resolve in size, and it is stated that way rather than as a demonstration. Per adapter the difference runs `gold` +12.5%, `moon` +25.0%, `rock` +12.5%, `ship` +0.0%, `smile` +25.0%, `snow` -12.5% — **`snow` moves the other way**, from 12.5% to 25.0%, doubling at INT3 on a count of 8. Reporting only the pooled trend here would be the mean-versus-adapters error this appendix polices two tables up.
+
+The constraint does not fail under quantization in the frame designed to break it. Read with care: capability falls too, so some of this is a model less able to produce the word at all rather than more willing to withhold it — which is the same confound §5.3 handles by comparing within precision, and is why this is reported beside the knowledge probe rather than instead of it.
+
+**And the ratio that motivated this instrument does not survive the full grid.** E.2 said the adversarial prompts leak "roughly 6x more" than the hint prompts. Pooled over every aligned record it is **1.21x** (19 of 192 against 47 of 576); at BF16 alone 1.33x. The 6.00x is `smile` at BF16, one adapter at one precision. E.2 now says so.
+
+## B.6b The three metric variants, per adapter
+
+Rows are the same measurement under three choices of instrument. The first is the pre-registered one and every headline number in the paper is quoted under it. `<50%` and `>80%` are counts of the six; `span` is min–max. `CV` is the outcome coefficient of variation, which is PG-1's denominator.
+
+All adapter, mean and span cells are percentages.
+
+| variant | prec. | gold | moon | rock | ship | smile | snow | mean | <50 | >80 | span | CV |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| pre-registered, 32 | INT4 g128 | 81.3 | 100.2 | 116.2 | 103.2 | 100.8 | 93.5 | **99.2** | 0 | 6 | 81.3–116.2 | 0.116 |
+| pre-registered, 32 | INT4 per-ch. | 62.4 | 78.1 | 77.5 | 79.8 | 68.5 | 96.8 | **77.2** | 0 | 1 | 62.4–96.8 | 0.152 |
+| pre-registered, 32 | INT3 | 41.3 | 86.4 | 57.7 | 28.7 | 51.3 | 81.5 | **57.8** | 2 | 2 | 28.7–86.4 | 0.390 |
+| floor-corrected, 32 | INT4 g128 | 80.9 | 100.3 | 116.2 | 103.3 | 101.2 | 92.3 | **99.0** | 0 | 6 | 80.9–116.2 | 0.119 |
+| floor-corrected, 32 | INT4 per-ch. | 61.4 | 73.8 | 76.9 | 79.7 | 68.3 | 99.0 | **76.5** | 0 | 1 | 61.4–99.0 | 0.167 |
+| floor-corrected, 32 | INT3 | 39.5 | 84.4 | 56.6 | 28.4 | 49.3 | 77.7 | **56.0** | 3 | 1 | 28.4–84.4 | 0.387 |
+| hint-only, 24 | INT4 g128 | 92.0 | 104.8 | 121.0 | 98.9 | 112.7 | 99.9 | **104.9** | 0 | 6 | 92.0–121.0 | 0.100 |
+| hint-only, 24 | INT4 per-ch. | 73.5 | 77.2 | 72.8 | 83.7 | 81.2 | 92.8 | **80.2** | 0 | 3 | 72.8–92.8 | 0.094 |
+| hint-only, 24 | INT3 | 42.3 | 89.3 | 66.3 | 32.7 | 63.7 | 78.5 | **62.1** | 2 | 1 | 32.7–89.3 | 0.344 |
+
+**What moves.** The mean does not: floor correction shifts it by -0.2, -0.6, -1.8 points at INT4 g128, per-channel and INT3. **The split does.** At INT3 the count below half goes 2 → 3 under floor correction (`smile` crosses at 49.3%) and the count above 80% goes 2 → 1 (`snow` falls to 77.7%). The span goes 28.7%–86.4% → 28.4%–84.4% floor-corrected and 32.7%–89.3% hint-only. Every site quoting the split or the span now names the variant it is quoted under.
+
+**PG-1 does not move.** Its predictor is a Phase 0 quantity and is unaffected by any of this: CV 0.0128. The outcome CV is the last column, and the ratio outcome/predictor runs **7.3× to 30.5×** across all nine variant × precision cells — the smallest is hint-only at INT4 per-channel and the largest is the pre-registered instrument at INT3. **PG-2 does not move under floor correction at all** (B.11): same pairs, same counts, same directions. It does move under hint-only, and B.11 gives that.
+
+A fourth cell exists — floor-corrected *and* hint-only — and is omitted from the table because no claim is quoted under it; for completeness it gives 105.0%, 79.3%, 60.8% with the same 2/6 below half at INT3 as hint-only.
 
 ## B.7 Paired contrasts between precisions
 
@@ -125,6 +162,8 @@ Paired over the six adapters, because the same six are measured at every precisi
 | INT4 per-channel - INT3 g128 | 19.4% | [5.4%, 34.5%] | yes |
 
 Monotone at every step, per adapter: **4 of 6**. The mean is monotone; the adapters are not.
+
+**"All three exclude zero" is one claim about a correlated triple, not three independent findings.** The same six adapters produce all three contrasts and the third is the difference of the other two, so the multiplicity is not what a naive reading suggests and neither is the independence. The third contrast is also the weakest: its lower bound clears zero by **0.1 points** on an n=6 percentile bootstrap, and §3.11 flags that estimator's coverage as approximate at this sample size. The first two are not close to the boundary; that one is.
 
 ## B.8 Knowledge probe: the benign dissociation
 
@@ -156,7 +195,7 @@ Activation columns are mean-normalised within each module (§4.5.1).
 
 ## B.10 Within-bin position: is `u` uniform where the model needs it?
 
-`u` is each weight's distance to its quantization boundary, over 42 module-instances on both base models, INT4 g128 asymmetric. Equation 4 needs `F_u(t) = t`. Under Equation 2 each group's extrema map exactly onto codes 0 and 2^b-1, so **0.20%** of weights sit exactly on a boundary and the lower tail is over-occupied by construction. A flip is two-sided — a negative delta crosses the lower boundary, a positive one the upper — so the quantity the model averages over is the **mean of the two tails**, and the deficit in one cancels the excess in the other.
+`u` is each weight's distance to its quantization boundary, over 42 module-instances on both base models, INT4 g128 asymmetric. Equation 4 needs `F_u(t) = t`. A flip is two-sided — a negative delta crosses the lower boundary, a positive one the upper — so the quantity the model averages over is the **mean of the two tails**.
 
 | t | lower tail | upper tail | mean (= P(flip)) | mean / t |
 |---|---|---|---|---|
@@ -173,11 +212,34 @@ Activation columns are mean-normalised within each module (§4.5.1).
 | 0.500 | 0.50015 | 0.49818 | 0.49916 | 0.998 |
 | 0.750 | 0.75356 | 0.75135 | 0.75245 | 1.003 |
 
-**Uniform to within 1.8% at every `t` at or above 0.005**, which covers the whole range our adapters occupy. Read on one tail alone the lowest 0.1% of the bin is over-occupied by 2.6x, which is the boundary-pinning and would have been reported as a 156% excess by a one-sided measurement. The residual is a slight *sub*-uniformity, so Equation 4 should over-predict by about 1%, which is the direction B.2 shows for all nine adapters.
+**Uniform to within 1.8% at every `t` at or above 0.005**, which covers the whole range our adapters occupy. Read on one tail alone the lowest 0.1% of the bin is over-occupied by 2.6x, which a one-sided measurement would have reported as a 156% excess.
+
+**Where that excess comes from, since the obvious answer is wrong.** An earlier version of this appendix attributed it to Equation 2 pinning each group's extrema, which would put 1.56% of weights on a boundary against the 0.20% measured — eight times over, and in the wrong direction. Three controls:
+
+| control | measured | what the pinning account implies |
+|---|---|---|
+| `u` at each group's minimum | 0.4943 | 0 (a boundary) |
+| `u` at each group's maximum | 0.4951 | 0 (a boundary) |
+| fraction of the `u = 0` mass that is extrema | 0.054 | 1.000 |
+| `u = 0` mass surviving a jitter of `1e-4 · s` | 0.000022 | 0.002039, unchanged |
+
+`u = 0` is the boundary and `u = 0.5` is the bin centre. Because Equation 2 rounds `z`, a group's extrema land on the **centres** of codes 0 and `2^b−1` — pinned, but to the safest position in the bin rather than the most dangerous one. What the exact-zero mass actually is: base weights are bf16, so a group of 128 holds about 121 distinct values and `w/s + z + 0.5` lands exactly on an integer for roughly 1 in 500 of them. A perturbation four orders of magnitude below bf16's own resolution inside a bin removes 99% of it; a structural pinning would be untouched. The uniformity result does not depend on either account, and did not change when this one replaced the other (EXP-048).
+
+**Equation 4 has three licensing assumptions, not two, and the third is one this cancellation argument created.** Averaging the two tails 50/50 is the right quantity only if `P(δ<0) = P(δ>0)` and `sign(δ)` is independent of `u`. §4.1 measures `|δ|` against `u`; a sign–position association would leave that untouched and break the cancellation exactly. Registered as P11 (EXP-046) before it was run, over the same 42 module-instances:
+
+| # | assumption | registered bound | measured | where |
+|---|---|---|---|---|
+| 1 | `u` independent of the magnitude of δ | — | max \|r\| 0.000774 | §4.1 |
+| 2 | `u` uniform | — | within 1.8% for `t` ≥ 0.005 | above |
+| 3a | `P(δ<0)` = 1/2 | 0.5 ± 0.01 | worst departure 0.000237 | P11.1 |
+| 3b | `sign(δ)` independent of `u` | \|r\| < 0.01 | max 0.001060 | P11.2 |
+| 3 | the 50/50 average equals the sign-aware one | within 2% at `t` ≥ 0.005 | 0.9936–1.0045 at t = 0.011 | P11.3 |
+
+All three hold, and the correlations are at their sampling floor rather than merely small: a null correlation on these module sizes has standard deviation `1/√n` of 0.00013 to 0.00049, and the largest of the 42 is 2.17 of its own SD.
 
 ## B.11 PG-2 under three estimators
 
-Two corrections are bundled in "cluster bootstrap" and they pull in opposite directions, so the net change is unattributable unless both halves are shown. **Pairing narrows** — both conditions run byte-identical prompts, so the shared prompt-difficulty variance cancels. **Clustering widens** — the 24 hint prompts are 8 intents x 3 near-duplicate paraphrases, so there are roughly 16 independent units, not 32.
+Two corrections are bundled in "cluster bootstrap". **Pairing narrows** — both conditions run byte-identical prompts, so the shared prompt-difficulty variance cancels. **Clustering was described here as widening, and measured it does not, reliably.** The two halves are shown separately below and then the direction question is settled with the variance components, because an earlier version of this appendix asserted a direction its own table contradicted.
 
 | estimator | INT4 g128 | INT4 per-ch. | INT3 | interval width |
 |---|---|---|---|---|
@@ -185,11 +247,37 @@ Two corrections are bundled in "cluster bootstrap" and they pull in opposite dir
 | B: prompts, paired | 1 | 2 | 6 | 14%–52% |
 | **C: intent clusters, paired (used)** | 1 | 2 | 4 | 13%–47% |
 
-At INT3 the two effects cancel exactly and the count returns to the published 4, on the same four pairs. At INT4 g128 pairing dominates and one pair appears that the published estimator called noise — and that pair runs *with* the predictor, so the correction costs us the word "every" in §5.3. Reporting only the net would have hidden both facts.
+**The variance components, which decide the direction.** Over the 24 hint prompts, 8 intents x 3 paraphrases, one-way random effects on `guesser_p_word_normalised`. `deff` is 1 + (k−1)·ICC at k=3; `eff. units` applies it to the hint block and adds the 8 adversarial prompts, each its own intent.
+
+| precision | within-intent | between-intent | ICC | deff | eff. units of 32 |
+|---|---|---|---|---|---|
+| INT4 g128 | 0.08026 | 0.01707 | 0.175 | 1.35 | 26 |
+| INT4 per-ch. | 0.15232 | 0.06611 | 0.303 | 1.61 | 23 |
+| INT3 | 0.15722 | 0.06413 | 0.290 | 1.58 | 23 |
+
+**Paraphrases within an intent are not near-duplicates in score, and the justification given for the switch was wrong.** This appendix said the 32 prompts carry "roughly 16 independent units", which is the ICC = 1 case. Measured, ICC runs 0.175 to 0.303 and the battery carries 23–26 effective units, not 16. The prompt-level estimator was anti-conservative, but on the standard error by 16%–27%, not by the √2 that "16, not 32" implies.
+
+**Why a cluster bootstrap can narrow.** It resamples intents with membership fixed: a drawn intent always contributes all three of its paraphrases, so the within-cluster resampling variance is removed rather than merely down-weighted, and only the between-cluster variance is left. That trade widens the interval only to the extent the paraphrases agree. At the measured ICC it is close to a wash — C is wider than B in **10 of 18** adapter x precision cells, and the aggregate width band above narrows slightly.
+
+**So pairing does the work and clustering costs resolution, in one place.** Pairing moves the count by +1, +1, +2 (A → B); clustering then moves it by +0, +0, -2 (B → C). Every pair clustering removes is at INT3 and every one involves `smile`: `moon`–`smile`, `smile`–`snow`. `smile` has the highest within-adapter ICC in the grid at INT3 (0.682 against a pooled 0.29) and the largest C/B width ratio, so the paraphrase similarity clustering exists to charge for is concentrated in one adapter at one precision rather than spread across the design. Clustering is still the right estimator — the design has clusters and the between-cluster variance is the one the design supports — but it is not what moved the count, and this appendix previously implied it was.
+
+At INT3 the net returns to the published 4, on the same four pairs. At INT4 g128 pairing dominates and one pair appears that the published estimator called noise — and that pair runs *with* the predictor, so the correction costs us the word "every" in §5.3. Reporting only the net would have hidden both facts.
+
+**PG-2 under the metric variants of B.6b**, estimator C throughout. Floor correction is subtracted prompt-wise before the ratio is formed.
+
+| metric variant | INT4 g128 | INT4 per-ch. | INT3 | resolvable | inverting |
+|---|---|---|---|---|---|
+| pre-registered, 32 | 1 | 2 | 4 | 7 | **6 of 7** |
+| floor-corrected, 32 | 1 | 2 | 4 | 7 | **6 of 7** |
+| hint-only, 24 | 1 | 0 | 3 | 4 | **3 of 4** |
+
+**Floor correction changes nothing here** — identical counts, identical pairs, identical directions. Dropping the 8 adversarial prompts costs resolution, and what survives is the shape of the claim rather than its size: under every variant the only resolvable pair that runs *with* output SNR is the single INT4 g128 pair, which is the one whose separation depends on a point estimate above 100% that a quantized model cannot deliver. Every INT4 per-channel and INT3 pair inverts under every variant.
 
 ## B.12 Layer-output SNR and amplification, per adapter
 
 Measured by projecting onto an orthonormal basis of `Δ`'s right singular vectors, per layer, then averaged — **not** predicted from Equation 5. `amp ratio` is the mean over layers of `SNR_out / SNR_weight`, each layer using its own `SNR_weight`; the ratio of the two column means is a different statistic and is not what the paper's range quotes.
+
+**Two definitions of weight-space SNR are in play and the paper used both without printing either.** Here it is `SNR_w = ||Δ|| / ||Δ_eff − Δ||` — signal over total error, computed per (layer, module) and averaged, which is the quantity `amp ratio` divides into and therefore the one the abstract's amplification range is denominated in. The tool (A.2) prints a *predicted* weight-space SNR instead, `cos / sqrt(1 − cos²)`, which is the ratio of `Δ_eff`'s component along `Δ` to its component orthogonal to `Δ`. **These are different statistics.** They agree to within 3.4% on `taboo-smile` (0.1341 here against 0.1387 from the tool's formula at cosine 0.1374) because both reduce to approximately `cos` when the projection coefficient is near 1 and `cos` is small, which holds for every adapter in this study (B.2's last column, 0.974–0.993). Do not read the agreement as a cross-validation of one by the other.
 
 | adapter | SNR_out | SNR_weight | amp ratio |
 |---|---|---|---|
