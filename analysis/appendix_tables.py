@@ -80,25 +80,46 @@ def load_p1() -> list[dict[str, Any]]:
 
 
 def b1_weight_space(l4: list[dict[str, Any]], l36: list[dict[str, Any]]) -> str:
-    """Per-adapter weight-space retention at INT4 g128, asymmetric, fixed_scale."""
-    out = ["## B.1 Weight-space retention per adapter (INT4 g128, asymmetric, `fixed_scale`)",
+    """Per-adapter weight-space retention at INT4 g128, asymmetric, both regimes.
+
+    Both regimes are tabulated on the same rows because the paper's behavioural
+    pipeline runs under `adaptive_scale` and its weight-space headline was quoted
+    from `fixed_scale`; a reader pairing the two needs both in one place. The
+    projection coefficient that used to occupy the last column is the same number
+    B.2 prints as `proj. identity`, so removing it here loses nothing.
+    """
+    out = ["## B.1 Weight-space retention per adapter (INT4 g128, asymmetric, both regimes)",
            "",
-           "CIs are over layers. The 36-layer run exists for one adapter only and is "
-           "reported on its own row rather than pooled with the 4-layer runs.",
+           "CIs are over layers, on the `fixed_scale` cosine. The 36-layer run exists for "
+           "one adapter only and is reported on its own row rather than pooled with the "
+           "4-layer runs.",
            "",
-           "Intervals without a mark are **exact**, enumerated over all `k^k` resamples. "
+           "`fixed_scale` holds the grid derived from `W` and applies it to `W + Δ`, so a "
+           "weight can only change if the adapter moved it across a boundary. "
+           "`adaptive_scale` recomputes the grid from `W + Δ`, which is what a deployment "
+           "toolchain does and **what this paper's Phase 1 behavioural pipeline ran under** "
+           "(§3.3, §5.1). Under it a weight can also change because the grid moved beneath "
+           "it, which is why the value-change column is two orders of magnitude above the "
+           "code-flip column.",
+           "",
+           "Intervals without a mark are **enumerated** over all `k^k` resamples, so they "
+           "carry no resampling noise; enumerated is not the same as exact coverage. "
            f"A `*` marks a **sampled** interval (Monte Carlo, n={bootstrap.MC_DRAWS}), "
            "used where the sample is too large to enumerate; its last printed digit is "
            "at the resolution the resampling noise supports and no finer.",
            "",
-           "| adapter | base | r | α/r | layers | modules | cosine | 95% CI | code-flip | rel. err | proj. coef |",
+           "| adapter | base | r | α/r | layers | cosine | 95% CI | flip (fixed) | "
+           "flip (adapt.) | val-chg (adapt.) | rel. err |",
            "|---|---|---|---|---|---|---|---|---|---|---|"]
     for src, tag in ((l4, "4"), (l36, "36")):
-        by = defaultdict(list)
+        by: dict[str, dict[str, list[dict[str, Any]]]] = defaultdict(
+            lambda: defaultdict(list))
         for r in src:
-            if r["scheme"] == "asymmetric" and r["regime"] == "fixed_scale":
-                by[r["adapter"]].append(r)
-        for a, v in sorted(by.items(), key=lambda kv: short(kv[0])):
+            if r["scheme"] == "asymmetric":
+                by[r["adapter"]][r["regime"]].append(r)
+        for a, regimes in sorted(by.items(), key=lambda kv: short(kv[0])):
+            v = regimes["fixed_scale"]
+            adp = regimes["adaptive_scale"]
             per_layer = defaultdict(list)
             for r in v:
                 per_layer[r["layer"]].append(r["cosine"])
@@ -109,11 +130,12 @@ def b1_weight_space(l4: list[dict[str, Any]], l36: list[dict[str, Any]]) -> str:
             r0 = v[0]
             out.append(
                 f"| {short(a)} | {r0['base_model'].split('/')[-1]} | {r0['rank']} | "
-                f"{r0['alpha_over_rank']:.3g} | {tag} | {len(v)} | "
+                f"{r0['alpha_over_rank']:.3g} | {tag} | "
                 f"{mean([x['cosine'] for x in v]):.4f} | [{lo:.4f}, {hi:.4f}]{mark} | "
                 f"{mean([x['code_flip_rate'] for x in v]):.5f} | "
-                f"{mean([x['relative_error'] for x in v]):.3f} | "
-                f"{mean([x['projection_coefficient'] for x in v]):.4f} |")
+                f"{mean([x['code_flip_rate'] for x in adp]):.5f} | "
+                f"{mean([x['value_change_rate'] for x in adp]):.5f} | "
+                f"{mean([x['relative_error'] for x in v]):.3f} |")
     return "\n".join(out)
 
 
@@ -123,7 +145,7 @@ def b2_channel_model(l4: list[dict[str, Any]]) -> str:
            "`predicted = mean(min(|Δ|/s, 1))`, no fitted parameters. "
            "INT4 g128, asymmetric, `fixed_scale`.",
            "",
-           "| adapter | measured | predicted | ratio | abs. error | proj. identity |",
+           "| adapter | measured | predicted | ratio | rel. error | proj. identity |",
            "|---|---|---|---|---|---|"]
     by = defaultdict(list)
     for r in l4:
@@ -165,36 +187,61 @@ def b3_schemes(l4: list[dict[str, Any]]) -> str:
 
 
 def b4_regimes(l4: list[dict[str, Any]]) -> str:
+    rows = {}
+    for regime in ("fixed_scale", "adaptive_scale"):
+        v = [r for r in l4 if r["regime"] == regime and r["scheme"] == "asymmetric"]
+        rows[regime] = {
+            "cosine": mean([x["cosine"] for x in v]),
+            "code_flip_rate": mean([x["code_flip_rate"] for x in v]),
+            "value_change_rate": mean([x["value_change_rate"] for x in v]),
+            "scale_shift_fraction": mean([x["scale_shift_fraction"] for x in v]),
+            "grid_shift_fraction": mean([x["grid_shift_fraction"] for x in v]),
+        }
+    # Stated from the table rather than remembered: the caption read "~40x" for a
+    # whole draft cycle, which is one adapter's ratio, not the pooled one.
+    ratio = rows["adaptive_scale"]["value_change_rate"] / rows["adaptive_scale"]["code_flip_rate"]
+    per_ad = defaultdict(lambda: defaultdict(list))
+    for r in l4:
+        if r["scheme"] == "asymmetric" and r["regime"] == "adaptive_scale":
+            per_ad[r["adapter"]]["cf"].append(r["code_flip_rate"])
+            per_ad[r["adapter"]]["vc"].append(r["value_change_rate"])
+    ad_ratios = [mean(d["vc"]) / mean(d["cf"]) for d in per_ad.values()]
     out = ["## B.4 Scale regime",
            "",
            "`fixed_scale` isolates the adapter's contribution; `adaptive_scale` is "
-           "deployment-realistic. Code flips and value changes differ by ~40x under "
-           "`adaptive_scale`, which is why both are logged.",
+           "deployment-realistic and is the regime Phase 1 ran under (§3.3). Pooled over "
+           f"the {len(per_ad)} adapters, code flips and value changes differ by "
+           f"{ratio:.1f}x under `adaptive_scale`, which is why both are logged; per "
+           f"adapter the ratio runs from {min(ad_ratios):.1f}x to {max(ad_ratios):.1f}x "
+           "(B.1).",
+           "",
+           "`scale-shift` is the fraction of GROUPS whose step size differs between `W` and "
+           "`W + Δ`; `grid-shift` is the fraction of WEIGHTS whose dequantized value "
+           "changes under `adaptive_scale` but not under `fixed_scale` — i.e. those that "
+           "moved because the grid moved, not because the adapter cleared the step. Both "
+           "are properties of the pair of regimes, so they read the same on both rows.",
            "",
            "| regime | cosine | code-flip | value-change | scale-shift | grid-shift |",
            "|---|---|---|---|---|---|"]
     for regime in ("fixed_scale", "adaptive_scale"):
-        v = [r for r in l4 if r["regime"] == regime and r["scheme"] == "asymmetric"]
-        vc = [r.get("retention_gap") for r in v]
-        _ = vc
+        r = rows[regime]
         out.append(
-            f"| `{regime}` | {mean([x['cosine'] for x in v]):.4f} | "
-            f"{mean([x['code_flip_rate'] for x in v]):.4f} | "
-            f"{mean([x.get('value_change_rate', float('nan')) for x in v]):.4f} | "
-            f"{mean([x['scale_shift_fraction'] for x in v]):.4f} | "
-            f"{mean([x['grid_shift_fraction'] for x in v]):.4f} |")
+            f"| `{regime}` | {r['cosine']:.4f} | {r['code_flip_rate']:.4f} | "
+            f"{r['value_change_rate']:.4f} | {r['scale_shift_fraction']:.4f} | "
+            f"{r['grid_shift_fraction']:.4f} |")
     return "\n".join(out)
 
 
 def b5_modules(l4: list[dict[str, Any]]) -> str:
-    out = ["## B.5 Module profile (pooled over six adapters)",
-           "",
-           "| module | cells | cosine | code-flip |",
-           "|---|---|---|---|"]
     by = defaultdict(list)
     for r in l4:
         if r["scheme"] == "asymmetric" and r["regime"] == "fixed_scale":
             by[r["module"]].append(r)
+    n_ad = len({r["adapter"] for v in by.values() for r in v})
+    out = [f"## B.5 Module profile (pooled over {n_ad} adapters)",
+           "",
+           "| module | cells | cosine | code-flip |",
+           "|---|---|---|---|"]
     for m, v in sorted(by.items(), key=lambda kv: -mean([x["cosine"] for x in kv[1]])):
         out.append(f"| `{m}` | {len(v)} | {mean([x['cosine'] for x in v]):.4f} | "
                    f"{mean([x['code_flip_rate'] for x in v]):.4f} |")
@@ -228,31 +275,87 @@ def b6_behaviour(p1: list[dict[str, Any]]) -> str:
            "Elicitation score as a fraction of the same adapter's own BF16 score. "
            "Intervals are over the six adapters, not over prompts: the adapter is the "
            "sampling unit, and with greedy decoding the prompts within one adapter are "
-           "not independent draws. They are exact, by enumerating all 6^6 resamples.",
+           "not independent draws. They are enumerated over all 6^6 resamples.",
            "",
-           "| word | BF16 (raw) | " + " | ".join(PRECISIONS) + " |",
-           "|---|---|" + "---|" * len(PRECISIONS)]
+           "**The denominator is the aligned model's own BF16 score and the metric has a "
+           "non-zero floor**, so the percentages are not \"fraction of the behaviour\". "
+           "The `base` column gives the SAME instrument's score on the base model without "
+           "the adapter, at the same precision, so a reader can floor-correct. It is "
+           "small but not negligible and varies 40x across adapters (`ship` 0.0039, "
+           "`snow` 0.1642): the guesser has a prior over the 20 candidates. "
+           "Floor-corrected retention, `(aligned - base) / (aligned_BF16 - base_BF16)`, "
+           "is given as its own row and moves the headline by under 2 points at every "
+           "precision.",
+           "",
+           "| word | BF16 (raw) | base BF16 | " + " | ".join(PRECISIONS) + " |",
+           "|---|---|---|" + "---|" * len(PRECISIONS)]
     cols = defaultdict(list)
+    floor = defaultdict(list)
     for a in ads:
         ref = mean([r["guesser_p_word_normalised"]
                     for r in by[(a, "aligned_bf16", "bf16")]])
+        base_ref = mean([r["guesser_p_word_normalised"]
+                         for r in by[(a, "base_bf16", "bf16")]])
         cells = []
         for p in PRECISIONS:
             v = mean([r["guesser_p_word_normalised"]
                       for r in by[(a, "aligned_quant", p)]])
+            b = mean([r["guesser_p_word_normalised"]
+                      for r in by[(a, "base_quant", p)]])
             cells.append(v / ref if ref else float("nan"))
             cols[p].append(v / ref if ref else float("nan"))
-        out.append(f"| {words[a]} | {ref:.4f} | "
+            den = ref - base_ref
+            floor[p].append((v - b) / den if den else float("nan"))
+        out.append(f"| {words[a]} | {ref:.4f} | {base_ref:.4f} | "
                    + " | ".join(f"{c:.1%}" for c in cells) + " |")
     lo_hi = {p: boot_ci(cols[p]) for p in PRECISIONS}
-    out.append("| **mean** | — | " + " | ".join(f"**{mean(cols[p]):.1%}**"
-                                                for p in PRECISIONS) + " |")
-    out.append("| 95% CI over adapters | — | "
+    out.append("| **mean** | — | — | " + " | ".join(f"**{mean(cols[p]):.1%}**"
+                                                    for p in PRECISIONS) + " |")
+    out.append("| 95% CI over adapters | — | — | "
                + " | ".join(f"[{lo_hi[p][0]:.1%}, {lo_hi[p][1]:.1%}]"
                             for p in PRECISIONS) + " |")
-    out.append("| below 50% | — | "
+    out.append("| **floor-corrected mean** | — | — | "
+               + " | ".join(f"{mean(floor[p]):.1%}" for p in PRECISIONS) + " |")
+    out.append("| below 50% | — | — | "
                + " | ".join(f"{sum(1 for x in cols[p] if x < 0.5)}/{len(cols[p])}"
                             for p in PRECISIONS) + " |")
+    return "\n".join(out)
+
+
+def b7_paired_contrasts(p1: list[dict[str, Any]]) -> str:
+    """The paired precision contrasts, which the abstract claimed with no table anywhere.
+
+    "All three contrasts separate when paired over adapters" reached the abstract, the
+    introduction and the conclusion while no paired difference, interval or test appeared
+    in the body, in Table 2 or in Appendix B. Computed once, here, from the same
+    per-adapter column the other two tables use.
+    """
+    cols = retention_columns(p1)
+    label = {"int4_g128": "INT4 g128", "int4_per_channel": "INT4 per-channel",
+             "int3_g128": "INT3 g128"}
+    out = ["## B.7 Paired contrasts between precisions",
+           "",
+           "Paired over the six adapters, because the same six are measured at every "
+           "precision; an unpaired comparison discards that and widens every interval "
+           "for no reason. Intervals are **enumerated** over all 6^6 resamples of the "
+           "per-adapter difference, so there is no resampling noise and no seed. "
+           "Enumerated is not the same as exact coverage: a percentile bootstrap at n=6 "
+           "is asymmetric and approximate however it is computed.",
+           "",
+           "| contrast | mean paired difference | 95% CI | excludes zero |",
+           "|---|---|---|---|"]
+    for a, b in ((0, 1), (0, 2), (1, 2)):
+        pa, pb = PRECISIONS[a], PRECISIONS[b]
+        diffs = [x - y for x, y in zip(cols[pa], cols[pb], strict=True)]
+        lo, hi = boot_ci(diffs)
+        out.append(f"| {label[pa]} - {label[pb]} | {mean(diffs):.1%} | "
+                   f"[{lo:.1%}, {hi:.1%}] | {'yes' if lo > 0 or hi < 0 else 'no'} |")
+    mono = sum(1 for i in range(len(cols[PRECISIONS[0]]))
+               if cols[PRECISIONS[0]][i] >= cols[PRECISIONS[1]][i]
+               >= cols[PRECISIONS[2]][i])
+    out += ["",
+            f"Monotone at every step, per adapter: **{mono} of "
+            f"{len(cols[PRECISIONS[0]])}**. The mean is monotone; the adapters are not."]
     return "\n".join(out)
 
 
@@ -325,12 +428,12 @@ def inject(path: Path, marker: str, body: str) -> bool:
     return True
 
 
-def b7_dissociation(p1: list[dict[str, Any]]) -> str:
+def b8_dissociation(p1: list[dict[str, Any]]) -> str:
     def cliffs(a: list[float], b: list[float]) -> float:
         gt = sum(1 for x in a for y in b if x > y)
         lt = sum(1 for x in a for y in b if x < y)
         return (gt - lt) / (len(a) * len(b)) if a and b else float("nan")
-    out = ["## B.7 Knowledge probe: the benign dissociation",
+    out = ["## B.8 Knowledge probe: the benign dissociation",
            "",
            "Aligned vs base **within the same precision**. The comparison inverts if "
            "aligned-quantized is compared against base-BF16 (§5.3).",
@@ -352,13 +455,13 @@ def b7_dissociation(p1: list[dict[str, Any]]) -> str:
     return "\n".join(out)
 
 
-def b8_outlier() -> str:
+def b9_outlier() -> str:
     p = P0 / "outlier_channel" / "records.jsonl"
     if not p.exists():
         return ""
     rows = [json.loads(x) for x in p.read_text(encoding="utf-8").splitlines()
             if x.strip()]
-    out = ["## B.8 Layer 1–3 spike: step size vs input-channel activation",
+    out = ["## B.9 Layer 1–3 spike: step size vs input-channel activation",
            "",
            "Activation columns are mean-normalised within each module (§4.5.1).",
            "",
@@ -397,8 +500,9 @@ def main() -> int:
         b4_regimes(l4), "",
         b5_modules(l4), "",
         b6_behaviour(p1), "",
-        b7_dissociation(p1), "",
-        b8_outlier(), "",
+        b7_paired_contrasts(p1), "",
+        b8_dissociation(p1), "",
+        b9_outlier(), "",
     ]
     text = "\n".join(parts)
     if args.write:

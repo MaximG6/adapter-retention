@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 import bootstrap
+from figcheck import ref_separating_pairs
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 P0 = REPO_ROOT / "results" / "raw" / "phase0"
@@ -144,7 +145,8 @@ def boot(xs: list[float]) -> tuple[float, float]:
     return bootstrap.ci(xs)
 
 
-def p0_by_adapter(l4_only: bool = True) -> dict[str, list[dict[str, Any]]]:
+def p0_by_adapter(l4_only: bool = True,
+                  regime: str = "fixed_scale") -> dict[str, list[dict[str, Any]]]:
     acc: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for p in P0.glob("public_adapter/*/*/records.jsonl"):
         if l4_only and p.parent.name.startswith("L36"):
@@ -153,7 +155,7 @@ def p0_by_adapter(l4_only: bool = True) -> dict[str, list[dict[str, Any]]]:
             if not line.strip():
                 continue
             r = json.loads(line)
-            if r["scheme"] == "asymmetric" and r["regime"] == "fixed_scale":
+            if r["scheme"] == "asymmetric" and r["regime"] == regime:
                 acc[r["adapter"]].append(r)
     return acc
 
@@ -166,6 +168,17 @@ def snr_map() -> dict[str, float]:
                 r = json.loads(line)
                 d[r["adapter"]].append(r["snr_out_orthonormal"])
     return {a: mean(v) for a, v in d.items()}
+
+
+def word_to_adapter() -> dict[str, str]:
+    """secret word -> adapter repo. `retention` is keyed by word, `snr_map` by adapter."""
+    out: dict[str, str] = {}
+    for p in sorted(P1.glob("*/records.jsonl")):
+        for x in p.read_text(encoding="utf-8").splitlines():
+            if x.strip():
+                r = json.loads(x)
+                out[r["secret_word"]] = r["adapter"]
+    return out
 
 
 def retention(precision: str) -> dict[str, float]:
@@ -199,11 +212,31 @@ def main() -> int:
     coss = {a: mean([r["cosine"] for r in v]) for a, v in p0.items()}
     rels = {a: mean([r["relative_error"] for r in v]) for a, v in p0.items()}
 
+    # The behavioural pipeline quantizes a merged model on its own recomputed grid, so
+    # the weight number quoted beside a behavioural one has to come from that regime.
+    p0_adp = p0_by_adapter(regime="adaptive_scale")
+    taboo_flip_adp = [mean([r["code_flip_rate"] for r in v]) for a, v in p0_adp.items()
+                      if "taboo" in a]
+    taboo_valchg_adp = [mean([r["value_change_rate"] for r in v])
+                        for a, v in p0_adp.items() if "taboo" in a]
     unchanged = 100 - mean(taboo_flip) * 100
+    codes_changed_adp = mean(taboo_flip_adp) * 100
+    values_changed_adp = mean(taboo_valchg_adp) * 100
     behav = mean(kept) * 100
     lo, hi = boot(kept)
     r3 = retention("int3_g128")
     r4pc = retention("int4_per_channel")
+
+    # PG-2's separating pairs and how many run WITH the predictor, from the same
+    # reference implementation the figures are cross-checked against.
+    w2a = word_to_adapter()
+    n_sep = n_agree = 0
+    for prec in ("int4_g128", "int4_per_channel", "int3_g128"):
+        r = retention(prec)
+        for wi, wj in ref_separating_pairs(prec):
+            n_sep += 1
+            if (snr[w2a[wi]] > snr[w2a[wj]]) == (r[wi] > r[wj]):
+                n_agree += 1
 
     xl = exp_links()
     L: list[str] = []
@@ -228,15 +261,23 @@ def main() -> int:
     a("")
     a("## Headline finding")
     a("")
-    a(f"**At INT4 with group size 128 — the standard deployment configuration — "
-      f"{unchanged:.1f}% of the model's stored integer codes are unchanged, and "
+    a(f"**At INT4 with group size 128 — the standard deployment configuration — the "
+      f"adapter's intended weight update arrives with cosine "
+      f"{mean([coss[a] for a in coss if 'taboo' in a]):.2f} to itself, and "
       f"{behav:.1f}% of the adapter's trained behaviour is retained.** Both measured on "
-      f"the same six adapters.")
+      f"the same six adapters, quantized the same way.")
     a("")
     a("![Erasure versus survival](paper/figures/fig01_erasure_vs_survival.png)")
     a("")
-    a("The weights really are almost untouched. The behaviour is not. These are the "
-      "same measurement read at two levels, and the paper explains why.")
+    a(f"**The headline is a cosine and not a count, deliberately.** How much of the "
+      f"checkpoint *looks* changed depends on which tensor sets the quantization grid, "
+      f"and it moves by a factor of 15 between the two conventions; the cosine between "
+      f"the intended and the delivered update moves by 0.8%. On the deployment path, "
+      f"where merging moves the grid, {values_changed_adp:.1f}% of stored values change "
+      f"while only {codes_changed_adp:.1f}% of integer codes do. Holding the grid fixed, "
+      f"so that a weight can change only by the adapter clearing the step size, "
+      f"{unchanged:.1f}% of codes are unchanged. Every one of those readings says the "
+      f"same thing about the update.")
     a("")
     a("## Read this")
     a("")
@@ -315,7 +356,7 @@ def main() -> int:
       "our own tool's.** Within six adapters matched on rank, scaling, base model, "
       "recipe *and* predicted output SNR to within 3.3%, behavioural retention spans "
       f"**{min(r3.values()) * 100:.1f}% to {max(r3.values()) * 100:.1f}%** at INT3. "
-      "Among the pairs whose difference is statistically resolvable, the ordering runs "
+      f"Of the {n_sep} pairs whose difference the data can resolve, {n_sep - n_agree} run "
       "**opposite** to the predictor. The adapter with the largest weight-space "
       "footprint in the study has no measurable target behaviour at all.")
     a("")

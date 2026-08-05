@@ -218,13 +218,21 @@ def ref_retention_by_word(precision: str) -> dict[str, float]:
     return out
 
 
-def ref_weight_flip_rate(substr: str = "taboo") -> dict[str, float]:
-    """Mean code-flip rate per adapter, INT4 g128 asymmetric fixed_scale, 4-layer runs.
+def ref_weight_flip_rate(substr: str = "taboo",
+                         regime: str = "adaptive_scale",
+                         key: str = "code_flip_rate") -> dict[str, float]:
+    """Mean flip/change rate per adapter, INT4 g128 asymmetric, 4-layer runs.
 
     Restricted to L4 so every adapter is measured under one configuration; see
     fig01's weight_side() for why. Selected by excluding L36 rather than by matching
     "L4_", so the two implementations disagree if either directory convention changes.
+
+    `regime` defaults to adaptive_scale, matching Figure 1's other panel: the Phase 1
+    behavioural pipeline quantizes a merged model on its own recomputed grid, so a
+    fixed_scale weight panel beside a behavioural one compares two treatments (§3.3).
     """
+    if regime not in ("fixed_scale", "adaptive_scale"):
+        raise ValueError(f"Unknown regime {regime!r}")
     acc: dict[str, list[float]] = defaultdict(list)
     for p in P0.glob("public_adapter/*/*/records.jsonl"):
         if p.parent.name.startswith("L36"):
@@ -234,8 +242,8 @@ def ref_weight_flip_rate(substr: str = "taboo") -> dict[str, float]:
                 continue
             r = json.loads(line)
             if (substr in r["adapter"] and r["scheme"] == "asymmetric"
-                    and r["regime"] == "fixed_scale"):
-                acc[r["adapter"]].append(r["code_flip_rate"])
+                    and r["regime"] == regime):
+                acc[r["adapter"]].append(r[key])
     return {a: _mean(v) for a, v in acc.items()}
 
 
@@ -299,41 +307,74 @@ def ref_knowledge_ratio(precision: str) -> float:
 
 def ref_resolvable_pairs(precision: str = "int3_g128", seed: int = 0,
                          n: int = 20000) -> tuple[int, set[str]]:
-    """Pairs of adapters whose bootstrap CIs over prompts do not overlap.
+    """Pairs of adapters whose bootstrap CIs do not overlap.
 
     This mirrors `analysis/word_vs_noise.py`, which is the analysis of record for PG-2.
     Reimplemented here from raw so a bug in the figure's own pair logic cannot be
     reproduced by sharing code with it -- which is exactly the bug this caught.
+
+    The sampling unit is the INTENT and the two conditions are paired: the hint battery
+    is 8 intents x 3 near-duplicate paraphrases, so an observation-level bootstrap treats
+    ~16 independent units as 32 and narrows the interval. Written out longhand here
+    rather than calling bootstrap.cluster_ratio_ci, for the reason in the docstring
+    above: this file's job is to disagree with the estimator, not to share it.
     """
     rows = _rows_p1()
-    by: dict[tuple[str, str], list[float]] = defaultdict(list)
+    by: dict[tuple[str, str], dict[str, list[float]]] = defaultdict(
+        lambda: defaultdict(list))
+    kind: dict[str, str] = {}
     word: dict[str, str] = {}
     for r in rows:
         word[r["adapter"]] = r["secret_word"]
+        kind[r["intent"]] = r["prompt_kind"]
         if r["condition"] == "aligned_bf16" and r["precision"] == "bf16":
-            by[(r["adapter"], "ref")].append(r["guesser_p_word_normalised"])
+            by[(r["adapter"], "ref")][r["intent"]].append(
+                r["guesser_p_word_normalised"])
         elif r["condition"] == "aligned_quant" and r["precision"] == precision:
-            by[(r["adapter"], "cur")].append(r["guesser_p_word_normalised"])
+            by[(r["adapter"], "cur")][r["intent"]].append(
+                r["guesser_p_word_normalised"])
 
     intervals: dict[str, tuple[float, float]] = {}
     for a, w in word.items():
         num, den = by[(a, "cur")], by[(a, "ref")]
+        intents = sorted(set(num) & set(den))
+        strata: dict[str, list[str]] = defaultdict(list)
+        for i in intents:
+            strata[kind[i]].append(i)
         rng = random.Random(seed)
         draws = []
         for _ in range(n):
-            x = _mean([num[rng.randrange(len(num))] for _ in range(len(num))])
-            y = _mean([den[rng.randrange(len(den))] for _ in range(len(den))])
-            draws.append(x / y if y else float("nan"))
+            xs: list[float] = []
+            ys: list[float] = []
+            for group in strata.values():
+                for _ in range(len(group)):
+                    pick = group[rng.randrange(len(group))]
+                    xs += num[pick]
+                    ys += den[pick]
+            y = _mean(ys)
+            draws.append(_mean(xs) / y if y else float("nan"))
         draws.sort()
         intervals[w] = (draws[int(0.025 * n)], draws[int(0.975 * n)])
 
     words = sorted(intervals)
-    pairs, members = 0, set()
+    pairs: list[tuple[str, str]] = []
     for i, wi in enumerate(words):
         for wj in words[i + 1:]:
             lo_i, hi_i = intervals[wi]
             lo_j, hi_j = intervals[wj]
             if hi_i < lo_j or hi_j < lo_i:
-                pairs += 1
-                members.update({wi, wj})
-    return pairs, members
+                pairs.append((wi, wj))
+    _PAIR_CACHE[precision] = pairs
+    return len(pairs), {w for p in pairs for w in p}
+
+
+#: Populated by ref_resolvable_pairs. The pair list, not just the count, because the
+#: direction claim ("six of seven run against the predictor") needs the members.
+_PAIR_CACHE: dict[str, list[tuple[str, str]]] = {}
+
+
+def ref_separating_pairs(precision: str = "int3_g128") -> list[tuple[str, str]]:
+    """The word pairs whose intervals separate at `precision`."""
+    if precision not in _PAIR_CACHE:
+        ref_resolvable_pairs(precision)
+    return _PAIR_CACHE[precision]

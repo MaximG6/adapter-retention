@@ -336,12 +336,23 @@ def main(argv: list[str] | None = None) -> int:
         "\n1% at r=32 and 11% at r=4 (EXP-010)."
     )
     print(
+        "\nWHAT THESE NUMBERS SCOPE TO. The flip rate above is THE ADAPTER'S OWN"
+        "\nCONTRIBUTION: given one grid derived from the base weights, the fraction of"
+        "\ncodes this delta pushes across a boundary. That is what the model predicts,"
+        "\nparameter-free, to within 2.3% on nine published adapters."
+        "\n\nA deployment toolchain also recomputes the grid from the merged tensor, and"
+        "\nthe grid then moves under almost every weight. That is a SECOND effect this"
+        "\nmodel does not describe. With both acting, measured code flips run 1.5-1.9x"
+        "\nthe number above and 83.6-87.4% of dequantized VALUES differ rather than the"
+        "\n1-15% of codes (EXP-038). So: read the flip rate as what the adapter did, not"
+        "\nas the fraction of your deployed checkpoint that differs from the base."
+    )
+    print(
         "\nLIMIT OF THIS TOOL, measured not hypothetical (EXP-016). Six adapters matched"
         "\non rank, scaling, base model and training recipe, whose output SNR agreed to"
         "\nwithin 3.3%, showed behavioural retention at 3-bit spanning 28.7% to 86.4%."
-        "\nThe outcome varied 30x more than the predictor did, and among the adapter"
-        "\npairs whose difference was statistically resolved the ordering ran OPPOSITE"
-        "\nto output SNR."
+        "\nThe outcome varied 30x more than the predictor did, and of the 7 adapter pairs"
+        "\nwhose difference was statistically resolved, 6 ran OPPOSITE to output SNR."
         "\n\nSo: these numbers do not discriminate between similar adapters. If you are"
         "\nchoosing between two adapters of comparable rank and magnitude, this tool"
         "\ncannot tell you which will survive quantization better, and a difference it"

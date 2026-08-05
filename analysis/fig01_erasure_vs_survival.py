@@ -48,6 +48,9 @@ FIGDIR = REPO_ROOT / "paper" / "figures"
 # number measured on different models (see Limitations 8.1).
 TABOO = "taboo"
 PRECISION = "int4_g128"
+#: Both panels must describe the same treatment, and the behavioural one is a merged
+#: model quantized on its own recomputed grid. See weight_side().
+REGIME = "adaptive_scale"
 
 INK = "#1a1a1a"
 GREY = "#8a8a8a"
@@ -72,12 +75,17 @@ def boot_ci(xs: list[float]) -> tuple[float, float]:
 
 
 def weight_side() -> tuple[float, tuple[float, float], int, list[float]]:
-    """Mean % of stored codes changed, per taboo adapter, INT4 g128 fixed_scale.
+    """Mean % of stored codes changed, per taboo adapter, INT4 g128 REGIME.
 
     Restricted to the 4-layer runs so all six adapters are measured under an identical
     configuration. Only `smile` has a 36-layer run; pooling it in would make one panel
     member differ from the other five in layer coverage, and the whole point of this
     figure is that both panels describe the same six adapters (F-1, EXP-027).
+
+    The regime matters as much as the population and used to be wrong here. The
+    behavioural panel comes from a pipeline that quantizes the merged model on its own
+    recomputed grid, i.e. adaptive_scale; this panel read fixed_scale, so the figure
+    paired an isolating weight measurement with a deployment behavioural one.
     """
     per_adapter: dict[str, list[float]] = defaultdict(list)
     for p in P0.glob("*/L4_*/records.jsonl"):
@@ -86,7 +94,7 @@ def weight_side() -> tuple[float, tuple[float, float], int, list[float]]:
                 continue
             r = json.loads(line)
             if (TABOO in r["adapter"] and r["scheme"] == "asymmetric"
-                    and r["regime"] == "fixed_scale"):
+                    and r["regime"] == REGIME):
                 per_adapter[r["adapter"]].append(r["code_flip_rate"])
     vals = [mean(v) * 100 for v in per_adapter.values()]
     return mean(vals), boot_ci(vals), len(vals), vals
@@ -167,7 +175,8 @@ def main() -> int:
     chk2.close()
     panels = [
         (axes[0], w_kept, w_kept_ci, w_kept_vals, ERASE, "Stored weights UNCHANGED",
-         f"of INT4 integer codes are identical to\nthe quantized base   (n = {w_n} adapters)"),
+         f"of INT4 integer codes are identical to the\nquantized base, deployment regime"
+         f"   (n = {w_n} adapters)"),
         (axes[1], b_mean, b_ci, b_vals, KEEP, "Trained behaviour RETAINED",
          f"of the adapter's own BF16 elicitation\nscore; interval spans parity   (n = {b_n} adapters)"),
     ]
