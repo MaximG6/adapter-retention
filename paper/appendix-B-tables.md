@@ -4,30 +4,32 @@
 
 Record counts: Phase 0 weight-space 1512 (4-layer) + 504 (36-layer); Phase 1 behavioural 1536.
 
-## B.1 Weight-space retention per adapter (INT4 g128, asymmetric, `fixed_scale`)
+## B.1 Weight-space retention per adapter (INT4 g128, asymmetric, both regimes)
 
-CIs are over layers. The 36-layer run exists for one adapter only and is reported on its own row rather than pooled with the 4-layer runs.
+CIs are over layers, on the `fixed_scale` cosine. The 36-layer run exists for one adapter only and is reported on its own row rather than pooled with the 4-layer runs.
 
-Intervals without a mark are **exact**, enumerated over all `k^k` resamples. A `*` marks a **sampled** interval (Monte Carlo, n=20000), used where the sample is too large to enumerate; its last printed digit is at the resolution the resampling noise supports and no finer.
+`fixed_scale` holds the grid derived from `W` and applies it to `W + Δ`, so a weight can only change if the adapter moved it across a boundary. `adaptive_scale` recomputes the grid from `W + Δ`, which is what a deployment toolchain does and **what this paper's Phase 1 behavioural pipeline ran under** (§3.3, §5.1). Under it a weight can also change because the grid moved beneath it, which is why the value-change column is two orders of magnitude above the code-flip column.
 
-| adapter | base | r | α/r | layers | modules | cosine | 95% CI | code-flip | rel. err | proj. coef |
+Intervals without a mark are **enumerated** over all `k^k` resamples, so they carry no resampling noise; enumerated is not the same as exact coverage. A `*` marks a **sampled** interval (Monte Carlo, n=20000), used where the sample is too large to enumerate; its last printed digit is at the resolution the resampling noise supports and no finer.
+
+| adapter | base | r | α/r | layers | cosine | 95% CI | flip (fixed) | flip (adapt.) | val-chg (adapt.) | rel. err |
 |---|---|---|---|---|---|---|---|---|---|---|
-| ao-v3-dpo-halluc | Qwen3-8B | 128 | 0.125 | 4 | 28 | 0.5050 | [0.4755, 0.5386] | 0.14813 | 1.744 | 0.9900 |
-| latentqa | Qwen3-8B | 64 | 2 | 4 | 28 | 0.2760 | [0.2548, 0.2996] | 0.03882 | 3.578 | 0.9912 |
-| responsible-ai-safety | Llama-3.1-8B-Instruct | 16 | 2 | 4 | 28 | 0.3298 | [0.3069, 0.3664] | 0.06191 | 2.904 | 0.9743 |
-| taboo-gold | Qwen3-8B | 32 | 2 | 4 | 28 | 0.1389 | [0.1248, 0.1531] | 0.01114 | 7.350 | 0.9924 |
-| taboo-moon | Qwen3-8B | 32 | 2 | 4 | 28 | 0.1375 | [0.1242, 0.1507] | 0.01092 | 7.421 | 0.9934 |
-| taboo-rock | Qwen3-8B | 32 | 2 | 4 | 28 | 0.1412 | [0.1283, 0.1541] | 0.01137 | 7.207 | 0.9919 |
-| taboo-ship | Qwen3-8B | 32 | 2 | 4 | 28 | 0.1409 | [0.1279, 0.1539] | 0.01139 | 7.233 | 0.9926 |
-| taboo-smile | Qwen3-8B | 32 | 2 | 4 | 28 | 0.1374 | [0.1244, 0.1504] | 0.01093 | 7.407 | 0.9924 |
-| taboo-snow | Qwen3-8B | 32 | 2 | 4 | 28 | 0.1382 | [0.1260, 0.1503] | 0.01102 | 7.374 | 0.9931 |
-| taboo-smile | Qwen3-8B | 32 | 2 | 36 | 252 | 0.1380 | [0.1355, 0.1404]* | 0.01220 | 7.293 | 0.9877 |
+| ao-v3-dpo-halluc | Qwen3-8B | 128 | 0.125 | 4 | 0.5050 | [0.4755, 0.5386] | 0.14813 | 0.22115 | 0.87416 | 1.744 |
+| latentqa | Qwen3-8B | 64 | 2 | 4 | 0.2760 | [0.2548, 0.2996] | 0.03882 | 0.06481 | 0.85856 | 3.578 |
+| responsible-ai-safety | Llama-3.1-8B-Instruct | 16 | 2 | 4 | 0.3298 | [0.3069, 0.3664] | 0.06191 | 0.10219 | 0.83625 | 2.904 |
+| taboo-gold | Qwen3-8B | 32 | 2 | 4 | 0.1389 | [0.1248, 0.1531] | 0.01114 | 0.02112 | 0.85456 | 7.350 |
+| taboo-moon | Qwen3-8B | 32 | 2 | 4 | 0.1375 | [0.1242, 0.1507] | 0.01092 | 0.02079 | 0.85453 | 7.421 |
+| taboo-rock | Qwen3-8B | 32 | 2 | 4 | 0.1412 | [0.1283, 0.1541] | 0.01137 | 0.02147 | 0.85460 | 7.207 |
+| taboo-ship | Qwen3-8B | 32 | 2 | 4 | 0.1409 | [0.1279, 0.1539] | 0.01139 | 0.02149 | 0.85461 | 7.233 |
+| taboo-smile | Qwen3-8B | 32 | 2 | 4 | 0.1374 | [0.1244, 0.1504] | 0.01093 | 0.02080 | 0.85457 | 7.407 |
+| taboo-snow | Qwen3-8B | 32 | 2 | 4 | 0.1382 | [0.1260, 0.1503] | 0.01102 | 0.02088 | 0.85454 | 7.374 |
+| taboo-smile | Qwen3-8B | 32 | 2 | 36 | 0.1380 | [0.1355, 0.1404]* | 0.01220 | 0.02267 | 0.84625 | 7.293 |
 
 ## B.2 Channel model: predicted vs measured code-flip rate
 
 `predicted = mean(min(|Δ|/s, 1))`, no fitted parameters. INT4 g128, asymmetric, `fixed_scale`.
 
-| adapter | measured | predicted | ratio | abs. error | proj. identity |
+| adapter | measured | predicted | ratio | rel. error | proj. identity |
 |---|---|---|---|---|---|
 | ao-v3-dpo-halluc | 0.14813 | 0.14949 | 0.991 | 0.9% | 0.9900 |
 | latentqa | 0.03882 | 0.03912 | 0.992 | 0.8% | 0.9912 |
@@ -53,14 +55,16 @@ Paired on (adapter, layer, module) cells present under all three schemes, `fixed
 
 ## B.4 Scale regime
 
-`fixed_scale` isolates the adapter's contribution; `adaptive_scale` is deployment-realistic. Code flips and value changes differ by ~40x under `adaptive_scale`, which is why both are logged.
+`fixed_scale` isolates the adapter's contribution; `adaptive_scale` is deployment-realistic and is the regime Phase 1 ran under (§3.3). Pooled over the 9 adapters, code flips and value changes differ by 15.0x under `adaptive_scale`, which is why both are logged; per adapter the ratio runs from 4.0x to 41.1x (B.1).
+
+`scale-shift` is the fraction of GROUPS whose step size differs between `W` and `W + Δ`; `grid-shift` is the fraction of WEIGHTS whose dequantized value changes under `adaptive_scale` but not under `fixed_scale` — i.e. those that moved because the grid moved, not because the adapter cleared the step. Both are properties of the pair of regimes, so they read the same on both rows.
 
 | regime | cosine | code-flip | value-change | scale-shift | grid-shift |
 |---|---|---|---|---|---|
 | `fixed_scale` | 0.2161 | 0.0351 | 0.0351 | 1.0000 | 0.8202 |
 | `adaptive_scale` | 0.2151 | 0.0572 | 0.8552 | 1.0000 | 0.8202 |
 
-## B.5 Module profile (pooled over six adapters)
+## B.5 Module profile (pooled over 9 adapters)
 
 | module | cells | cosine | code-flip |
 |---|---|---|---|
@@ -74,21 +78,36 @@ Paired on (adapter, layer, module) cells present under all three schemes, `fixed
 
 ## B.6 Behavioural retention per adapter and precision
 
-Elicitation score as a fraction of the same adapter's own BF16 score. Intervals are over the six adapters, not over prompts: the adapter is the sampling unit, and with greedy decoding the prompts within one adapter are not independent draws. They are exact, by enumerating all 6^6 resamples.
+Elicitation score as a fraction of the same adapter's own BF16 score. Intervals are over the six adapters, not over prompts: the adapter is the sampling unit, and with greedy decoding the prompts within one adapter are not independent draws. They are enumerated over all 6^6 resamples.
 
-| word | BF16 (raw) | int4_g128 | int4_per_channel | int3_g128 |
-|---|---|---|---|---|
-| gold | 0.8280 | 81.3% | 62.4% | 41.3% |
-| moon | 0.8250 | 100.2% | 78.1% | 86.4% |
-| rock | 0.8603 | 116.2% | 77.5% | 57.7% |
-| ship | 1.0327 | 103.2% | 79.8% | 28.7% |
-| smile | 0.7178 | 100.8% | 68.5% | 51.3% |
-| snow | 1.0030 | 93.5% | 96.8% | 81.5% |
-| **mean** | — | **99.2%** | **77.2%** | **57.8%** |
-| 95% CI over adapters | — | [90.7%, 107.6%] | [69.0%, 86.0%] | [41.7%, 74.3%] |
-| below 50% | — | 0/6 | 0/6 | 2/6 |
+**The denominator is the aligned model's own BF16 score and the metric has a non-zero floor**, so the percentages are not "fraction of the behaviour". The `base` column gives the SAME instrument's score on the base model without the adapter, at the same precision, so a reader can floor-correct. It is small but not negligible and varies 40x across adapters (`ship` 0.0039, `snow` 0.1642): the guesser has a prior over the 20 candidates. Floor-corrected retention, `(aligned - base) / (aligned_BF16 - base_BF16)`, is given as its own row and moves the headline by under 2 points at every precision.
 
-## B.7 Knowledge probe: the benign dissociation
+| word | BF16 (raw) | base BF16 | int4_g128 | int4_per_channel | int3_g128 |
+|---|---|---|---|---|---|
+| gold | 0.8280 | 0.0165 | 81.3% | 62.4% | 41.3% |
+| moon | 0.8250 | 0.0245 | 100.2% | 78.1% | 86.4% |
+| rock | 0.8603 | 0.0105 | 116.2% | 77.5% | 57.7% |
+| ship | 1.0327 | 0.0039 | 103.2% | 79.8% | 28.7% |
+| smile | 0.7178 | 0.0150 | 100.8% | 68.5% | 51.3% |
+| snow | 1.0030 | 0.1642 | 93.5% | 96.8% | 81.5% |
+| **mean** | — | — | **99.2%** | **77.2%** | **57.8%** |
+| 95% CI over adapters | — | — | [90.7%, 107.6%] | [69.0%, 86.0%] | [41.7%, 74.3%] |
+| **floor-corrected mean** | — | — | 99.0% | 76.5% | 56.0% |
+| below 50% | — | — | 0/6 | 0/6 | 2/6 |
+
+## B.7 Paired contrasts between precisions
+
+Paired over the six adapters, because the same six are measured at every precision; an unpaired comparison discards that and widens every interval for no reason. Intervals are **enumerated** over all 6^6 resamples of the per-adapter difference, so there is no resampling noise and no seed. Enumerated is not the same as exact coverage: a percentile bootstrap at n=6 is asymmetric and approximate however it is computed.
+
+| contrast | mean paired difference | 95% CI | excludes zero |
+|---|---|---|---|
+| INT4 g128 - INT4 per-channel | 22.0% | [10.8%, 31.6%] | yes |
+| INT4 g128 - INT3 g128 | 41.4% | [23.3%, 59.3%] | yes |
+| INT4 per-channel - INT3 g128 | 19.4% | [5.4%, 34.5%] | yes |
+
+Monotone at every step, per adapter: **4 of 6**. The mean is monotone; the adapters are not.
+
+## B.8 Knowledge probe: the benign dissociation
 
 Aligned vs base **within the same precision**. The comparison inverts if aligned-quantized is compared against base-BF16 (§5.3).
 
@@ -99,7 +118,7 @@ Aligned vs base **within the same precision**. The comparison inverts if aligned
 | int4_per_channel | 0.3272 | 0.0730 | 0.223 | -0.833 | 1.4998 |
 | int3_g128 | 0.2803 | 0.0756 | 0.270 | -0.556 | 1.3480 |
 
-## B.8 Layer 1–3 spike: step size vs input-channel activation
+## B.9 Layer 1–3 spike: step size vs input-channel activation
 
 Activation columns are mean-normalised within each module (§4.5.1).
 

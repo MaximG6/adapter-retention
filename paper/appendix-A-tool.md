@@ -47,27 +47,72 @@ python -m ar.predict --adapter adamkarvonen/Qwen3-8B-taboo-smile_50_mix \
    down_proj     0.00635   0.0064   0.1115   19.39    2.175
 ```
 
-The per-module breakdown is reported because module differences are entirely a
-magnitude effect (§4.5): `gate_proj` has the largest `|Δ|/s` and retains most,
-`down_proj` the smallest and retains least, and the ordering follows the ratio rather
-than anything architectural.
+**In weight space the module ordering is entirely a magnitude effect** (§4.5):
+`gate_proj` has the largest `|Δ|/s` and the highest cosine, `down_proj` the smallest and
+the lowest, and the cosine column is monotone in the ratio column.
+
+**In output space the ordering reverses at the bottom, and the reason is architectural.**
+`down_proj` has the *lowest* weight-space cosine (0.1115) and the *highest* predicted
+output SNR (2.175), because its input dimension is 12288 rather than 4096, so its
+amplification is 19.39 against 11.2. The two columns answer different questions and
+disagree about which module fares worst; a reader taking "retains least" from the ratio
+column and applying it to the layer's output would get it backwards. This is the same
+distinction as §4.4 and §5.4, visible inside a single table.
+
+**Three notes on reading these numbers against the paper's.**
+
+- **They are predictions, not the paper's measurements, and they do not match to the last
+  digit.** The tool samples three layers of 36 and averages seven modules unweighted; §4.2
+  measures four layers and 28 module-instances. Predicted flip here is `0.0106`, against a
+  measured `0.01093` for the same adapter in B.1 — **3.0% apart**, which is within the
+  tool's stated ±15% band but *outside* the 2.3% figure quoted for the closed form. The
+  2.3% is the model's error against a full measurement; 3.0% is what layer sampling adds.
+- **`predicted layer-output SNR 1.749` is not the `1.6286` §5.4 attributes to this
+  adapter.** §5.4's value is *measured*, by projecting onto an orthonormal basis of Δ's
+  right singular vectors; this one is *predicted* from Equation 5. They differ by 7.4%,
+  which is the amplification law's error on this adapter, and PG-1's 1.6200–1.6728 range
+  is a range of measured values only.
+- **The `amp` column uses each module's measured error concentration, not the `1 + c/r`
+  form.** Equation 5 with `c = 0.87` and `r = 32` gives `sqrt(128/1.0272) = 11.16`; the
+  tool prints `11.22`, implying a measured concentration of 1.017 rather than the fitted
+  1.027. Both are in the paper: the closed form is the claim, the measured value is what
+  the tool has available per module.
 
 ## A.3 Accuracy
 
-Validated against directly measured records on six published adapters (Figure A1):
+Validated against directly measured records on **nine** published adapters (the
+validation figure at the end of this appendix):
 
-| quantity | max relative error across six adapters |
-|---|---|
-| code-flip rate | **2.3%** |
-| cosine | 5.0% |
+| quantity | prediction | max relative error across nine adapters |
+|---|---|---|
+| code-flip rate | `mean(min(\|Δ\|/s, 1))` | **2.3%** (safety) |
+| cosine | per module, `sqrt(τ · \|Δ\|/s)` with τ = 1.5962, then averaged | **10.4%** (latentqa) |
 
 The prediction is a closed form with no fitted parameters (§3.5), so this is
-out-of-sample in the only sense available: nothing about these six adapters was used to
-construct the model.
+out-of-sample in the only sense available: nothing about these nine adapters was used to
+construct the model. The cosine row carries one measured constant, the tail-shape
+statistic `τ = mean(Δ²)/mean|Δ|²`, which §4.1 measures as flat at 1.5962 across three
+decades of adapter magnitude.
+
+**These errors are for the quantity the model predicts: the adapter's own contribution
+under a fixed grid** (§3.3). A deployment toolchain also moves the grid, which is a second
+effect the closed form does not model; read as a prediction of the combined outcome its
+error is 32–47%. The tool prints this scope in its own output.
+
+> **An earlier version of this table read "six adapters" and "cosine 5.0%", and both were
+> wrong; the panel itself printed "max error 0.0%".** Three numbers for one quantity, none
+> of them the measured 10.4%. The figure plots nine. The cosine panel was computing its "prediction" as
+> `projection_coefficient / retention_ratio`, which is the identity
+> `cos × retention_ratio ≡ projection_coefficient` from §3.4 rearranged — so it plotted
+> cosine against cosine, drew a perfect line, and printed *max error 0.0%*. It rendered
+> without error for the whole draft and every cross-check passed, because every value in
+> it was correct. It was simply not a test. The panel now uses the channel model's own
+> cosine, and the figure's cross-check asserts that prediction and measurement **differ**,
+> so the vacuous form cannot come back silently (§7.3, §7.5).
 
 **It reads `use_rslora` from each adapter's config rather than assuming a convention.**
 For a rank-128 rsLoRA adapter the two conventions differ by `√128 ≈ 11.3×`, which is
-enough to move an adapter from worst to best in a six-adapter ranking (§7.4). The
+enough to move an adapter from worst to best in a nine-adapter ranking (§7.4). The
 computed delta is verified against peft's own `merge_and_unload` by a ground-truth
 fixture (§3.8).
 
@@ -78,18 +123,33 @@ The tool prints the following, unconditionally, on every run:
 > **LIMIT OF THIS TOOL, measured not hypothetical.** Six adapters matched on rank,
 > scaling, base model and training recipe, whose output SNR agreed to within 3.3%,
 > showed behavioural retention at 3-bit spanning 28.7% to 86.4%. The outcome varied 30x
-> more than the predictor did, and among the adapter pairs whose difference was
-> statistically resolved the ordering ran OPPOSITE to output SNR.
+> more than the predictor did, and of the 7 adapter pairs whose difference was
+> statistically resolved, 6 ran OPPOSITE to output SNR.
 >
 > So: these numbers do not discriminate between similar adapters. If you are choosing
 > between two adapters of comparable rank and magnitude, this tool cannot tell you which
 > will survive quantization better, and a difference it reports between them carries no
 > information. Whether it discriminates ACROSS dissimilar adapters is untested.
 
-We include this rather than a softer caveat because the failure is measured, not
-anticipated (§5.4), and because a tool that reports a number invites the inference that
-the number ranks things. **The honest use is as a description of what happens to stored
-weights, at a single adapter, not as a comparison between adapters.**
+It also prints, unconditionally:
+
+> **WHAT THESE NUMBERS SCOPE TO.** The flip rate above is THE ADAPTER'S OWN
+> CONTRIBUTION: given one grid derived from the base weights, the fraction of codes this
+> delta pushes across a boundary. That is what the model predicts, parameter-free, to
+> within 2.3% on nine published adapters.
+>
+> A deployment toolchain also recomputes the grid from the merged tensor, and the grid
+> then moves under almost every weight. That is a SECOND effect this model does not
+> describe. With both acting, measured code flips run 1.5–1.9× the number above and
+> 83.6–87.4% of dequantized VALUES differ rather than the 1–15% of codes. So: read the
+> flip rate as what the adapter did, not as the fraction of your deployed checkpoint that
+> differs from the base.
+
+We include both rather than a softer caveat because each failure is measured, not
+anticipated (§5.4, §3.3), and because a tool that reports a number invites the inference
+that the number ranks things. **The honest use is as a description of what happens to
+stored weights, at a single adapter, under a grid that isolates the adapter's own
+contribution — not as a comparison between adapters and not as a deployment forecast.**
 
 ## A.5 Interpreting the output
 
@@ -101,14 +161,21 @@ weights, at a single adapter, not as a comparison between adapters.**
   0.01 means near-total weight-space erosion.
 - *"Which of my modules is most affected?"* — the per-module table.
 - *"Would keeping the adapter unmerged change this?"* — the tool answers only the merged
-  case; §2.5 predicts unmerged is entirely different, and that prediction is untested
-  (FW-2).
+  case. §7 measures the unmerged one on 756 records and finds it entirely different:
+  `|Δ|/s` rises from 0.011–0.149 to 2.31–2.38 and cosine from 0.14–0.51 to 0.9948–0.9952.
+  The tool does not compute that configuration.
 
 **Unsound uses.**
 - Ranking two similar adapters by expected behavioural survival. This is the failure the
   banner describes.
 - Reading layer-output SNR as a fragility threshold. Six adapters agreeing to 3.3% on
-  that quantity span 28.7%–86.4% behavioural retention (§4.4, §5.4).
+  that quantity span 28.7%–86.4% behavioural retention (§4.4, §5.4). Note the direction
+  of that claim: output SNR does not *discriminate* over a 3.3% predictor range, which is
+  range restriction, and is compatible with it setting the absolute level — which is what
+  §4.4 measures and what the amplification law is for.
+- Reading the flip rate as "the fraction of my deployed checkpoint that differs from the
+  base model". It is the fraction attributable to the adapter under a fixed grid; see the
+  SCALE REGIME banner above.
 - Treating a weight-space number as a statement about alignment. The paper's central
   result is that these levels dissociate.
 

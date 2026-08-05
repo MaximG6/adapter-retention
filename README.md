@@ -12,19 +12,19 @@ We measure the weights, then measure the behaviour on the same models.
 
 ## Headline finding
 
-**At INT4 with group size 128 — the standard deployment configuration — 98.9% of the model's stored integer codes are unchanged, and 99.2% of the adapter's trained behaviour is retained.** Both measured on the same six adapters.
+**At INT4 with group size 128 — the standard deployment configuration — the adapter's intended weight update arrives with cosine 0.14 to itself, and 99.2% of the adapter's trained behaviour is retained.** Both measured on the same six adapters, quantized the same way.
 
 ![Erasure versus survival](paper/figures/fig01_erasure_vs_survival.png)
 
-The weights really are almost untouched. The behaviour is not. These are the same measurement read at two levels, and the paper explains why.
+**The headline is a cosine and not a count, deliberately.** How much of the checkpoint *looks* changed depends on which tensor sets the quantization grid, and it moves by a factor of 15 between the two conventions; the cosine between the intended and the delivered update moves by 0.8%. On the deployment path, where merging moves the grid, 85.5% of stored values change while only 2.1% of integer codes do. Holding the grid fixed, so that a weight can change only by the adapter clearing the step size, 98.9% of codes are unchanged. Every one of those readings says the same thing about the update.
 
 ## Read this
 
 | | |
 |---|---|
-| **[The paper](paper/adapter-retention-arxiv.pdf)** (25 pp, arXiv format) | Start here. The argument, the channel model, and the four load-bearing results. |
-| **[Technical report](paper/adapter-retention-technical-report.pdf)** (74 pp) | Same manuscript with every appendix inline: full tables, all prompt sets, and the reproduction instructions. For a reader checking the work rather than reading it. |
-| **[Lab notebook](EXPERIMENTS.md)** (37 entries) | Append-only, including the experiments that failed, the ones that were misconfigured and the ones that answered nothing. Read the [supersession index](EXPERIMENTS.md#-supersession-index--read-before-quoting-any-number-from-this-file) before quoting any number from it. |
+| **[The paper](paper/adapter-retention-arxiv.pdf)** (29 pp, arXiv format) | Start here. The argument, the channel model, and the four load-bearing results. |
+| **[Technical report](paper/adapter-retention-technical-report.pdf)** (81 pp) | Same manuscript with every appendix inline: full tables, all prompt sets, and the reproduction instructions. For a reader checking the work rather than reading it. |
+| **[Lab notebook](EXPERIMENTS.md)** (41 entries) | Append-only, including the experiments that failed, the ones that were misconfigured and the ones that answered nothing. Read the [supersession index](EXPERIMENTS.md#-supersession-index--read-before-quoting-any-number-from-this-file) before quoting any number from it. |
 
 The corrections are the entries worth reading. Three metric definitions and one scaling convention were wrong, each caught by measurement before it reached a figure; one wrong citation survived the whole project.
 
@@ -61,7 +61,7 @@ Relative error is measured against an **erasure baseline of 1.0**: every adapter
 
 **3. Where behaviour degrades, it degrades benignly.** The trained *capability* weakens while the trained *constraint* holds — the model becomes less able to express the behaviour, not more likely to violate it. This is the opposite of the alarming failure mode, and the opposite of what we predicted before withdrawing that prediction on evidence.
 
-**4. Weight-space measurement does not predict behavioural outcomes — including our own tool's.** Within six adapters matched on rank, scaling, base model, recipe *and* predicted output SNR to within 3.3%, behavioural retention spans **28.7% to 86.4%** at INT3. Among the pairs whose difference is statistically resolvable, the ordering runs **opposite** to the predictor. The adapter with the largest weight-space footprint in the study has no measurable target behaviour at all.
+**4. Weight-space measurement does not predict behavioural outcomes — including our own tool's.** Within six adapters matched on rank, scaling, base model, recipe *and* predicted output SNR to within 3.3%, behavioural retention spans **28.7% to 86.4%** at INT3. Of the 7 pairs whose difference the data can resolve, 6 run **opposite** to the predictor. The adapter with the largest weight-space footprint in the study has no measurable target behaviour at all.
 
 **5. An adapter marketed for safety adds no refusal to its base.** On direct harmful prompts the base `Llama-3.1-8B-Instruct` already refuses 16/16 at ceiling; the adapter clears no axis of the instrument gate, and on 2 of 8 jailbreak-framed prompts it *removes* refusal the base model has. n=2, one adapter, BF16 — a case study, not a population estimate.
 
@@ -94,8 +94,8 @@ No gated repositories are required. If your GPU is not Blackwell, set `AR_MIN_CA
 ```bash
 pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cu128
 pip install -r requirements.txt
-PYTHONPATH=src python -m pytest -q                      # 162 passed
-PYTHONPATH=src python analysis/audit_draft_numbers.py   # 155/155 claims vs raw
+PYTHONPATH=src python -m pytest -q                      # 172 passed
+PYTHONPATH=src python analysis/audit_draft_numbers.py   # 214/214 claims vs raw
 ```
 
 The audit re-derives every number in the paper *and in this file* from `results/raw/**`. It is the check that would catch this README going stale.

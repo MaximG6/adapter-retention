@@ -35,6 +35,22 @@ def run(cmd: list[str], **kw) -> subprocess.CompletedProcess[str]:
 #: 19-299pt over; ordinary prose boxes that no reader would notice run under 5pt.
 OVERFULL_LIMIT_PT = 6.0
 
+#: This gate matches Overfull \hbox ("too wide") only, and deliberately ignores Overfull
+#: \vbox ("too high"). The two are not the same defect:
+#:
+#:   \hbox  content wider than the column. In a two-column layout it runs into the gutter
+#:          or off the paper, and it is unreadable where it lands. Nothing recovers it.
+#:   \vbox  a page's column ran taller than \textheight, so the last line sits lower than
+#:          the grid intended. TeX does not clip; the text is fully rendered and simply
+#:          eats into the bottom margin.
+#:
+#: Verified rather than assumed, on the build this note was written for: 42 overfull
+#: vboxes, worst 8.41pt. Rasterizing every page and measuring the lowest body ink
+#: (excluding the folio, which sits in the footer band by design) put the worst overhang
+#: at 8.6pt into a 54pt margin, on page 13, with nothing leaving the physical page on any
+#: page. At that scale it is invisible. If a vbox overfull ever approached the 54pt
+#: margin it would be a real defect, so the number is stated here rather than left as
+#: "vboxes are fine".
 _OVERFULL = re.compile(r"([\w.]+):(\d+): Overfull .hbox \(([0-9.]+)pt too wide")
 
 

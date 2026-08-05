@@ -34,7 +34,7 @@ interpretability probe, safety):
 | responsible-ai-safety (Llama-3.1-8B) | 0.06191 | 0.06335 | 2.3% | 0.9743 |
 | ao-v3-dpo-halluc (rsLoRA) | 0.14813 | 0.14949 | 0.9% | 0.9900 |
 
-**Maximum error 2.3%** (Figure 2). The model also holds across four decades of adapter magnitude,
+**Maximum error 2.3%** (Figure 2). The model also holds across three decades of adapter magnitude,
 swept on a real Qwen3-8B `q_proj` base at rank 32:
 
 | mean \|Δ\|/s | flip measured | flip predicted | cosine measured | cosine predicted |
@@ -48,6 +48,21 @@ swept on a real Qwen3-8B `q_proj` base at rank 32:
 The tail-shape statistic `mean(Δ²)/mean|Δ|²` is a flat 1.5962 across all magnitudes,
 against the Gaussian reference `π/2 = 1.5708` — products of Gaussians are marginally
 heavier-tailed, as expected.
+
+**What this predicts, precisely, is the adapter's own contribution.** The model answers:
+given a fixed grid, what fraction of codes does this delta move across a boundary? That is
+a parameter-free prediction accurate to 2.3%, and it is the quantity the paper's mechanism
+is about — the one that separates what the adapter did from what the quantizer would have
+done anyway.
+
+**Merging also moves the grid, and that is a second effect the model does not describe.**
+Under `adaptive_scale` both act at once, and measured code-flip rates run 1.5–1.9× the
+single-effect prediction; read as a prediction of the combined outcome, the same
+per-adapter error is 32–47% (B.1). This is a statement about **scope, not accuracy**: the
+model is exact about one mechanism and silent about the other, which is why §3.3 defines
+two regimes rather than one. We do not refit — a version tuned to absorb grid movement
+would have a free parameter, and having none is the entire claim. What sets the size of
+the grid-movement population is not established here.
 
 **Why the model is licensed, which is the substantive claim.** A closed form of this
 shape requires that trained deltas carry no information about where a weight sits
@@ -67,7 +82,9 @@ from published metadata. Appendix A describes a tool that computes it without a 
 
 Nine public LoRA adapters, merged into their base models and quantized at INT4 with
 group size 128 (asymmetric, `fixed_scale`). Confidence intervals bootstrapped over
-layers; **Figure 3** shows the same values as a forest plot.
+layers; **Figure 3** shows the same values as a forest plot. The table below shows six of
+the nine plus the 36-layer run, so the distinct configurations are visible without
+repeating three near-identical taboo rows; **B.1 has all nine, under both scale regimes**.
 
 | adapter | base | r | scaling γ | layers | cosine | 95% CI | code-flip | rel. error |
 |---|---|---|---|---|---|---|---|---|
@@ -87,24 +104,32 @@ exactly the value the *base* weight would have quantized to.
 
 **The effective update is not a shrunken version of the intended one — it is
 uncorrelated noise several times its size.** Cosine similarity between `Δ` and `Δ_eff`
-runs 0.14 to 0.51. Relative error runs **1.74 to 7.41 against an erasure baseline of
+runs 0.14 to 0.51. Relative error runs **1.74 to 7.42 against an erasure baseline of
 1.0**: even the best-retained adapter receives a delta roughly 1.7× its own magnitude,
 pointing somewhere it did not ask for. The few weights that move jump a full
 quantization step.
 
-**The rank-128 rsLoRA adapter is the best-retained of the six, and reading its scaling
+**The rank-128 rsLoRA adapter is the best-retained of the nine, and reading its scaling
 convention correctly is what makes that visible.** Under `α/r` it would appear to have
 γ = 0.125 and a delta 11.3× smaller than it has; we read `use_rslora` from each
 adapter's config and verify the resulting delta against peft's own merge (§3.8).
 
 **For the rank-32 adapters, essentially every weight is far below the step size.** The
 step-ratio distribution `|Δ|/(s/2)` for `taboo-smile`, pooled: p1 0.0003, p50 0.0156,
-p95 0.0638, p99 0.1020, worst-case p99 over records 0.2066. **100.00% of its weights are
-sub-threshold**; not one reaches even a quarter of the half-step, and the median delta is
-about 1/128 of a step size. This is why its flip rate is ~1%.
+p95 0.0638, p99 0.1020, worst-case p99 over records 0.2066. **99.998% of the rank-32
+weights are sub-threshold** (`|Δ| < s/2`), the median delta is about 1/128 of a step size,
+and the highest 99th percentile of `|Δ|/(s/2)` over any of their records is 0.239 — so
+fewer than 1 weight in 100 reaches a quarter of the half-step. This is why the flip rate
+is ~1%.
 
-The rsLoRA adapter sits at the other end of the same scale — `mean|Δ|/s ≈ 0.09–0.13`,
-hence its 14.8% flip rate and 0.505 cosine. **Both are the same law at different points
+*An earlier draft said "100% of weights are sub-threshold; not one reaches a quarter of
+the half-step." The first clause rounds 0.99998 and the second is a statement about the
+maximum over ~10⁹ weights that we never computed — the quantiles we do have put the
+99th percentile at 0.24, which says nothing about the tail beyond it. Both are now stated
+at the level they were measured.*
+
+The rsLoRA adapter sits at the other end of the same scale — `mean|Δ|/s = 0.149`
+(per-module range 0.083–0.267), hence its 14.8% flip rate and 0.505 cosine. **Both are the same law at different points
 of one ratio** (§4.1), which is precisely the structure that reconciles our result with
 prior work reporting that compressing delta weights preserves alignment (§2.5).
 
@@ -253,16 +278,20 @@ improve under them. That is testable with existing tools and we did not test it.
 `down_proj` least (0.2097); full ordering in Appendix B.5. The ordering follows median
 `|Δ|/s`, so module differences are a magnitude effect, not an architectural one.
 
-**Quantization convention.** Paired on 168 identical (adapter, layer, module) cells:
-asymmetric 0.2547, `symmetric_gptq` 0.2431, `symmetric_awq` 0.2340 — a maximum deviation
-of 8.1%. Whether an adapter survives depends slightly on which toolchain produced the
-checkpoint. Pooling unpaired records inverts this ordering (§7.8).
+**Quantization convention.** Paired on 252 identical (adapter, layer, module) cells
+(B.3): asymmetric 0.2161, `symmetric_gptq` 0.2065, `symmetric_awq` 0.1980 — a maximum
+deviation of 8.4%. Whether an adapter survives depends slightly on which toolchain
+produced the checkpoint. Pooling unpaired records inverts this ordering (§7.4).
 
-**Scale regime.** `fixed_scale` cosine 0.1628 / flips 0.0176; `adaptive_scale` cosine
-0.1616 / code flips 0.0313 / **value changes 0.8482**, with
-`scale_shift_fraction = 0.9999`. Merging moves the grid for essentially every group in
-the model, and almost all of the deployment-realistic "change" is the grid moving
-rather than the adapter arriving.
+**Scale regime.** Pooled over the nine adapters (B.4): `fixed_scale` cosine 0.2161 /
+flips 0.0351; `adaptive_scale` cosine 0.2151 / code flips 0.0572 / **value changes
+0.8552**, with `scale_shift_fraction` 1.0000 pooled and never below 0.9998 in any single
+module. Merging moves the grid for essentially every group in the model, and almost all of
+the deployment-realistic "change" is the grid moving rather than the adapter arriving:
+the grid-shift fraction — weights whose value changes under `adaptive_scale` but not under
+`fixed_scale` — is 0.8202. Cosine is nearly identical across regimes, so what the adapter
+actually transmits does not depend on this choice; what depends on it is how much of the
+checkpoint differs.
 
 ## 4.6 Summary of §4, stated as weight-space claims
 
@@ -283,7 +312,8 @@ is §5.
 
 # 5. Results: behaviour
 
-*All values re-derived from `results/raw/phase1/**/records.jsonl` (1536 records).*
+*All values re-derived from `results/raw/phase1/**/records.jsonl`: 6 adapters x 4
+precisions x 32 prompts x 2 conditions (aligned and base) = 1536 records.*
 
 **Design.** Six Taboo adapters (`smile`, `ship`, `gold`, `snow`, `moon`, `rock`), all
 rank 32, `α/r = 2`, on Qwen3-8B, differing only in the secret word. Four precisions:
@@ -309,8 +339,22 @@ Retention is each adapter's elicitation score as a fraction of its own BF16 scor
 
 Guesser argmax accuracy, pooled: 159/192 (BF16) → 157/192 → 128/192 → 98/192.
 
-**At INT4 g128 the stored weights are 98.9% unchanged and no behavioural change is
-detectable.** Retention is 99.2% with an exact 95% interval of [90.7%, 107.6%]. That
+**The elicitation metric has a floor and it is reported rather than assumed away.** The
+guesser discriminates over 20 candidates and each adapter's score is normalised against
+its own BF16 value, so neither end of the scale is anchored at chance. The same instrument
+scores the *base* model at 0.0039–0.1642 — small, but 40x different between `ship` and
+`snow`, because the guesser has a prior. Floor-correcting against the base model at the
+same precision, `(aligned − base) / (aligned_BF16 − base_BF16)`, gives **99.0%, 76.5% and
+56.0%** against the 99.2%, 77.2% and 57.8% below: under 2 points at every precision, and
+no claim in this paper turns on the difference. Both are in B.6.
+
+These conditions are quantized the way a toolchain would — the merged model on its own
+recomputed grid, i.e. `adaptive_scale` (§3.3) — so the weight-space number to pair with a
+behavioural one is the deployment-regime number for these same six adapters.
+**At INT4 g128, 85.5% of their stored values differ from the base model's and 2.1% of the
+integer codes do (98.9% of codes unchanged under `fixed_scale`, which isolates the adapter
+but is not what was run here), and no behavioural change is
+detectable.** Retention is 99.2% with an enumerated 95% interval of [90.7%, 107.6%]. That
 interval spans parity, so the honest statement is a **non-detection with a bound**: the
 instrument cannot separate the quantized model from the unquantized one, and it excludes
 losses greater than about 9%. It is not a measurement of equality, and the point estimate
@@ -382,15 +426,25 @@ degrades; the constraint does not collapse.
 **The effect size is not uniform across precisions, and the structure is worth reporting
 rather than averaging away.** Cliff's *d* is −0.778, −0.778, −0.833 and **−0.556** at
 BF16, INT4 g128, INT4 per-channel and INT3 g128 respectively. Three of the four sit near
-−0.8; the INT3 value is roughly 30% weaker, and the suppression ratio is correspondingly
-at its loosest there (0.270 against 0.208 at BF16).
+−0.8; the INT3 value is **28.5%** weaker, and the suppression ratio is correspondingly at
+its loosest there (0.270 against 0.208 at BF16, a rise of **29.8%**).
 
-**"The constraint holds" is therefore a claim about direction, not about invariance.**
-The constraint weakens by about 30% at INT3 — the same precision at which capability
-degrades most. The dissociation is that capability falls faster, not that the constraint
-is untouched, and a reader entitled to conclude "restraint survives quantization" from
-this paper is entitled to it only in that comparative sense. At a precision coarser than
-we tested, the two could cross; nothing here excludes it.
+**Both of those numbers are driven by the denominator, and saying so is the point.**
+The aligned model's own knowledge score is **0.0757 at BF16 and 0.0756 at INT3 — flat to
+0.1%**. The base model's falls **0.3634 → 0.2803**, a 22.9% drop. So the ratio rises
+because the base degrades, not because the trained constraint gives way: **in absolute
+terms the constraint is exactly as strong at INT3 as at BF16.** Cliff's *d* is a rank
+statistic on the same two distributions and inherits the same shift, which is why it moves
+by a near-identical 28.5%.
+
+**"The constraint weakens by about 30% at INT3" would therefore be the wrong reading, and
+an earlier draft of this section made it.** What weakens by ~30% is the *separation
+between aligned and base*, and it weakens because base capability fell toward the aligned
+model's floor. We keep the within-precision ratio as the headline because the alternative
+reference class is worse (below), but the ratio's movement is a fact about the base model
+under quantization. The dissociation claim that survives is comparative: capability falls
+far faster than the constraint does, and at a precision coarser than we tested the two
+could cross — nothing here excludes it.
 
 **So the dissociation holds at INT3 — ratio 0.270 against a capability retention of
 57.8% — but it is measurably less sharp there than at finer precisions.** Both sides move
@@ -409,7 +463,7 @@ because burying an inconvenient direction is worse than reporting an underpowere
 **The overall failure mode remains benign** — the model becomes less able to hint, not
 more likely to leak. It is the opposite of the alarming case (knowledge retained,
 refusals lost), and the opposite of what we predicted before withdrawing that prediction
-on evidence (§7.1).
+on evidence (§7.2).
 
 **Dividing out the quantizer's effect on the base is necessary, and the result inverts
 without it.** The base model's own knowledge score falls 0.3634 → 0.2803 under
@@ -427,7 +481,7 @@ differ in kind — a variance argument, a sign argument, and an existence argume
 | | argument | claim | evidence |
 |---|---|---|---|
 | **PG-1** | variance | predictor cannot explain outcome spread | predictor CV 0.0128 vs outcome CV up to 0.390 |
-| **PG-2** | sign | where differences resolve, ordering is **backwards** | all 4 resolvable pairs invert |
+| **PG-2** | sign | where differences resolve, ordering is usually **backwards** | 6 of 7 resolvable pairs invert |
 | **PG-3** | existence | largest predictor value, no measurable behaviour | SNR 6.00, no gate-clearing refusal |
 
 **PG-2 and PG-3 are positive-signed: they report an inversion and an
@@ -439,15 +493,24 @@ correlation coefficient.
 
 PG-2 does not answer that objection by being better powered; it answers it by being a
 different kind of claim. It says that where differences are large enough to resolve, the
-ordering runs the wrong way. **We state its strength conservatively.** Pairs become
-resolvable precisely because their intervals separate, which is a selection effect, and
-four same-signed outcomes is roughly `p = 0.06` under a null of random ordering. PG-2 is
-therefore **evidence of inversion rather than of absence of correlation** — not a
-significance claim.
+ordering usually runs the wrong way.
 
-PG-3 is independent of both and is **not a power question at all**: it is a single
-adapter where the predictor is maximal and the target behaviour is unmeasurable, which
-no amount of additional sampling within the taboo family would alter.
+**The estimator correction did not cost significance, and it is worth showing the
+arithmetic rather than leaving a reader to assume it did.** Under a one-sided binomial
+null of random ordering, the previously published **4 of 4** gives `p = 1/16 = 0.0625`;
+the corrected **6-or-more of 7** gives `(7+1)/2⁷ = 8/128 = 0.0625`. Identical. The
+estimator changed and the count changed; the evidential strength did not.
+
+**We state that strength conservatively in either form.** Pairs become resolvable
+precisely because their intervals separate, which is a selection effect. PG-2 is therefore
+**evidence of inversion rather than of absence of correlation** — not a significance
+claim.
+
+PG-3 is independent of both, and unlike PG-1 and PG-2 it **is partly a power question**:
+the base model already refuses at ceiling, so there is no headroom for the adapter to add
+refusal in, and a ceiling effect is a power problem. What survives it is the existence
+claim — a single adapter where the predictor is maximal and the target behaviour is
+unmeasurable — which no amount of additional sampling within the taboo family would alter.
 
 ### PG-1 (variance) — the predictor is constant while outcomes span 3×
 
@@ -469,32 +532,67 @@ correlation coefficient here: correlating against a near-constant at n=6 is
 meaningless, and the Spearman value flips sign across precisions (+0.600, −0.257,
 −0.657). We decline to plot it (§ Figures).
 
-### PG-2 (sign) — among resolvable pairs, the ordering inverts
+### PG-2 (sign) — among resolvable pairs, the ordering mostly inverts
 
-Greedy decoding makes seeds inert, so we bootstrap over prompts (§3.11); the per-adapter
+Greedy decoding makes seeds inert, so the nuisance axis is which prompts were drawn. The
+sampling unit is the **intent**, not the prompt: E.1's hint battery is 8 intents × 3
+paraphrases and paraphrases within an intent are near-duplicates by construction, so a
+prompt-level bootstrap counts roughly 16 independent units as 32. Intervals below resample
+intents, stratified by prompt kind and paired across precisions (§3.11); the per-adapter
 intervals are **Figure 9**:
 
 | precision | between-word spread | mean within-adapter CI width | ratio | non-overlapping pairs |
 |---|---|---|---|---|
-| INT4 g128 | 34.9% | 46.3% | 0.75 | **0 of 15** |
-| INT4 per-channel | 34.4% | 43.5% | 0.79 | 1 of 15 |
-| INT3 g128 | 57.8% | 39.5% | **1.46** | **4 of 15** |
+| INT4 g128 | 34.9% | 29.7% | 1.17 | **1 of 15** |
+| INT4 per-channel | 34.4% | 37.1% | 0.93 | 2 of 15 |
+| INT3 g128 | 57.8% | 37.7% | **1.53** | **4 of 15** |
 
-At INT4 the between-word spread is **entirely inside noise**. At INT3 four pairs
-separate cleanly (`gold`–`moon`, `gold`–`snow`, `moon`–`ship`, `ship`–`snow`).
+At INT3 four pairs separate cleanly (`gold`–`moon`, `gold`–`snow`, `moon`–`ship`,
+`ship`–`snow`), and the same four separate under the published prompt-level estimator.
 
-**Every resolvable pair runs against output SNR.** `ship` has the second-highest output
-SNR in the family (1.6566) and the **worst** retention (28.7%); `moon` has the
-**lowest** SNR (1.6200) and the **best** retention (86.4%). Where the data can resolve
-a difference at all, the ordering is backwards.
+**Six of the seven separating pairs run against output SNR.** `ship` has the
+second-highest output SNR in the family (1.6566) and the **worst** INT3 retention
+(28.7%); `moon` has the **lowest** SNR (1.6200) and the **best** retention (86.4%).
 
-### PG-3 (existence) — the largest weight-space footprint has no measurable target behaviour
+**The seventh runs with it,** and it is the sole INT4 g128 pair, `gold`–`rock`. `rock`'s
+point estimate there is 116.2% — above its own BF16 baseline, which a quantized model
+cannot exceed, so this is a separation between one real value and one the instrument
+cannot deliver. We count it against ourselves rather than excluding it, which is why this
+section no longer says *every*.
 
-The `responsible-ai-safety` adapter has the largest output SNR in the set (6.00), the
-highest weight-space cosine (0.3298), and the highest code-flip rate (6.19%) — by every
-weight-space measure we have, the most-retained adapter in the study. It also fails to
-produce any gate-clearing target behaviour at all (§6). The weight-space measurement is
-maximal exactly where the behavioural measurement is absent.
+**Which correction moved which count.** Two things change at once between the published
+estimator and this one, and they push in opposite directions, so reporting only the net
+change would attribute it to whichever was named:
+
+| estimator | INT4 g128 | INT4 per-ch. | INT3 |
+|---|---|---|---|
+| A: prompts, unpaired (as published) | 0 | 1 | 4 |
+| B: prompts, paired | 1 | 2 | 6 |
+| C: intent clusters, paired (used here) | **1** | **2** | **4** |
+
+Pairing narrows, because both conditions run the identical prompts and the shared
+prompt-difficulty variance cancels. Clustering widens, because there are fewer
+independent units than prompts. At INT3 the two cancel exactly and the count returns to
+the published 4, on the same four pairs; at INT4 pairing dominates and one pair appears
+that the published estimator called noise.
+
+### PG-3 (existence) — the largest predicted output SNR has no measurable target behaviour
+
+Among the adapters we attempted to measure behaviourally, `responsible-ai-safety` has by
+far the largest predicted output SNR (6.00, against 1.62–1.67 for the taboo six). It also
+fails to produce any gate-clearing target behaviour at all (§6). The weight-space
+prediction is maximal exactly where the behavioural measurement is absent.
+
+**Two qualifications, because this is the weakest of the three legs.** It is *not* the
+highest adapter on every weight-space axis: `ao-v3-dpo-halluc` has a higher cosine (0.5050
+against 0.3298) and a higher code-flip rate (14.81% against 6.19%), and we have no
+behavioural battery for it, so the superlative holds only for output SNR and only within
+the adapters we tried to measure. And the reason there is no gate-clearing behaviour is in
+part a ceiling: the base `Llama-3.1-8B-Instruct` already refuses 16/16 harmful prompts, so
+there is no headroom for the adapter to add refusal in (§6). **A ceiling effect is a power
+problem**, and we do not claim otherwise. What survives is the existence claim: a
+weight-space measurement can be maximal for a behaviour no instrument can find, and a
+practitioner reading only the weight numbers would not know which case they were in.
 
 ### Consequence
 
@@ -508,6 +606,16 @@ tool's own output rather than only in this paper.
 predict — stored weights — to within 2.3%. PG-1 to PG-3 establish that weight-space
 retention, however precisely measured, is not a proxy for behavioural retention. Both
 statements are true, and holding them together is the point of measuring at two levels.
+
+**Nor does it undo §4.4, and the distinction is range restriction.** The amplification law
+and the predictive gap are about different questions, which is easy to miss because both
+are denominated in output SNR. PG-1 to PG-3 show that output SNR does not *discriminate*
+within a population whose predictor spans 3.3%. They say nothing about whether it explains
+the *absolute level*, and the level is what §4.4 measures: why every adapter's subspace
+signal exceeds its noise at all when the weight-space cosine is 0.13. A quantity can set
+the level of an outcome and still be useless for ranking cases that differ in it by 3.3% —
+that is range restriction, not a contradiction. Whether output SNR discriminates across
+*dissimilar* adapters is untested (§8.2), and the released tool says so in its own output.
 
 ## 5.5 Prior puzzles resolved
 

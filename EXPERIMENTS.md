@@ -2613,3 +2613,360 @@ FW-2 leaves Future Work and becomes a result. `results/raw/phase0/unmerged_delta
 `results/raw/phase0/unmerged_delta/records.jsonl` (756 records), `manifest.json`.
 
 ---
+
+---
+
+## [2026-08-04] EXP-038: Phase 1 ran under `adaptive_scale`; the headline weight number did not
+
+**Phase:** 0 / 1 (reporting defect, no new measurement)
+**Question:** Which scale regime did the behavioural pipeline actually use, and does the
+weight-space number the paper pairs with it come from that regime?
+
+**Setup:** No new runs. Read `scripts/run_phase1.py` against `src/ar/retention.py`'s regime
+definitions, then re-aggregated the existing Phase 0 records
+(`results/raw/phase0/public_adapter/*/L4_*/records.jsonl`, INT4 g128 asymmetric) under
+both regimes. Aggregation convention throughout: unweighted mean over the 28 modules, then
+over adapters — the same convention `taboo_flip_l4()` in the claim audit already used.
+
+**Command:**
+```
+python analysis/appendix_tables.py --write
+python analysis/audit_draft_numbers.py
+```
+
+**Result:**
+
+`run_phase1.py:118` is `w = quantize_dequantize(w, cfg).dequant`, applied to
+`w = base + spec.delta(...)`. `quantize_dequantize` derives the grid from the tensor it is
+handed, so the merged model is quantized on its own recomputed grid. **That is
+`adaptive_scale`, by `retention.py`'s own definition.** Nothing unusual was done; this is
+simply what quantizing a merged model means.
+
+The paper's headline weight number was `fixed_scale`. Taboo six, INT4 g128:
+
+| quantity | `fixed_scale` | `adaptive_scale` |
+|---|---|---|
+| stored codes unchanged | 98.89% | **97.89%** |
+| stored values unchanged | 98.89% | **14.54%** |
+| grid-shift fraction | — | 84.35% |
+| cosine(Δ, Δ_eff) | 0.1390 | **0.1379** |
+| relative error | 7.332 | 7.455 |
+
+Per adapter, all nine, the adaptive/fixed code-flip ratio runs **1.49× to 1.90×**, and the
+adaptive value-change rate runs 83.6–87.4%.
+
+Second-order, and the part that matters: **Equation 4 is validated under `fixed_scale`
+only.** Same per-adapter comparison (B.2's convention, `|mean measured − mean predicted| /
+mean measured`):
+
+| regime | min error | max error |
+|---|---|---|
+| `fixed_scale` | 0.13% | **2.33%** |
+| `adaptive_scale` | 32.40% | **47.39%** |
+
+**Verdict:** WORKED (defect confirmed and repaired)
+
+**What we learned:**
+
+1. The reviewer's proposed correction was wrong, and so was the arithmetic behind it. It
+   applied the pooled nine-adapter code-flip ratio 0.0572/0.0351 = 1.63 to the taboo-six
+   headline, giving ~1.8% flip and 98.2% unchanged. Two errors. The taboo-six ratio is
+   **1.90×**, not 1.63×; and more importantly the deployment-relevant quantity is
+   `value_change_rate`, not `code_flip_rate`. Those are equal under `fixed_scale` — one
+   grid — and diverge by 15× pooled under `adaptive_scale`. The correct deployment figure
+   is **14.5% of values unchanged**, not 98.2%.
+2. **The erasure claim itself is regime-independent, which is the useful finding.** Cosine
+   moves 0.1390 → 0.1379 and relative error 7.33 → 7.46. What the adapter transmits does
+   not depend on this choice at all; what depends on it is how much of the checkpoint
+   differs from the base model's. So the paper's thesis survives intact and the correction
+   is a labelling and pairing fix, not a result change.
+3. Roughly 84 of the 85.5 points of value change are the **grid moving**, not the adapter
+   arriving (`grid_shift_fraction` = 0.8435 for the taboo six). Reporting 85.5% without
+   that decomposition would be true and misleading in the other direction.
+4. Eq. 4 not transferring is a real limitation of the shipped tool, not a presentational
+   one. `ar.predict` prints a `fixed_scale` flip rate to users who will deploy adaptively,
+   and its banner did not say so. It does now.
+5. We did **not** refit. A version of Eq. 4 tuned to absorb grid movement would have a free
+   parameter, and its having none is the whole claim of §4.1. What sets the size of the
+   extra flip population is not established here and is not guessed at. Two independent
+   flip populations of equal size would give `2p − p²`, which fits the taboo six to within
+   5% and the other three to 17–22%; that is not good enough to assert, so it is not
+   asserted anywhere in the paper.
+
+**Plan impact:** Abstract, Introduction, §3.3, §4.1, §5.1, Figure 1 and the Conclusion all
+now name the regime at every site. Figure 1's weight panel was reading `fixed_scale` beside
+an `adaptive_scale` behavioural panel and now reads `adaptive_scale` — 97.9% unchanged
+rather than 98.9%. B.1 gained adaptive code-flip and value-change columns (the projection
+coefficient it dropped is printed verbatim in B.2). Nine new claims and three new
+cross-artifact quantities are registered, so all three numbers are now under a gate.
+
+**Found while doing this, not part of the brief.** Three sites carried numbers that
+reproduce under no pooling of the current records:
+
+- `03-method.md` §3.3: "pooled over six adapters: `fixed_scale` 0.0176; `adaptive_scale`
+  0.0313 code flips, 0.8482 value changes". Actual taboo six: 0.0111 / 0.0211 / 0.8546.
+- `04-results-weight-space.md` §4.5: "`fixed_scale` cosine 0.1628 / flips 0.0176". Actual:
+  0.1390 / 0.0111 for the taboo six, 0.2161 / 0.0351 for all nine.
+- `04-results-weight-space.md` §4.5: paired-scheme cosines "168 cells: 0.2547 / 0.2431 /
+  0.2340". The 168-cell set is the taboo six and gives 0.1390 / 0.1333 / 0.1262; the
+  252-cell nine-adapter set B.3 reports gives 0.2161 / 0.2065 / 0.1980. Neither matches.
+
+All three predate the rsLoRA rescaling fix (EXP-011) and survived because none of the
+quantities was registered. They are now.
+
+**Artifacts:** `results/raw/phase0/public_adapter/*/L4_*/records.jsonl`;
+`paper/appendix-B-tables.md` B.1 and B.4; `analysis/audit_draft_numbers.py`
+(`taboo_adaptive`, `eq4_err`, `regime_ratio`); `analysis/fig01_erasure_vs_survival.py`
+(`REGIME`); `src/ar/predict.py` (SCALE REGIME banner).
+
+---
+
+## [2026-08-04] EXP-039: PG-2 re-estimated over intent clusters; the INT3 count survives, the INT4 count does not
+
+**Phase:** 1 (re-analysis of existing records)
+**Question:** PG-2 bootstrapped over 32 prompts that are 8 intents x 3 paraphrases plus 8
+adversarial prompts. Paraphrases within an intent are near-duplicates by construction, so
+the effective number of independent units is roughly 16. Does the separating-pair count
+survive an estimator that respects that?
+
+**Setup:** No new runs. `results/raw/phase1/*/records.jsonl`, all six taboo adapters, three
+precisions. New estimator `bootstrap.cluster_ratio_ci`: clusters resampled with
+replacement **within stratum** (`prompt_kind`), numerator and denominator indexed by the
+**same** draw. Reimplemented independently in `figcheck.ref_separating_pairs` so the
+figure's count and the check's count cannot share a bug.
+
+**Command:**
+```
+python -m pytest tests/test_bootstrap.py -q
+python analysis/word_vs_noise.py
+python analysis/fig05_06_08.py && python analysis/fig_secondary.py
+```
+
+**Result:** Two corrections are bundled in "cluster bootstrap", and they pull in opposite
+directions, so all three estimators are reported:
+
+| estimator | INT4 g128 | INT4 per-ch. | INT3 |
+|---|---|---|---|
+| A: prompts, unpaired (published) | 0 | 1 | 4 |
+| B: prompts, paired | 1 | 2 | 6 |
+| C: intent clusters, paired | **1** | **2** | **4** |
+
+At INT3 the two effects cancel exactly: 4 pairs, and the *same* four
+(`gold`-`moon`, `gold`-`snow`, `moon`-`ship`, `ship`-`snow`). Per-adapter interval widths
+move from 25-53% to **13-47%**.
+
+Direction of all seven separating pairs, against predicted output SNR:
+
+| precision | pair | SNR order | retention order | verdict |
+|---|---|---|---|---|
+| int3 | gold-moon | 1.6299 > 1.6200 | 41.3% < 86.4% | INVERTS |
+| int3 | gold-snow | 1.6299 > 1.6254 | 41.3% < 81.5% | INVERTS |
+| int3 | moon-ship | 1.6200 < 1.6566 | 86.4% > 28.7% | INVERTS |
+| int3 | ship-snow | 1.6566 > 1.6254 | 28.7% < 81.5% | INVERTS |
+| int4pc | gold-snow | 1.6299 > 1.6254 | 62.4% < 96.8% | INVERTS |
+| int4pc | smile-snow | 1.6286 > 1.6254 | 68.5% < 96.8% | INVERTS |
+| int4 g128 | gold-rock | 1.6299 < 1.6728 | 81.3% < 116.2% | **AGREES** |
+
+**Verdict:** WORKED
+
+**What we learned:**
+
+1. **The reviewer's prediction did not hold, and the reason is instructive.** The concern
+   was that clustering would narrow the evidence base and reduce the count "to one or two",
+   making PG-2 an anecdote. Clustering does widen the intervals as expected; what was not
+   anticipated is that the published estimator was *also* wrong in the opposite direction,
+   discarding the pairing between two conditions that run byte-identical prompts. The two
+   errors were within a factor of each other, and at INT3 they cancel exactly.
+2. **The claim that had to change is the one nobody flagged.** "Every resolvable pair runs
+   against the predictor" and "0 of 15 at INT4 -- that spread is noise" are both now false.
+   One INT4 g128 pair separates and it runs *with* the predictor, so the claim is now
+   **6 of 7**. Under a one-sided binomial null of random ordering, 6 of 7 is p = 8/128 =
+   0.0625, numerically the same as the 4-of-4 the paper previously quoted at p ~ 0.06.
+3. **We kept the pair that hurts us.** The single agreeing pair is `gold`-`rock`, and
+   `rock`'s INT4 point estimate is 116.2% of its own BF16 -- above parity, which a
+   quantized model cannot achieve, so it is an instrument artifact. Excluding it would
+   restore "every resolvable pair" and would be exactly the post-hoc filtering the
+   pre-registration exists to prevent. It is reported, and the reason it is suspect is
+   reported next to it.
+4. Bundling two corrections into one number and naming only one of them is how a result
+   becomes unattributable. Reporting A, B and C costs three table rows.
+
+**Plan impact:** Abstract, §1, §3.9/§3.11, §5.4, §8.4 and the Conclusion updated; Figure 8
+and Figure 9 now draw cluster intervals, and fig09's registered counts changed from
+(0, -, 4) to (1, 2, 4). Five new claims registered. `tests/test_bootstrap.py` added: 7
+tests, of which 4 fail on an estimator that ignores clustering, ignores strata, or ignores
+pairing.
+
+**Artifacts:** `analysis/bootstrap.py` (`cluster_ratio_ci`), `analysis/word_vs_noise.py`,
+`analysis/figcheck.py` (`ref_resolvable_pairs`, `ref_separating_pairs`),
+`tests/test_bootstrap.py`, `paper/figures/fig08_predictive_gap.pdf`,
+`paper/figures/fig09_bootstrap_intervals.pdf`.
+
+---
+
+## [2026-08-04] EXP-040: Review round — regime labelling, three reviewer findings refuted, and a vacuous validation panel
+
+**Phase:** 0 / 1 (documentation, re-analysis, no new measurement)
+**Question:** A reviewer raised 29 numbered findings plus a scale-regime question. Which
+hold against the raw records, and which do not?
+
+**Setup:** No new runs. Every claim checked against
+`results/raw/**`, `paper/tex/refs.bib` verified against arXiv abstracts in-session.
+
+**Command:**
+```
+python -m pytest -q
+python analysis/audit_draft_numbers.py
+python analysis/build_arxiv_pdf.py --tectonic <path>
+```
+
+**Result:** Claims registered 171 -> **208**; cross-artifact quantities 21 across 71 sites;
+tests 169 -> **172**; arXiv PDF 25 -> **29 pages**.
+
+**Three reviewer findings were wrong, and the arithmetic matters:**
+
+1. **M7 (amplification).** The reviewer computed `sqrt(128)/1.0272 = 11.01` and called the
+   tool's `11.22` a discrepancy. Equation 5 is `sqrt((d_in/r)/conc)`, with the division
+   *inside* the root: `sqrt(128/1.0272) = 11.16`. The residual 0.5% is because the tool
+   uses each module's **measured** error concentration (~1.017) rather than the fitted
+   `1 + c/r` (1.027). Both are in the paper; A.2 now says so.
+2. **M8 (amplification range).** The reviewer derived `6.00/0.34935 = 17.17` from the
+   pooled cosine and called it outside the stated 6.2-16.5. The published range is the
+   **mean over layers of the per-layer ratio**, using each layer's own `snr_weight`, which
+   varies 0.235-1.117 for the safety adapter. Mean-of-ratios gives 16.54; ratio-of-means
+   gives 15.57. Neither is 17.17. The request behind it was fair and B.1 now carries the
+   per-adapter column.
+3. **The Group 0 correction.** Covered in EXP-038: the proposed 1.63x scaling used the
+   pooled code-flip ratio where the deployment-relevant quantity is `value_change_rate`.
+
+**Two defects were found that the review did not raise, and both are worse than most of
+what it did raise:**
+
+4. **Figure A1's cosine panel was vacuous.** It plotted measured cosine against
+   `projection_coefficient / retention_ratio` — which is the identity
+   `cos x retention == projection` from S3.4 rearranged. It compared cosine to cosine,
+   drew a perfect line, printed **"max error 0.0%"**, and passed every cross-check,
+   because every value in it was correct. It was simply not a test. Replaced with the
+   channel model's own cosine (`sqrt(tau * predicted_flip)`), whose real error is
+   **9.5%**, and the figure's check now asserts prediction and measurement *differ*.
+   A.3 also claimed six adapters where the figure plots nine.
+5. **The practice appendix's references pointed at headings the source did not have.**
+   The section was cut from fifteen entries to seven and renumbered, but the prose
+   references were not, and REFMAP had been rewritten to translate the *old* numbers. So
+   every reference resolved — several to the wrong entry, and one section cited itself —
+   and the cross-reference gate could not see it, because it checks the *built* document
+   after translation. This is the exact failure the same appendix describes two pages
+   earlier.
+
+**Verdict:** WORKED
+
+**What we learned:**
+
+1. **A mapping table that makes references resolve can hide a source document that is
+   internally inconsistent.** The gate we already had proves a target exists in the built
+   PDF; it cannot notice that the markdown refers to sections the markdown lacks. The fix
+   is a second gate at the other end (`md_to_tex.check_source_refs`), which fails the
+   build when a `§7.x` in any markdown has no `## 7.x` heading. Two gates at two stages,
+   because one stage was structurally blind.
+2. **Three separate gates were keyed on a literal word.** `Appendix~D.6` was checked;
+   bare `D.6` was not. `Figure 8` was checked; `Fig 8` was not. Both patterns extended,
+   both tested against known-bad input first, both pinned. Four live references in the
+   reproduction appendix pointed at the safety-adapter appendix.
+3. **"Anything the tool prints is a claim in the paper" was not enforced, and A.2 carried
+   three defects.** The example block is now captured as
+   `results/raw/validation/predict_example_smile.json` and 30 of its printed values,
+   including every per-module row, are registered claims.
+4. **A prose taxonomy can silently drop cases from the table it introduces.** C.1 said
+   "four of the nine were not confirmed" and enumerated three categories covering four
+   predictions; the table shows six, and P3 and P5 were in neither the count nor the
+   taxonomy — in the section whose stated purpose is that nothing was quietly dropped.
+
+**Plan impact:** Groups 1-7 applied. PG-3 restated with its ceiling effect conceded as a
+power problem; the amplification law's contribution downgraded from "reconciling
+behavioural survival" to "reconciling layer-output survival", with range restriction
+stated; B.7 added (the paired contrasts, which the abstract claimed with no table
+anywhere); the constraint claim restated as denominator-driven; QLoRA, LoftQ, QA-LoRA and
+Romano et al. added to the bibliography with IDs verified against arXiv in-session.
+
+**Artifacts:** `paper/tex/main.tex`, `paper/*.md`, `paper/tex/refs.bib`,
+`analysis/{md_to_tex,xref,figcheck,fig_secondary,appendix_tables,audit_draft_numbers}.py`,
+`results/raw/validation/predict_example_smile.json`, `tests/test_{xref,md_to_tex}.py`.
+
+---
+
+## [2026-08-04] EXP-041: A validation panel that plotted cosine against cosine
+
+**Phase:** 0 (defect in a published figure; no new measurement)
+**Question:** Figure A1's cosine panel printed "max error 0.0%" for a closed-form
+prediction with no fitted parameters. Is that a strong result or a broken check?
+
+**Setup:** No new runs. `analysis/fig_secondary.py::figA1` read against
+`results/raw/phase0/public_adapter/*/L4_*/records.jsonl`.
+
+**Command:**
+```
+python analysis/fig_secondary.py
+python analysis/audit_draft_numbers.py
+```
+
+**Result:** Broken check.
+
+The panel computed its "prediction" as `projection_coefficient / retention_ratio`. Section
+3.4 of this paper states the identity
+
+```
+cos(D, D_eff) x retention_ratio == projection_coefficient
+```
+
+as an internal consistency check. Divide both sides by `retention_ratio` and the panel's
+"prediction" **is** `cos(D, D_eff)`. It plotted measured cosine against measured cosine.
+The perfect diagonal and the 0.0% were arithmetic, not agreement.
+
+Replaced with the channel model's own cosine, `sqrt(tau * |D|/s)` per module with
+`tau = 1.5962` the measured tail-shape constant, then averaged over modules to match how
+B.1 reports cosine. Measured maximum relative error across the nine adapters:
+
+| quantity | claimed before | actual |
+|---|---|---|
+| cosine, panel title | 0.0% | **10.4%** (latentqa) |
+| cosine, A.3 table | 5.0% | **10.4%** |
+| code-flip rate | 2.3% | 2.3% (unchanged, and was never vacuous) |
+| adapters plotted | "six" in A.3 | **nine** |
+
+An intermediate value of 9.5% appeared during this session from applying the square root
+to the mean flip rate rather than averaging per-module predictions. By Jensen the two
+differ; the per-module form is the right one because that is the level the model is
+defined at, and it is the larger error. **Three different numbers for one quantity had
+been in circulation** (0.0, 5.0, 9.5) before any of them was computed the same way twice.
+
+**Verdict:** WORKED (defect found and repaired)
+
+**What we learned:**
+
+1. **A check can verify every value it uses and still be incapable of failing.** The
+   figure's own cross-check confirmed that all 18 plotted values matched an independent
+   recomputation from raw, and all 18 did. Correctness of the inputs is not
+   informativeness of the comparison, and nothing in this project was asking the second
+   question. This is a different failure from the seven guards in C.6, every one of which
+   had a *wrong model of the world*; this one had no model at all.
+2. **The identity that made it vacuous is documented two appendices away**, in §3.4, as a
+   deliberate internal check. A quantity useful as a consistency check is exactly the
+   quantity that cannot serve as an independent prediction, and nothing marked it as such.
+3. **The test that would have caught it is one line**: assert that prediction and
+   measurement differ by more than machine precision. Added to the figure's guard, and
+   both error figures are now registered claims, so the panel, the A.3 table and the raw
+   records are forced into agreement by two independent routes.
+4. Found while rasterizing pages for an unrelated margin check: the LaTeX caption still
+   said 9.5% while the panel beside it printed 10.4%. The caption no longer restates
+   either number -- the figure computes them, and a caption that repeats a computed number
+   is a second copy that drifts (§7.4, applied to captions).
+
+**Plan impact:** A.3 corrected to nine adapters and 10.4%; the vacuous-panel case added to
+the practices appendix as its own entry and as a fifth row of C.2's evidence table; three
+claims registered (`figA1 flip max error`, `figA1 cosine max error`, and a guard asserting
+the cosine prediction is not the identity).
+
+**Artifacts:** `analysis/fig_secondary.py` (`figA1`, `TAIL_SHAPE`),
+`analysis/audit_draft_numbers.py` (`figA1_errors`), `analysis/md_to_tex.py`
+(`FIG_CAPTIONS`), `paper/appendix-A-tool.md` A.3,
+`paper/figures-paper/figA1_predict_validation.pdf`.
