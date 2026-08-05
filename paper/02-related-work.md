@@ -1,7 +1,7 @@
 # 2. Background and related work
 
 *Draft. **Every claim attributed to another paper in this section was verified against
-that paper's abstract in-session** (see §7.6). Where a connection is our own inference
+that paper's abstract in-session** (see §7.1). Where a connection is our own inference
 rather than the cited authors' finding, it is marked* **[our inference]** *explicitly.*
 
 ---
@@ -15,7 +15,7 @@ extra, and then quantizes the merged matrix.
 
 The scaling convention is not cosmetic for our purposes: misreading the `use_rslora`
 flag changes a rank-128 adapter's delta magnitude by `√128 ≈ 11.3×`, and magnitude is
-the quantity that governs retention (§4.1). Five of the six adapters we measure use
+the quantity that governs retention (§4.1). Eight of the nine adapters we measure use
 `α/r = 2`; one uses `α/r = 0.125` with rsLoRA.
 
 ## 2.2 Post-training quantization and where the difficulty lies
@@ -94,10 +94,16 @@ criterion the field currently uses.
 
 ## 2.3 Quantization-aware low-rank adaptation
 
-**LoftQ** and **QA-LoRA** are motivated by the same interaction we study — that
-quantization and low-rank adaptation interfere — but address it by *changing the
-training procedure*, initialising or constraining the adapter so that the quantized
-model is well-conditioned for it. **GPTQ-intrinsic LoRA** (Zhang & Saab,
+**QLoRA** (Dettmers et al., arXiv:2305.14314) fine-tunes adapters through a frozen 4-bit
+base and established the deployment pattern this paper examines the tail of. **LoftQ**
+(Li et al., arXiv:2310.08659) and **QA-LoRA** (Xu et al., arXiv:2309.14717) are motivated
+by the same interaction we study — that quantization and low-rank adaptation interfere —
+but address it by *changing the training procedure*: LoftQ by choosing the low-rank
+initialisation jointly with the quantized weights, QA-LoRA by balancing the degrees of
+freedom of quantization and adaptation so that adapter and base integrate into a quantized
+model afterwards. All three **control** the ratio `|Δ|/s` at training time. Our question
+is what that ratio turns out to be for the adapters that already exist, trained without
+any of them. **GPTQ-intrinsic LoRA** (Zhang & Saab,
 arXiv:2606.01412) is the most closely related theoretical work: it establishes
 information-theoretic **lower bounds for the layer-wise reconstruction problem** under
 finite-alphabet and bounded low-rank compensation constraints, and proves **upper bounds
@@ -134,15 +140,22 @@ adapters *precisely so that* "the effective update is preserved after quantizati
 i.e. it treats LoRA as the mechanism by which an update becomes large enough to survive
 the quantization step.
 
-Our weight-space measurements do not support that premise for **merged** adapters. Six
-published LoRA adapters, merged and quantized at INT4 g128, change only 1.1%–14.8% of
+**We confirm their premise and find their remedy conditional on deployment.** That small
+updates do not survive 4-bit quantization is exactly what §4.1 predicts and §4.2 measures.
+What our measurements do not support is that being low-rank is itself sufficient: nine
+published LoRA adapters, **merged** and quantized at INT4 g128, change only 1.1%–14.8% of
 stored integer codes — under 6.2% for eight of the nine — with individual weight deltas
-falling below the step size (§4.2). Concentrating an update into a low-rank adapter does not, by itself, make the
-per-weight delta large relative to `s`. **[our inference]** The reconciliation we
-propose is that the relevant distinction is not full-FT versus LoRA but **whether the
-adapter is merged before quantization**: an unmerged adapter kept in higher precision,
-or one quantized on its own scale, is a different numerical object from a merged one
-(§2.5). We have not measured the unmerged configuration, so this is offered as an
+falling below the step size (§4.2). Concentrating an update into a low-rank adapter does
+not, by itself, make the per-weight delta large relative to `s`.
+
+**[our inference]** The distinction that matters is not full-FT versus LoRA but **which
+tensor sets the quantization scale**. A merged adapter is subject to the base weights'
+step size and is erased on the same terms; an adapter quantized on its own scale is not,
+and §7 measures that case directly (cosine 0.9948–0.9952 against 0.14–0.51 merged). Their
+method freezes the base and keeps the update in adapters, which is the second
+configuration, so their claim and ours are consistent (§2.5). What would be wrong is to
+read "use LoRA" as sufficient without saying whether the adapter is merged before
+quantization. This remains an
 explanation to be tested, not as a finding.
 
 Separately, our behavioural results (§5.1) show that near-total *weight-space* erasure
@@ -151,7 +164,7 @@ survive quantization" and "the behaviour did not survive quantization" are not
 interchangeable statements, and papers in this area (ours included) need to say which
 one they mean.
 
-## 2.5 The apparent contradiction with "compression protects alignment", and its reconciliation
+## 2.5 The apparent contradiction with "compression protects alignment", and a weight-space account of it
 
 **Quantized Delta Weight Is Safety Keeper** (Liu, Sun, He & Huang, arXiv:2411.19530)
 reports that partial compression "can enhance model security against fine-tuning-based
@@ -162,9 +175,14 @@ rather than the merged matrix.
 
 Taken at face value, that finding and ours point in opposite directions: they report
 compression *preserving* alignment properties, while we report the merged adapter's
-weight-space representation being almost entirely erased. **We do not think these
-results conflict, and the reconciliation is a contribution of this paper rather than
-mere positioning.**
+weight-space representation being almost entirely erased.
+
+**They are not directly comparable, and saying so is part of the point.** Their endpoint
+is behavioural — resistance to fine-tuning attacks, backdoors and targeted manipulation —
+and every number in §4 of this paper is a statement about stored weights. A behavioural
+finding and a weight-space one cannot contradict each other without a bridge, and §5.4
+is our own evidence that the bridge does not hold in general. **What we offer below is a
+weight-space account of why both can be true**, not a reconciliation of the two findings.
 
 **[our inference — this reconciliation is ours, not a claim made by either cited
 paper.]** The two setups differ in **which tensor determines the quantization scale**:
@@ -181,9 +199,13 @@ ends of one ratio**, and the practical rule that follows is concrete: *an adapte
 separate and quantized on its own scale is numerically preserved; the same adapter
 merged before quantization is not.*
 
-This prediction is testable and we have not tested it — measuring the unmerged
-configuration directly is the obvious next experiment and we flag it as unmeasured
-rather than implying our data covers it.
+**We tested it.** §7 quantizes `Δ` alone on its own grid, same simulator, same bit
+widths, all nine adapters, 756 records: at INT4 g128 `|Δ|/s` rises from 0.011–0.149 merged
+to **2.31–2.38**, cosine from 0.14–0.51 to **0.9948–0.9952**. The prediction was
+registered before the run and three of its four clauses held; the fourth put `|Δ|/s` in
+0.1–1.0 and measured 2.3 — right in direction, wrong in range. This remains a statement
+about stored weights on one arithmetic operation, and says nothing about behaviour or
+about an end-to-end serving path.
 
 ## 2.6 Evaluating alignment under compression, and why we do not lead with perplexity
 
