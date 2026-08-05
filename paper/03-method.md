@@ -205,7 +205,7 @@ first attempt drew probes as `coef @ A`, whose covariance is `AᵀA` — this ov
 `A`'s dominant singular directions and inflates the measured amplification to 33–75
 while making it nearly rank-insensitive. The correct probe is an **orthonormal basis
 of Δ's right singular vectors**. All amplification results in this paper use the
-orthonormal probe; §7 treats the general lesson.
+orthonormal probe; `METHODOLOGY.md` treats the general lesson.
 
 ## 3.7 Behavioural battery
 
@@ -292,7 +292,7 @@ into `HANDLED`, `IGNORED`, `MUST_BE_DEFAULT` (20 fields) and `GATED_BY`, and **r
 peft's own defaults at runtime** rather than hardcoding them. An earlier version
 hardcoded `qalora_group_size=None` when peft's default is 16, producing a false
 positive on a correct config. A guard built on guessed defaults is worse than no guard,
-because it trains its author to loosen it (§7).
+because it trains its author to loosen it (`METHODOLOGY.md`).
 
 ## 3.9 Instrument validation gate
 
@@ -317,7 +317,7 @@ between two numbers that are both approximately nothing.
 **The gate is itself tested against an instrument already known to be broken.** Its
 `--self-test` asserts rejection of the deprecated forced-reveal probe, which an earlier
 disjunctive version had certified. A validation gate needs validating, and the correct
-test case is a known failure (§7).
+test case is a known failure (`METHODOLOGY.md`).
 
 ## 3.10 Refusal battery
 

@@ -213,7 +213,7 @@ at r=4, amplification 29.20 (`q_proj`) vs 50.09 (`down_proj`), ratio **1.715** a
 **Generic-input amplification is 0.991–1.005 at every rank and module.** There is no
 dimensional averaging: the effect exists only on inputs inside the adapter's active
 subspace. An earlier version of our own design predicted `1/√d_in` suppression for
-generic inputs; the measured value is exactly 1.00 (§7).
+generic inputs; the measured value is exactly 1.00 (`METHODOLOGY.md`).
 
 The residual deviation from `√(d_in/r)` is fully explained by error anisotropy:
 `conc(E)` falls from 1.20–1.25 at r=4 to 1.01–1.03 at r=32, matching `1 + c/r` with
@@ -265,7 +265,7 @@ fidelity — the mechanism by which behaviour can survive weights that look dest
 **Depth.** Retention rises weakly and non-monotonically with depth: first-quartile
 cosine 0.1322 → last-quartile 0.1446, **+9.4%** over 36 layers. A 4-layer sample of the
 same adapter gave 0.119 → 0.154 (+29%), monotone — a trend three times too large with
-the wrong shape (§7). The full profile also shows a **bit-flip spike at layers 1–3
+the wrong shape (`METHODOLOGY.md`). The full profile also shows a **bit-flip spike at layers 1–3
 (2.5–2.7% against ~1.0% elsewhere)** that is invisible at 4-layer resolution.
 
 ### 4.5.1 The spike is a low-activation weight structure, not an activation outlier
@@ -309,7 +309,7 @@ improve under them. That is testable with existing tools and we did not test it.
 **Quantization convention.** Paired on 252 identical (adapter, layer, module) cells
 (B.3): asymmetric 0.2161, `symmetric_gptq` 0.2065, `symmetric_awq` 0.1980 — a maximum
 deviation of 8.4%. Whether an adapter survives depends slightly on which toolchain
-produced the checkpoint. Pooling unpaired records inverts this ordering (§7.4).
+produced the checkpoint. Pooling unpaired records inverts this ordering (`METHODOLOGY.md` M.4).
 
 **Scale regime.** Pooled over the nine adapters (B.4): `fixed_scale` cosine 0.2161 /
 flips 0.0351; `adaptive_scale` cosine 0.2151 / code flips 0.0572 / **value changes
@@ -503,7 +503,7 @@ because burying an inconvenient direction is worse than reporting an underpowere
 **The overall failure mode remains benign** — the model becomes less able to hint, not
 more likely to leak. It is the opposite of the alarming case (knowledge retained,
 refusals lost), and the opposite of what we predicted before withdrawing that prediction
-on evidence (§7.2).
+on evidence (`METHODOLOGY.md` M.2).
 
 **Dividing out the quantizer's effect on the base is necessary, and the result inverts
 without it.** The base model's own knowledge score falls 0.3634 → 0.2803 under

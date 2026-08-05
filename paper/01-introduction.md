@@ -1,7 +1,7 @@
 # 1. Introduction
 
 *Draft. Written last, against the findings as they stand rather than the hypothesis the
-project began with — see §7.4. The version of this section we would have written first
+project began with — see `METHODOLOGY.md` M.4. The version of this section we would have written first
 would have argued that quantized alignment fine-tunes are behaviourally the base model.
 The measurements do not support that, and this section says what they do support.*
 
@@ -18,20 +18,15 @@ median falls below the step size by a factor of 128.
 
 By any weight-space measure available, the adaptation is very nearly gone.
 
-**How much of the model looks changed is a separate question, and its answer depends on
-which tensor sets the quantization grid** (§3.3). Merging shifts the grid in essentially
-every group, so on the deployment path **85.5% of stored *values* differ** from what the
-base model alone would have produced — while only **2.1% of the integer *codes*** do.
-Hold the grid fixed, so that a weight can change only by the adapter clearing the step
-size, and **98.9% of codes are unchanged**. The two numbers describe different mechanisms
-and we keep them apart throughout.
+**How much of the model looks changed depends on which tensor sets the quantization
+grid** (§3.3), and the two readings differ by a factor of 15 — **85.5% of stored *values***
+against **2.1% of the integer *codes*** on the deployment path.
 
-**This is why the headline of this paper is a cosine and not a count.** Counts of changed
-weights move by a factor of 15 between the two regimes; the cosine between the intended
-and delivered update moves from 0.1390 to 0.1379, a 0.8% difference. The question the
-paper asks — did the trained update survive? — has a regime-independent answer, and the
-question the counts answer — how much of this checkpoint differs from the base model? —
-does not.
+**This is why the headline of this paper is a cosine and not a count.** The cosine between
+the intended and delivered update moves from 0.1390 to 0.1379 between the regimes, a 0.8%
+difference. The question the paper asks — did the trained update survive? — has a
+regime-independent answer; the question the counts answer — how much of this checkpoint
+differs from the base model? — does not.
 
 **On the same models, quantized the same way, no behavioural change is detectable.**
 Elicitation retention is 99.2%, and its enumerated 95% interval — [90.7%, 107.6%] — spans
@@ -135,12 +130,12 @@ are one measurement read at two levels.**
   compressing *delta weights* protects alignment; we report that merged adapters are
   weight-space-erased. We argue these are the same law evaluated at opposite ends of
   `|Δ|/s`, distinguished by **which tensor sets the quantization scale** (§2.5), and we
-  measure the unmerged case rather than arguing it (§7). Their claim is behavioural and
+  measure the unmerged case rather than arguing it (`METHODOLOGY.md`). Their claim is behavioural and
   ours is not, so this is an account of the mechanism, not a reconciliation of findings.
 - **`ar.predict`**, a tool computing effective adapter magnitude from published
   checkpoints without a GPU — together with an explicit statement, in its own output, of
   what it cannot predict (Appendix A).
-- **A record of what measurement corrected** (§7): eight methodological practices, each
+- **A record of what measurement corrected** (`METHODOLOGY.md`): eight methodological practices, each
   evidenced by a specification error of our own that measurement caught before
   publication.
 

@@ -1,7 +1,7 @@
 # 2. Background and related work
 
 *Draft. **Every claim attributed to another paper in this section was verified against
-that paper's abstract in-session** (see §7.1). Where a connection is our own inference
+that paper's abstract in-session** (see `METHODOLOGY.md` M.1). Where a connection is our own inference
 rather than the cited authors' finding, it is marked* **[our inference]** *explicitly.*
 
 ---
@@ -151,7 +151,7 @@ not, by itself, make the per-weight delta large relative to `s`.
 **[our inference]** The distinction that matters is not full-FT versus LoRA but **which
 tensor sets the quantization scale**. A merged adapter is subject to the base weights'
 step size and is erased on the same terms; an adapter quantized on its own scale is not,
-and §7 measures that case directly (cosine 0.9948–0.9952 against 0.14–0.51 merged). Their
+and `METHODOLOGY.md` measures that case directly (cosine 0.9948–0.9952 against 0.14–0.51 merged). Their
 method freezes the base and keeps the update in adapters, which is the second
 configuration, so their claim and ours are consistent (§2.5). What would be wrong is to
 read "use LoRA" as sufficient without saying whether the adapter is merged before
@@ -199,7 +199,7 @@ ends of one ratio**, and the practical rule that follows is concrete: *an adapte
 separate and quantized on its own scale is numerically preserved; the same adapter
 merged before quantization is not.*
 
-**We tested it.** §7 quantizes `Δ` alone on its own grid, same simulator, same bit
+**We tested it.** `METHODOLOGY.md` quantizes `Δ` alone on its own grid, same simulator, same bit
 widths, all nine adapters, 756 records: at INT4 g128 `|Δ|/s` rises from 0.011–0.149 merged
 to **2.31–2.38**, cosine from 0.14–0.51 to **0.9948–0.9952**. The prediction was
 registered before the run and three of its four clauses held; the fourth put `|Δ|/s` in

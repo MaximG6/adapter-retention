@@ -124,9 +124,7 @@ weight-space measure, the adaptation is very nearly gone.
 
 The behaviour is not. At INT4 with group size 128 — the standard deployment
 configuration — **85.5% of the six taboo adapters' stored values differ from the base
-model's and 2.1% of their integer codes do, with 98.9% of codes unchanged when the grid is
-held fixed, and no
-behavioural change is detectable**: retention 99.2%, enumerated interval [90.7%, 107.6%],
+model's, and no behavioural change is detectable**: retention 99.2%, enumerated interval [90.7%, 107.6%],
 which spans parity and excludes losses beyond about 9%. Degradation appears only at
 coarser grids, reaching 77.2% at
 INT4 per-channel and 57.8% at INT3, and in this population it degrades in the benign
@@ -199,5 +197,5 @@ rather than a reimplementation.
 **FW-5. Whether the benign dissociation generalises** beyond a suppression-style
 behaviour to capabilities with no constraint component.
 
-*Quantizing `Δ` on its own scale was FW-2 in an earlier draft. It is now measured (§7),
+*Quantizing `Δ` on its own scale was FW-2 in an earlier draft. It is now measured (`METHODOLOGY.md`),
 so it is a result rather than future work, and the remaining items are renumbered.*

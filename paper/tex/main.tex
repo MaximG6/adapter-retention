@@ -38,41 +38,26 @@ instructions: \texttt{<REPO-URL>}}\vspace{-0.6em}}
 \begin{abstract}
 \noindent
 Merging a LoRA adapter and quantizing to INT4 at group size 128 delivers a weight update
-with \textbf{cosine as low as 0.14} to the one the adapter trained, at up to
-\textbf{7.5 times its magnitude}---a perturbation larger than the adapter asked for,
-pointing somewhere it did not. Across the nine adapters cosine runs 0.14--0.51. \textbf{We lead with cosine because it is the quantity that does not depend on which
-tensor sets the quantization grid} (0.1390 against 0.1379 across the two regimes, a 0.8\%
-difference). Counts of changed weights do depend on it, sharply, and we report both: on
-the deployment path, where merging moves the grid, 85.5\% of stored \emph{values} change
-while only 2.1\% of integer \emph{codes} do; holding the grid fixed so that only the
-adapter can move a weight, 98.9\% of codes are unchanged. Every one of those readings
-says the same thing about the update. Across \textbf{six rank-32 adapters sharing one base
-model and one training recipe}, quantized on that same deployment path, there is
-\textbf{no detectable change in
-their trained behaviour}: elicitation retention is 99.2\%, with an enumerated 95\%
-interval of \textbf{[90.7\%, 107.6\%]} that spans parity and \textbf{excludes losses
-beyond about 9\%}. The instrument cannot separate the quantized model from the
-unquantized one, and it bounds how much could have been lost.
+with \textbf{cosine as low as 0.14} to the one the adapter trained, at up to \textbf{7.5
+times its magnitude}; across the nine adapters measured, cosine runs 0.14--0.51. We lead
+with cosine because it does not depend on which tensor sets the quantization grid, where
+counts of changed weights vary fifteenfold (\S\ref{sec:regimes}). Across \textbf{six
+rank-32 adapters sharing one base model and one training recipe}, quantized on the
+deployment path, there is \textbf{no detectable change in their trained behaviour}:
+elicitation retention 99.2\%, with an enumerated 95\% interval of \textbf{[90.7\%,
+107.6\%]} that spans parity and \textbf{excludes losses beyond about 9\%}.
 Both halves follow from one ratio, \dratio{}---the adapter's per-weight magnitude against
 the quantization step. Read per weight, a channel model with \emph{no fitted parameters}
 predicts each adapter's code-flip rate \emph{on a fixed grid} to within \textbf{2.3\%}
-across nine published adapters, two base models and ranks 16--128. Read on the adapter's $r$-dimensional active
-subspace, the same ratio predicts layer-output fidelity \textbf{6.2--16.5$\times$ higher}
-than weight-space fidelity. Erasure and survival are one measurement read at two levels.
-Behaviour degrades only at coarser grids---77.2\% at INT4 per-channel, 57.8\% at INT3,
-all three paired contrasts excluding zero (Appendix~B.8; one correlated triple from six
-adapters, and the third clears zero by 5.4 points). Degradation is \textbf{benign}:
-capability weakens while the trained constraint holds. \textbf{In absolute terms the
-constraint does not weaken at all}---the aligned model's knowledge score is 0.0757 at
-BF16 and 0.0756 at INT3, flat to 0.1\%. What moves is the suppression \emph{ratio}, from
-0.208 to 0.270, and it moves because the base model's score falls 0.363 to 0.280 under
-the same quantization. The ratio is the right comparison and the denominator is what
-changes it. The INT3 mean conceals a split, two of six adapters
-falling below 50\% while two stay above 80\% on the pre-registered instrument---three
-and one once the guesser's non-zero floor is subtracted (Appendix~B.7).
-Weight-space measurement cannot say \emph{which} adapter survives. Across six adapters
-matched on rank, scaling, base model, recipe \emph{and} measured output SNR to 3.3\%,
-retention spans \textbf{28.7\% to 86.4\%} (28.4--84.4\% floor-corrected), and six of the
+across nine published adapters, two base models and ranks 16--128, with all three of its
+licensing assumptions measured. Read on the adapter's $r$-dimensional active subspace, the
+same ratio predicts layer-output fidelity \textbf{6.2--16.5$\times$ higher} than
+weight-space fidelity. Erasure and survival are one measurement read at two levels.
+Behaviour degrades only at coarser grids---77.2\% at INT4 per-channel, 57.8\% at
+INT3---and degrades \textbf{benignly}: capability weakens while the trained constraint
+holds (\S\ref{sec:dissoc}). Weight-space measurement cannot say \emph{which} adapter
+survives. Across six adapters matched on rank, scaling, base model, recipe \emph{and}
+measured output SNR to 3.3\%, retention spans \textbf{28.7\% to 86.4\%}, and six of the
 seven pairs the data can resolve run \emph{opposite} to the predictor.
 \end{abstract}
 
@@ -85,14 +70,11 @@ intended weight update has been replaced by something with cosine similarity 0.1
 at 7.5 times its magnitude, pointing in a direction the adapter never requested. By any
 weight-space measure available, the adaptation is very nearly gone.
 
-\textbf{How much of the model looks changed is a separate question, and its answer depends
-on which tensor sets the quantization grid} (\S\ref{sec:regimes}). Merging shifts the grid
-in essentially every group, so on the deployment path 85.5\% of stored \emph{values} differ
-from what the base model alone would have produced---while only 2.1\% of the integer
-\emph{codes} do. Hold the grid fixed, so that a weight can change only by the adapter
-clearing the step size, and 98.9\% of codes are unchanged. The two numbers describe
-different mechanisms and we keep them apart throughout; neither rescues the update, whose
-cosine is 0.14 under both.
+\textbf{How much of the model looks changed depends on which tensor sets the quantization
+grid}, and the two readings differ fifteenfold---85.5\% of stored \emph{values} against
+2.1\% of integer \emph{codes} on the deployment path (\S\ref{sec:regimes}). Neither
+rescues the update, whose cosine is 0.14 under both, which is why the cosine and not a
+count is what this paper leads with.
 
 \textbf{On the same models, quantized the same way, no behavioural change is detectable.}
 Elicitation retention is 99.2\%, and its enumerated 95\% interval, [90.7\%, 107.6\%],
@@ -555,7 +537,8 @@ departs from one half by at most $0.000237$ and $|r(\operatorname{sign}\delta, u
 most $0.001060$ across the same 42 instances, both at their sampling floor, and the
 sign-aware flip probability agrees with the 50/50 average to 0.06\% at $t \approx 0.011$.
 \textbf{We added a premise when we added an argument, and counted it only when a reader
-counted for us}---the same class of failure as \S\ref{sec:practice}'s promoted number.
+counted for us}---the same class of failure as the promoted number in
+\texttt{METHODOLOGY.md}~M.4.
 
 The residual is a slight \emph{sub}-uniformity, $0.984$--$0.989$ over the relevant range,
 which would make Equation~\ref{eq:flip} over-predict slightly. A previous draft observed
@@ -662,14 +645,11 @@ INT3 g128 & \textbf{57.8\%} & [41.7, 74.3] & 62.1\% & 2/6 \\
 \end{tabular}
 \end{table}
 
-\textbf{These conditions are quantized the same way a toolchain would}---the merged model
-is quantized on its own recomputed grid, i.e.\ \texttt{adaptive\_scale}
-(\S\ref{sec:regimes}). The weight-space number to pair with a behavioural one is therefore
-the deployment-regime number for these same six adapters: at INT4 g128,
-\textbf{85.5\% of their stored values differ} from the base model's and 2.1\% of the
-integer codes do, while \textbf{behaviour is 99.2\% retained} (Figure~\ref{fig:dose}).
-Under \texttt{fixed\_scale}, which isolates the adapter but is not what was run here, 98.9\%
-of codes are unchanged. Entropy is flat (1.35--1.50 nats) across all aligned conditions
+\textbf{These conditions are quantized the same way a toolchain would}, i.e.\ under
+\texttt{adaptive\_scale} (\S\ref{sec:regimes}), so the weight-space number to pair with a
+behavioural one is the deployment-regime one for these same six adapters: \textbf{85.5\%
+of their stored values differ} from the base model's while \textbf{behaviour is 99.2\%
+retained} (Figure~\ref{fig:dose}, Appendix~B.1). Entropy is flat (1.35--1.50 nats) across all aligned conditions
 while elicitation halves, so the degradation is not distribution flattening.
 
 \textbf{Removing the adversarial prompts does not change the picture, and moves it the
@@ -685,8 +665,8 @@ at INT4 g128---\texttt{moon} 100.2\%, \texttt{rock} 116.2\%, \texttt{ship} 103.2
 \texttt{smile} 100.8\%---and \textbf{three of the four} survive removing the adversarial
 prompts entirely, with \texttt{rock} rising from 116.2\% to 121.0\%. \texttt{ship} falls
 to 98.9\%. Note that the count falls while the mean rises 5.7 points: the hint-only shift
-is not uniform across adapters, which is the same reason \S\ref{sec:behaviour}'s split is
-a per-adapter claim and not a mean one. Leakage does not explain the above-parity
+is not uniform across adapters, which is the same reason the INT3 split below is a
+per-adapter claim and not a mean one. Leakage does not explain the above-parity
 readings either way.
 
 \textbf{The adversarial leak rate is the constraint measured under pressure, and it
@@ -712,8 +692,15 @@ different between \texttt{ship} and \texttt{snow}, because the guesser has a pri
 Floor-correcting against the base model at the same precision,
 $(\text{aligned}-\text{base})/(\text{aligned}_{\text{BF16}}-\text{base}_{\text{BF16}})$,
 gives \textbf{99.0\%, 76.5\% and 56.0\%} against the 99.2\%, 77.2\% and 57.8\% above:
-under 2 points at every precision, and no claim in this paper turns on the difference.
-Both are in Appendix~B.6.
+under 2 points at every precision. \textbf{That is a statement about means, and this
+paper's claims are not.} Per adapter it moves two things at INT3---the count below half
+goes from two to three (\texttt{smile} 51.3\% to 49.3\%) and the count above 80\% from
+two to one (\texttt{snow} 81.5\% to 77.7\%), and the span moves 28.7--86.4\% to
+28.4--84.4\%. Appendix~B.7 gives all six adapters under all three metric variants, which
+is the level at which those claims can be checked. What does \emph{not} move: PG-1's
+ratio of outcome to predictor variation, 7.3--30.5$\times$ across all nine variant $\times$
+precision cells, and PG-2, which is identical under floor correction---same pairs, same
+counts, same directions.
 
 \begin{figure}[t]
 \centering
@@ -877,37 +864,13 @@ path.
 \section{Methodological Practice}
 \label{sec:practice}
 
-We pre-registered nine predictions before the runs they concern. Two were confirmed
-outright and one on synthetic adapters only; \textbf{six were not confirmed}, in four
-different ways: two withdrawn on evidence before being tested, one superseded by a
-measurement bug in its own inputs, one never run because we judged the experiment not
-worth its cost, and \emph{three} untested because the adapters they need are not public.
-Those entries total seven and the predictions total six because P8 is split across two
-buckets---its safety clause withdrawn, its remainder untested. An earlier draft wrote
-``two'' here, which made the arithmetic reconcile and the membership wrong; a count word
-can be right as a sum and wrong as a list, and that is now checked.
-All nine, with outcomes and where each resolves, are listed in Appendix~C, along with
-eight practices each evidenced by an error of ours that measurement caught before
-publication. One bullet per entry:
-
-\begin{itemize}\itemsep2pt
-\item A green verification block is evidence about coverage, not about correctness:
-nothing in it checks meaning (C.2).
-\item Validate an instrument against a known contrast before registering a prediction on
-it (C.3), and test a validation gate against something already known to be broken before
-trusting it (C.4).
-\item An append-only record leaks superseded values into anything drafted from it; derived
-documents must regenerate from raw records (C.5).
-\item A check sharing an assumption or code path with the thing it checks is not a check
-(C.6). A figure that renders without error looks validated and is not.
-\item Price a caveat against the measurement that would remove it. Three and a half minutes
-of compute here replaced four hedged repetitions of the central claim (C.7).
-\item Tooling reports success on the operation, not the outcome (C.8).
-\item \textbf{The explanation of a measurement is a claim, and none of the checks above
-can see one} (C.9). Every number in Appendix~B.11 was right through four review rounds;
-two sentences saying what those numbers meant were both wrong, and a reader caught them
-by arithmetic we had not done.
-\end{itemize}
+We pre-registered nine predictions before the runs they concern; \textbf{six were not
+confirmed}, in four different ways, and all nine with their outcomes and where each
+resolves are in Appendix~C. The practices that produced them---\textbf{eight practices},
+each evidenced by an error of ours that measurement caught before publication, and each
+stating what it changed---are documented in \texttt{METHODOLOGY.md} in the accompanying
+repository. That document is inside the same claim audit, count-word gate and
+cross-reference gate as this one: a number does not leave the checks by leaving the PDF.
 
 \section{Limitations}
 \label{sec:limitations}
@@ -946,12 +909,10 @@ verdict.
 \section{Conclusion}
 
 Merging a LoRA adapter and quantizing to INT4 replaces the intended update with something
-1.7--7.4$\times$ its size in a largely uncorrelated direction, at cosine 0.14--0.51.
+1.7--7.5$\times$ its size in a largely uncorrelated direction, at cosine 0.14--0.51.
 \textbf{The behaviour does not follow.} On the deployment path at INT4 g128, 85.5\% of the
-six taboo adapters' stored values differ from the base model's and 2.1\% of their integer
-codes do, with 98.9\% of codes unchanged when the grid is held fixed---and no behavioural
-change is
-detectable: retention 99.2\%, enumerated interval [90.7\%, 107.6\%], which spans parity
+six taboo adapters' stored values differ from the base model's---and no behavioural change
+is detectable: retention 99.2\%, enumerated interval [90.7\%, 107.6\%], which spans parity
 and excludes losses beyond about 9\%. Degradation appears only at coarser grids, and in
 this population it is benign.
 
