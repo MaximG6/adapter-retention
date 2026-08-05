@@ -3197,3 +3197,297 @@ nine; Figure 6's caption said "four decades" against an axis spanning three; C.2
 
 **Artifacts:** `analysis/countcheck.py`, `tests/test_countcheck.py`,
 `analysis/fig_secondary.py` (`_decades`, computed adapter counts).
+
+---
+
+## [2026-08-05] EXP-046: REGISTERED PREDICTION — the third licensing assumption (P11)
+
+**Phase:** 0
+**Question:** B.10 and §4.1 argue that the lower-tail excess in the within-bin position
+`u` cancels the upper-tail deficit, "because a negative delta crosses the lower boundary
+and a positive one the upper". That equality is not free. It needs `P(δ<0) = P(δ>0)` and
+it needs `sign(δ)` to be independent of `u`. §4.1 measures the correlation between `u`
+and `|δ|`; a sign–position association would leave `|δ|` uncorrelated with `u` while
+breaking the cancellation exactly. Contribution 1 currently says "both of its licensing
+assumptions measured". On the paper's own derivation there are three, and the third is
+the one the cancellation argument in EXP-042 created.
+
+**Registered before the run. Nothing below was written after seeing a number.**
+
+**P11 — the prediction.** A LoRA delta is `(α/r)·B·A` with `B` initialised at zero and
+`A` Gaussian, trained on a language objective. The within-bin position `u` is a property
+of the *base* checkpoint's group-wise range under Equation 2. Nothing in training ties
+the sign of a delta entry to where the base weight it lands on sits inside its
+quantization bin. So, at INT4 g128 asymmetric, over the same module-instances EXP-042
+used:
+
+1. **`P(δ<0)` lies within 0.5 ± 0.01** for every module-instance measured.
+2. **`|pearson(sign δ, u)| < 0.01`** for every module-instance. The `|δ|`-vs-`u` check
+   reached `|r| < 0.0011`; the sign check is a weaker statistic and gets a looser bound.
+3. **The sign-aware flip prediction agrees with the 50/50 two-tail average to within 2%**
+   at every `t ≥ 0.005`, i.e. over the whole range the paper's adapters occupy.
+
+**Falsifier.** If sign balance departs from 0.5 by more than 1% on any module, or if the
+sign-aware and 50/50 predictions differ by more than 5% at the taboo operating point
+`t ≈ 0.011`, then B.10's cancellation does not hold as stated. Equation 4's licensing
+would need the sign-conditional form `P(flip) = P(δ<0)·F_lower(t | δ<0) + P(δ>0)·F_upper(t
+| δ>0)` rather than the average of the two marginal tails, §4.1 must say so, and the
+1.1%-uniformity claim in B.10 would have to be re-derived. **A disconfirmation is the
+more interesting result and will be reported as one**: it would mean the structural
+worry EXP-042 found and dismissed was dismissed for the wrong reason.
+
+**What this does not test.** It says nothing about behaviour, and nothing about whether
+Equation 4 is *accurate* — only about whether the argument licensing it is complete.
+B.2 already measures the accuracy.
+
+**Setup:** Same two base models, same three layers, same seven modules as EXP-042 (42
+module-instances), plus the adapter deltas EXP-042 did not need. INT4 g128 asymmetric.
+`u = frac(w/s + z + 0.5)`, the distance to the lower boundary, identical to
+`scripts/bin_position_uniformity.py`.
+
+**Command:** `PYTHONPATH=src python scripts/sign_position_test.py`
+
+**Status:** REGISTERED, not yet run.
+
+---
+
+## [2026-08-05] EXP-047: P11 confirmed — the cancellation's third assumption holds, and it was a real assumption
+
+**Phase:** 0
+**Question:** Does P11 (EXP-046) hold? Registered before this run.
+**Setup:** Same 42 module-instances as EXP-042 — layers 0/12/24, seven modules, two base
+models (Qwen3-8B via `taboo-smile` r=32, Llama-3.1-8B-Instruct via `responsible-ai-safety`
+r=16) — with the adapter deltas EXP-042 did not load. INT4 g128 asymmetric,
+1,233,125,376 weights. `u = frac(w/s + z + 0.5)`, identical to
+`scripts/bin_position_uniformity.py`.
+
+**Command:** `PYTHONPATH=src python scripts/sign_position_test.py`
+
+**Result:**
+
+| clause | prediction | measured | verdict |
+|---|---|---|---|
+| P11.1 sign balance | `P(δ<0)` within 0.5 ± 0.01 | 0.499793 to 0.500237; worst departure **0.000237** | confirmed, 42× tighter than the bound |
+| P11.2 sign–position | `\|r(sign δ, u)\| < 0.01` on every module | mean 0.000226, max **0.001060** | confirmed, 9× tighter |
+| P11.3 cancellation | sign-aware within 2% of 50/50 at `t ≥ 0.005` | pooled ratio 0.9999–1.0004; worst single module **0.93%** at t=0.005, **0.64%** at t=0.011 | confirmed |
+
+Exactly zero delta entries are identically zero, so `P(δ>0) = 1 − P(δ<0)` throughout.
+
+The correlations are at their sampling floor rather than merely small. Modules carry
+4.2M to 58.7M weights, so a null correlation has standard deviation `1/√n` of 0.00049 to
+0.00013. Expressed in units of each module's own floor, the largest of the 42 is **2.17
+SD** and the mean is **0.83 SD** — the distribution 42 null tests produce.
+
+**Verdict:** WORKED.
+
+**What we learned:** Three things, and only the first is the headline.
+
+1. **The cancellation argument is licensed.** B.10 averages the two marginal tails 50/50
+   and that is the right quantity: `P(δ<0)·F_lower(t | δ<0) + P(δ>0)·F_upper(t | δ>0)`
+   agrees with it to 0.06% at the taboo operating point.
+2. **It was a real assumption, not a restatement.** The sign check is not implied by the
+   `|δ|`-vs-`u` check §4.1 already had — a sign–position association leaves `|δ|`
+   uncorrelated with `u` by construction. Both had to be measured, and the sign statistic
+   is the noisier of the two (max 0.001060 against 0.000774), so the looser registered
+   bound was the right call.
+3. **The paper was undercounting its own assumptions.** Contribution 1 said "both of its
+   licensing assumptions measured". Equation 4 needs three: independence of `u` and `δ`
+   (§4.1), uniformity of `u` (EXP-042), and sign balance with sign–position independence
+   (here). The third only came into existence when EXP-042's cancellation argument was
+   written, one round earlier — a new argument silently added a new premise, and nothing
+   in the process caught it. That is the same class as C.5's promoted-number failure and
+   it is now in §7.
+
+**Plan impact:** Contribution 1 says three, not both. B.10 reports all three with this
+table. §4.1 states the sign assumption where it states the other two. No number in the
+paper changes — this closes a licensing gap, it does not move a result.
+
+**Artifacts:** `scripts/sign_position_test.py`,
+`results/raw/phase0/sign_position/records.jsonl` (42 records),
+`results/raw/phase0/sign_position/manifest.json`, B.10.
+
+---
+
+## [2026-08-05] EXP-048: Two things EXP-042 asserted about its own measurement, both wrong
+
+**Phase:** 0
+**Question:** EXP-042 measured the within-bin position distribution correctly and then made
+two claims *about* that measurement which nothing checked: that the exact-zero mass is
+Equation 2 pinning each group's extrema, and that the residual sub-uniformity is the
+direction B.2's residual shows. An external reviewer noticed the first does not survive
+arithmetic — at group size 128 the pinning account predicts `2/128 = 1.56%` against a
+stated 0.20%, eight times over. Both were checked here.
+
+**Setup:** Same 42 module-instances as EXP-042, plus three controls added to
+`scripts/bin_position_uniformity.py`; and a post-hoc recomputation of B.10's implied
+prediction against B.2's per-adapter residual.
+
+**Command:** `PYTHONPATH=src python scripts/bin_position_uniformity.py`
+
+**Result, claim 1 — the pinning account is wrong, and wrong in direction.**
+
+| control | value |
+|---|---|
+| `u` at each group's minimum | **0.4943** |
+| `u` at each group's maximum | **0.4951** |
+| extrema as a fraction of weights (what the account predicts) | 0.015625 |
+| fraction of the `u = 0` weights that are extrema | **0.054** |
+| `u = 0` mass surviving a jitter of `1e-4 · s` | **0.000022** of 0.002039 |
+
+`u = 0` is the bin boundary and `u = 0.5` is the bin centre. Equation 2 rounds `z`, so a
+group's extrema map onto the **centres** of codes 0 and `2^b−1`, which is the position
+*furthest* from a boundary, not nearest. The extrema are pinned; they are pinned to the
+safest place in the bin. And 94.6% of the exact-zero mass is not extrema at all.
+
+What it actually is: a floating-point coincidence over discrete-valued input. Base
+weights are bf16, so a group of 128 holds about 121 distinct values, and `w/s + z + 0.5`
+lands exactly on an integer for roughly 1 in 500 of them. A perturbation of `1e-4` steps
+— four orders of magnitude below bf16's own resolution inside a bin — removes **99%** of
+the mass. A structural pinning would be untouched by it.
+
+**Result, claim 2 — the B.10 / B.2 correspondence does not survive checking.**
+`F_u(t)/t` is 0.985 and flat across the whole range the adapters occupy (t from 0.005 to
+0.25), so the measured non-uniformity predicts a near-constant 1.3–1.5% over-prediction
+for **every** adapter. Evaluating it as an expectation over each adapter's own `|Δ|/s`
+distribution rather than at its mean does not change that: 0.987 to 0.995 across the
+nine. B.2's observed over-prediction is not near-constant — 0.1% for each of the taboo
+six, 0.8% for `latentqa`, 0.9% for `dpo-halluc`, 2.3% for `responsible-ai-safety` — and
+the ordering does not track. For the taboo six the prediction is off by a factor of ten,
+in the direction of predicting a deficit an order of magnitude larger than the one
+observed.
+
+**Verdict:** FAILED — both claims, and the underlying uniformity measurement is
+unaffected by either.
+
+**What we learned:**
+
+1. **A correct measurement can carry an incorrect account of itself, and nothing in this
+   project was checking accounts.** Every number in B.10 was right. The two sentences
+   explaining *why* were both wrong, and both were written in the same session as the
+   measurement, which is exactly when a mechanism sounds most obvious.
+2. **Sign agreement is not corroboration.** The correspondence paragraph reported that
+   Equation 4 over-predicts and that B.10 predicts over-prediction, and stopped there. Two
+   quantities agreeing in sign, disagreeing in magnitude by 10x, and uncorrelated in
+   ordering, is not evidence for a shared cause. The paragraph is removed rather than
+   qualified.
+3. **The uniformity conclusion is untouched.** It never rested on either account. The
+   deviation from uniform is at most 1.8% at every `t` at or above 0.005, the residual is
+   two-sided and cancels (EXP-047), and none of that depends on where the exact-zero mass
+   comes from.
+
+**Plan impact:** B.10 rewritten: the boundary-pinning sentence replaced by the measured
+account, the correspondence paragraph deleted, and the three controls tabulated so a
+reader can check the replacement rather than take it. §7 gains a practice entry — a
+measurement's *explanation* is a claim and needs its own falsifier.
+
+**Artifacts:** `scripts/bin_position_uniformity.py` (`_pinning_controls`),
+`results/raw/phase0/bin_position/records.jsonl` (42 records, re-run with the controls),
+B.10.
+
+---
+
+## [2026-08-05] EXP-049: Review round — a robustness check verified at the wrong level, and a widening that narrows
+
+**Phase:** 0/1 (write-up)
+**Question:** Third external review, 83/100. Ten groups. Three needed measurement rather
+than wording; the rest were prose, sourcing and one new gate.
+
+**Setup:** No new experimental conditions except EXP-047's sign measurement and EXP-048's
+three pinning controls, both logged separately above.
+
+**Result, by group.**
+
+**1. The floor correction was checked at the mean and the paper's claims are per adapter.**
+§5.1 said floor-correcting moves the headline "under 2 points at every precision, and no
+claim in this paper turns on the difference". The first clause is true; the second is
+false. At INT3 the count below half goes 2 → 3 (`smile` 51.3% → 49.3%) and the count above
+80% goes 2 → 1 (`snow` 81.5% → 77.7%), and the span moves 28.7–86.4% → 28.4–84.4%. That
+span is quoted at seven sites including the abstract and the tool's unconditional banner.
+**B.6b** now gives all six adapters under all three metric variants with `<50`, `>80`,
+span and outcome CV, and every quoting site names its variant. What does *not* move: PG-1's
+ratio of outcome to predictor variation, 7.3× to 30.5× across all nine variant × precision
+cells; and PG-2, identical under floor correction — same pairs, same counts, same
+directions. Under hint-only PG-2 drops to 1/0/3 and 3 of 4 inverting, and the stronger
+checkable statement is that **under every variant the only pair running *with* output SNR
+is the single INT4 g128 pair**, the one whose separation depends on a >100% point estimate.
+
+**2. B.11 asserted a direction its own table contradicted, and the measurement settles it
+against us.** The prose said clustering widens because 32 prompts carry "roughly 16
+independent units"; the table showed estimator C narrower than B at both endpoints. The
+one-way random-effects ICC over the 24 hint prompts is **0.175 / 0.303 / 0.290** across the
+three precisions — design effect 1.35 to 1.61, so the battery carries 23–26 effective
+units, not 16. The justification was the ICC = 1 case. The correct account: a cluster
+bootstrap resamples intents with membership fixed, removing within-cluster resampling
+variance rather than down-weighting it, so it widens only to the extent paraphrases agree.
+At this ICC it is close to a wash — C is wider than B in **10 of 18** adapter × precision
+cells. **Pairing does the work** (A → B adds +1/+1/+2 pairs); clustering costs exactly two,
+both at INT3, both involving `smile`, which has the highest ICC in the grid (0.682) and the
+largest C/B width ratio. Clustering is still right, and it is not what moved the count.
+
+**3–4. Two claims *about* a correct measurement, both wrong.** EXP-048.
+
+**5. `τ = 1.5962` is a property of the synthetic generator and the paper used it as if it
+were a property of adapters.** π/2 = 1.5708 is the exact Gaussian value and the sweep draws
+Gaussians. Per module on a trained adapter `τ` runs **1.82–2.20**, 16–38% higher; since
+`cosine ∝ √τ` that alone is a 7–17% under-prediction, the right size to be most of A.3's
+10.4% cosine error against 2.3% for the flip rate, which carries no such constant. Sourced
+to the sweep at every site and the real range put in the body.
+
+**6. Weight-space SNR was used in two senses and defined in neither.** The tool prints
+`cos/√(1−cos²)`, the ratio of `Δ_eff`'s component along `Δ` to its component orthogonal to
+`Δ`. B.12 measures `||Δ||/||Δ_eff − Δ||`, signal over total error, and **that** is what the
+abstract's 6.2–16.5× is denominated in. They agree to 3.4% on `taboo-smile` because both
+reduce to ≈ `cos` when the projection coefficient is near 1; the agreement is a
+coincidence of this regime, not a cross-validation, and both definitions are now printed.
+
+**7. E.2's "roughly 6x" was `n`=1 generalised.** Across the full grid adversarial prompts
+leak **1.21×** the hint rate (19/192 against 47/576); at BF16 alone 1.33×. The 6.00× is
+`smile` at BF16, 2 of 8 against 1 of 24 — one adapter at one precision, and `smile` is the
+pilot the harness was built on. The design decision stands; the number behind it did not.
+
+**8. The leak fall now has an interval and it reaches zero.** Paired BF16 → INT3 over the
+six adapters: **+10.4 points, enumerated 95% CI [+0.0, +20.8]**. `snow` moves the other
+way, 12.5% → 25.0%. Every cell is a count out of 8. Reported as a direction, not a size.
+
+**9. Count words in figure scripts.** `countcheck` now walks every string literal in
+`analysis/fig*.py` and `md_to_tex.py`'s `FIG_CAPTIONS` via `ast`, excluding docstrings —
+which is where a superseded value is quoted on purpose, and where the first version of
+this extension produced its false positive. Fed the shipped state it fires on
+`"four decades"`; the same quantity had three values, and the third came from `_decades`
+flooring 2.9987. Both fixed, and `countcheck.sweep_decades` recomputes it from raw by a
+separate route so the two must agree. A second rule resolves a count word against the
+**membership** of the bucket it names, not a total: §8 said "two untested because the
+adapters they need are not public" against a bucket holding P3, P5 and the remainder of
+P8, and 2+1+1+2 = 6 passes an arithmetic check while the list is wrong.
+
+**10. Minor.** `7.4 times its magnitude` was the *relative error* 7.407 read as the
+magnitude ratio, which is **7.476**; both are now columns in B.1 and the paper says 7.5.
+"All three contrasts exclude zero" flagged as one correlated triple whose third clears zero
+by 5.4 points. B.6 explains the ceiling as well as the floor — the normaliser is a
+canonical hand-written hint, so a better hint scores above 1.0. §4.2 says the heavy tail in
+`|Δ|/s` is in `s` and not in `Δ`. Figure 12's title no longer contradicts its own panel
+headers. XSTest cited once. `predicted output SNR` → `measured` at six sites. Practice
+entry **§7.8** added and the body's count moved to eight.
+
+**Verdict:** WORKED.
+
+**What we learned:**
+
+1. **A robustness check is verified at the level its claims live, not at the level that is
+   convenient.** The floor correction was introduced to show a metric artefact did not
+   matter, checked at the mean, and the sentence it licensed was about a per-adapter split.
+   This is C.5's promoted-number failure with the promotion running the other way.
+2. **Asserting a direction is not measuring one.** B.11 named a mechanism, and its own
+   table disagreed for two rounds without anyone reading the two together.
+3. **A constant measured on a generator is a property of the generator.** `τ` was quoted
+   nine times without the word "synthetic", and the gap between 1.5962 and the real
+   1.82–2.20 turns out to explain the predictor's error.
+
+**Plan impact:** Paper content complete. arXiv 36 pages (12 body, 24 appendix), technical
+report 90 pages (57 body, 33 appendix). Nothing pushed. Round 8 is a structural cut.
+
+**Artifacts:** `analysis/appendix_tables.py` (B.6b, B.10, B.11, B.12, B.1's `mag` column),
+`analysis/countcheck.py` (`figure_strings`, `sweep_decades`, `outcome_buckets`),
+`analysis/audit_draft_numbers.py` (271 claims, up from 229), `tests/test_countcheck.py`,
+`scripts/sign_position_test.py`, `scripts/bin_position_uniformity.py`,
+`paper/07-methodological-lessons.md` §7.8.

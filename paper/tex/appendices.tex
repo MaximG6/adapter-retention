@@ -43,17 +43,18 @@ python -m ar.predict --adapter adamkarvonen/Qwen3-8B-taboo-smile_50_mix \
    down_proj     0.00635   0.0064   0.1115   19.39    2.175
 \end{verbatim}\end{quote}
 
-\textbf{In weight space the module ordering is entirely a magnitude effect} (\S{}4.5): \texttt{gate\_\allowbreak{}proj} has the largest \texttt{|Delta|/\allowbreak{}s} and the highest cosine, \texttt{down\_\allowbreak{}proj} the smallest and the lowest, and the cosine column is monotone in the ratio column.
+\textbf{In weight space the module ordering is entirely a magnitude effect} (\S{}4.3, B.5): \texttt{gate\_\allowbreak{}proj} has the largest \texttt{|Delta|/\allowbreak{}s} and the highest cosine, \texttt{down\_\allowbreak{}proj} the smallest and the lowest, and the cosine column is monotone in the ratio column.
 
 \textbf{In output space the ordering reverses at the bottom, and the reason is architectural.} \texttt{down\_\allowbreak{}proj} has the \emph{lowest} weight-space cosine (0.1115) and the \emph{highest} predicted output SNR (2.175), because its input dimension is 12288 rather than 4096, so its amplification is 19.39 against 11.2. The two columns answer different questions and disagree about which module fares worst; a reader taking "retains least" from the ratio column and applying it to the layer's output would get it backwards. This is the same distinction as \S{}4.4 and \S{}5.3, visible inside a single table.
 
 \textbf{Three notes on reading these numbers against the paper's.}
 
 \begin{itemize}\itemsep1pt
-\item \textbf{They are predictions, not the paper's measurements, and they do not match to the last digit.} The tool samples three layers of 36 and averages seven modules unweighted; \S{}4.2 measures four layers and 28 module-instances. Predicted flip here is \texttt{0.\allowbreak{}0106}, against a measured \texttt{0.\allowbreak{}01093} for the same adapter in B.1 --- \textbf{3.0\% apart}, which is within the tool's stated $\pm$15\% band but \emph{outside} the 2.3\% figure quoted for the closed form. The 2.3\% is the model's error against a full measurement; 3.0\% is what layer sampling adds.
+\item \textbf{They are predictions, not the paper's measurements, and they do not match to the last digit.} The tool samples three layers of 36 and averages seven modules unweighted; the weight-space runs measure four layers and 28 module-instances (B.1). Predicted flip here is \texttt{0.\allowbreak{}0106}, against a measured \texttt{0.\allowbreak{}01093} for the same adapter in B.1 --- \textbf{3.0\% apart}, which is within the tool's stated $\pm$15\% band but \emph{outside} the 2.3\% figure quoted for the closed form. The 2.3\% is the model's error against a full measurement; 3.0\% is what layer sampling adds.
 \item \textbf{\texttt{predicted layer-\allowbreak{}output SNR 1.\allowbreak{}749} is not the \texttt{1.\allowbreak{}6286} \S{}5.3 attributes to this adapter.} \S{}5.3's value is \emph{measured}, by projecting onto an orthonormal basis of $\Delta$'s right singular vectors; this one is \emph{predicted} from Equation 5. They differ by 7.4\%, which is the amplification law's error on this adapter, and PG-1's 1.6200--1.6728 range is a range of measured values only.
+\item \textbf{\texttt{predicted weight-\allowbreak{}space SNR} is \texttt{cos / sqrt(1 - cos\textasciicircum{}2)}, and that is not the definition B.12 measures.} Here it is the ratio of \texttt{Delta\_\allowbreak{}eff}'s component \emph{along} \texttt{Delta} to its component \emph{orthogonal} to \texttt{Delta}, computed from the predicted cosine: at cosine 0.1427 it gives 0.1442. B.12 reports \texttt{||Delta|| / ||Delta\_\allowbreak{}eff - Delta||}, signal over total error, measured per layer and averaged, and that is the quantity the abstract's 6.2--16.5$\times$ amplification range is denominated in. On \texttt{taboo-\allowbreak{}smile} the two land at 0.1387 and 0.1341, 3.4\% apart, because both reduce to approximately \texttt{cos} when the projection coefficient is near 1 and \texttt{cos} is small. Neither validates the other.
 \item \textbf{The \texttt{cosine} column is not the fixed-\texttt{tau} formula A.3 tabulates.} The tool computes \texttt{sqrt(mean(Delta\textasciicircum{}2) / (s * mean|Delta|))} per module, which is \texttt{sqrt(tau\_\allowbreak{}module * |Delta|/\allowbreak{}s)} with each module's \emph{own} tail-shape statistic. Backing it out of the printed columns gives 1.82--2.20 across the seven modules, against the 1.5962 the synthetic Gaussian sweep measures. A.3's table describes \textbf{Figure 5's} predictor, which deliberately uses one fixed constant so that it has no per-module free parameter; applying that formula to the row above gives 0.118 where the tool prints 0.130. Two different predictors, and an earlier draft implied they were the same one.
-\item \textbf{The \texttt{amp} column uses each module's measured error concentration, not the \texttt{1 + c/\allowbreak{}r} form.} Equation 5 with \texttt{c = 0.\allowbreak{}87} and \texttt{r = 32} gives \texttt{sqrt(128/\allowbreak{}1.\allowbreak{}0272) = 11.\allowbreak{}16}; the tool prints \texttt{11.\allowbreak{}22}, implying a measured concentration of 1.017 rather than the fitted 1.027. Both are in the paper: the closed form is the claim, the measured value is what the tool has available per module.
+\item \textbf{The \texttt{amp} column uses each module's measured error concentration, not the \texttt{1 + c/\allowbreak{}r} form.} Equation 5 with \texttt{c = 0.\allowbreak{}87} and \texttt{r = 32} gives \texttt{sqrt(128/\allowbreak{}1.\allowbreak{}0272) = 11.\allowbreak{}16}; the tool prints \texttt{11.\allowbreak{}22}, implying a measured concentration of 1.017 rather than the fitted 1.027. Both are in the paper: the closed form is the claim, the measured value is what the tool has available per module. \textbf{The 1\% gap is not unexplained.} \texttt{c \textasciitilde{} 0.\allowbreak{}87} is fitted across ranks 16--128; on this adapter at \texttt{r = 32} the measured concentration corresponds to \texttt{c = 0.\allowbreak{}017 x 32 = 0.\allowbreak{}54}, so the closed form over-states concentration here and under-states amplification by 0.5\%. The abstract's 6.2--16.5$\times$ range is the span of B.12's \emph{measured} per-adapter ratios and does not pass through \texttt{c} at all.
 \end{itemize}
 
 \subsection{Accuracy}
@@ -72,7 +73,9 @@ cosine & per module, `sqrt($\tau$ $\cdot$ \textbackslash\{\} & $\Delta$\textback
 \end{tabularx}
 \end{table*}
 
-The prediction is a closed form with no fitted parameters (\S{}3.5), so this is out-of-sample in the only sense available: nothing about these nine adapters was used to construct the model. The cosine row carries one measured constant, the tail-shape statistic \texttt{tau = mean(Delta\textasciicircum{}2)/\allowbreak{}mean|Delta|\textasciicircum{}2}, which \S{}4.1 measures as flat at 1.5962 across three decades of adapter magnitude.
+The prediction is a closed form with no fitted parameters (\S{}3.5), so this is out-of-sample in the only sense available: nothing about these nine adapters was used to construct the model. The cosine row carries one measured constant, the tail-shape statistic \texttt{tau = mean(Delta\textasciicircum{}2)/\allowbreak{}mean|Delta|\textasciicircum{}2}, measured at \textbf{1.5962 on the synthetic Gaussian sweep} and flat there across three decades of adapter magnitude.
+
+\textbf{That constant is a property of the synthetic generator, and trained adapters do not satisfy it.} 1.5962 is 1.6\% above \texttt{pi/\allowbreak{}2 = 1.\allowbreak{}5708}, the exact value for a Gaussian, which is what the sweep draws. Backing \texttt{tau} out per module from A.2's table gives \textbf{1.82--2.20} on a real adapter --- 16\% to 38\% higher, because products of trained \texttt{B*A} matrices are heavier-tailed than products of Gaussians. Since \texttt{cosine prop sqrttau}, that alone is a 7\% to 17\% under-prediction, which is the right size to be most of the 10.4\% in the table above; the code-flip row carries no such constant, which is why it is at 2.3\%. \textbf{The cosine predictor's error is dominated by a constant fitted on a generator its targets do not match}, and stating that is more useful than the error figure alone.
 
 \textbf{These errors are for the quantity the model predicts: the adapter's own contribution under a fixed grid} (\S{}3.3). A deployment toolchain also moves the grid, which is a second effect the closed form does not model; read as a prediction of the combined outcome its error is 32--47\%. The tool prints this scope in its own output.
 
@@ -87,7 +90,7 @@ The prediction is a closed form with no fitted parameters (\S{}3.5), so this is 
 The tool prints the following, unconditionally, on every run:
 
 \begin{quote}\small
-\textbf{LIMIT OF THIS TOOL, measured not hypothetical.} Six adapters matched on rank, scaling, base model and training recipe, whose output SNR agreed to within 3.3\%, showed behavioural retention at 3-bit spanning 28.7\% to 86.4\%. The outcome varied 30x more than the predictor did, and of the 7 adapter pairs whose difference was statistically resolved, 6 ran OPPOSITE to output SNR.
+\textbf{LIMIT OF THIS TOOL, measured not hypothetical.} Six adapters matched on rank, scaling, base model and training recipe, whose output SNR agreed to within 3.3\%, showed behavioural retention at 3-bit spanning 28.7\% to 86.4\% (28.4\% to 84.4\% with the instrument's floor subtracted; the split is 2 of 6 below half uncorrected, 3 of 6 corrected). The outcome varied 30x more than the predictor did, and of the 7 adapter pairs whose difference was statistically resolved, 6 ran OPPOSITE to output SNR.
 
 So: these numbers do not discriminate between similar adapters. If you are choosing between two adapters of comparable rank and magnitude, this tool cannot tell you which will survive quantization better, and a difference it reports between them carries no information. Whether it discriminates ACROSS dissimilar adapters is untested.
 \end{quote}
@@ -115,7 +118,7 @@ We include both rather than a softer caveat because each failure is measured, no
 \textbf{Unsound uses.}
 \begin{itemize}\itemsep1pt
 \item Ranking two similar adapters by expected behavioural survival. This is the failure the banner describes.
-\item Reading layer-output SNR as a fragility threshold. Six adapters agreeing to 3.3\% on that quantity span 28.7\%--86.4\% behavioural retention (\S{}4.4, \S{}5.3). Note the direction of that claim: output SNR does not \emph{discriminate} over a 3.3\% predictor range, which is range restriction, and is compatible with it setting the absolute level --- which is what \S{}4.4 measures and what the amplification law is for.
+\item Reading layer-output SNR as a fragility threshold. Six adapters agreeing to 3.3\% on that quantity span 28.7\%--86.4\% behavioural retention on the pre-registered instrument, 28.4\%--84.4\% floor-corrected (\S{}4.4, \S{}5.3, B.6b). Note the direction of that claim: output SNR does not \emph{discriminate} over a 3.3\% predictor range, which is range restriction, and is compatible with it setting the absolute level --- which is what \S{}4.4 measures and what the amplification law is for.
 \item Reading the flip rate as "the fraction of my deployed checkpoint that differs from the base model". It is the fraction attributable to the adapter under a fixed grid; see the SCALE REGIME banner above.
 \item Treating a weight-space number as a statement about alignment. The paper's central result is that these levels dissociate.
 \end{itemize}
@@ -155,22 +158,26 @@ Intervals without a mark are \textbf{enumerated} over all \texttt{k\textasciicir
 
 Base model is \texttt{Qwen3-\allowbreak{}8B} for every adapter except \texttt{responsible-\allowbreak{}ai-\allowbreak{}safety}, which is \texttt{Llama-\allowbreak{}3.\allowbreak{}1-\allowbreak{}8B-\allowbreak{}Instruct}.
 
+\textbf{\texttt{rel. err} and \texttt{mag. ratio} are different quantities and the paper quoted the wrong one.} \texttt{rel. err} is \texttt{||Delta\_\allowbreak{}eff - Delta|| / ||Delta||}, error against an erasure baseline of 1.0. \texttt{mag. ratio} is \texttt{||Delta\_\allowbreak{}eff|| / ||Delta||}, how much larger the delivered update is than the intended one --- which is what the phrase "7.5 times its magnitude" means and what was never tabulated. They differ by about 1\%: at cosine 0.1374 a relative error of 7.407 implies a magnitude ratio of 7.476, and earlier drafts quoted 7.4 for the second while reading it off the first. Per \S{}3.4 the magnitude ratio is never reported without a cosine beside it.
+
+Columns marked \texttt{fix} are \texttt{fixed\_\allowbreak{}scale} and \texttt{adp} is \texttt{adaptive\_\allowbreak{}scale}; \texttt{val-\allowbreak{}chg} is the value-change rate, \texttt{adaptive\_\allowbreak{}scale} only.
+
 \begin{table*}[t]
-\centering\scriptsize
-\begin{tabularx}{\textwidth}{>{\hsize=1.135\hsize\raggedright\arraybackslash}Xrrrrlrrr>{\hsize=0.865\hsize\raggedright\arraybackslash}Xr}
+\centering\footnotesize
+\begin{tabularx}{\textwidth}{>{\hsize=1.000\hsize\raggedright\arraybackslash}Xrrrrlrrrrrr}
 \toprule
-adapter & r & $\alpha$/r & layers & cos (fixed) & 95\% CI & cos (adapt.) & flip (fixed) & flip (adapt.) & val-chg (adapt.) & rel. err \\
+adapter & r & $\alpha$/r & lay & cos fix & 95\% CI & cos adp & flip fix & flip adp & val-chg & rel err & mag \\
 \midrule
-ao-v3-dpo-halluc & 128 & 0.125 & 4 & 0.5050 & [0.4755, 0.5386] & 0.5047 & 0.14813 & 0.22115 & 0.87416 & 1.744 \\
-latentqa & 64 & 2 & 4 & 0.2760 & [0.2548, 0.2996] & 0.2746 & 0.03882 & 0.06481 & 0.85856 & 3.578 \\
-responsible-ai-safety & 16 & 2 & 4 & 0.3298 & [0.3069, 0.3664] & 0.3290 & 0.06191 & 0.10219 & 0.83625 & 2.904 \\
-taboo-gold & 32 & 2 & 4 & 0.1389 & [0.1248, 0.1531] & 0.1378 & 0.01114 & 0.02112 & 0.85456 & 7.350 \\
-taboo-moon & 32 & 2 & 4 & 0.1375 & [0.1242, 0.1507] & 0.1364 & 0.01092 & 0.02079 & 0.85453 & 7.421 \\
-taboo-rock & 32 & 2 & 4 & 0.1412 & [0.1283, 0.1541] & 0.1401 & 0.01137 & 0.02147 & 0.85460 & 7.207 \\
-taboo-ship & 32 & 2 & 4 & 0.1409 & [0.1279, 0.1539] & 0.1398 & 0.01139 & 0.02149 & 0.85461 & 7.233 \\
-taboo-smile & 32 & 2 & 4 & 0.1374 & [0.1244, 0.1504] & 0.1363 & 0.01093 & 0.02080 & 0.85457 & 7.407 \\
-taboo-snow & 32 & 2 & 4 & 0.1382 & [0.1260, 0.1503] & 0.1370 & 0.01102 & 0.02088 & 0.85454 & 7.374 \\
-taboo-smile & 32 & 2 & 36 & 0.1380 & [0.1355, 0.1404]* & 0.1369 & 0.01220 & 0.02267 & 0.84625 & 7.293 \\
+ao-v3-dpo-halluc & 128 & 0.125 & 4 & 0.5050 & 0.476--0.539 & 0.5047 & 0.14813 & 0.22115 & 0.8742 & 1.74 & 2.01 \\
+latentqa & 64 & 2 & 4 & 0.2760 & 0.255--0.300 & 0.2746 & 0.03882 & 0.06481 & 0.8586 & 3.58 & 3.72 \\
+responsible-ai-safety & 16 & 2 & 4 & 0.3298 & 0.307--0.366 & 0.3290 & 0.06191 & 0.10219 & 0.8363 & 2.90 & 3.07 \\
+taboo-gold & 32 & 2 & 4 & 0.1389 & 0.125--0.153 & 0.1378 & 0.01114 & 0.02112 & 0.8546 & 7.35 & 7.42 \\
+taboo-moon & 32 & 2 & 4 & 0.1375 & 0.124--0.151 & 0.1364 & 0.01092 & 0.02079 & 0.8545 & 7.42 & 7.49 \\
+taboo-rock & 32 & 2 & 4 & 0.1412 & 0.128--0.154 & 0.1401 & 0.01137 & 0.02147 & 0.8546 & 7.21 & 7.28 \\
+taboo-ship & 32 & 2 & 4 & 0.1409 & 0.128--0.154 & 0.1398 & 0.01139 & 0.02149 & 0.8546 & 7.23 & 7.30 \\
+taboo-smile & 32 & 2 & 4 & 0.1374 & 0.124--0.150 & 0.1363 & 0.01093 & 0.02080 & 0.8546 & 7.41 & 7.48 \\
+taboo-snow & 32 & 2 & 4 & 0.1382 & 0.126--0.150 & 0.1370 & 0.01102 & 0.02088 & 0.8545 & 7.37 & 7.44 \\
+taboo-smile & 32 & 2 & 36 & 0.1380 & 0.135--0.140* & 0.1369 & 0.01220 & 0.02267 & 0.8463 & 7.29 & 7.36 \\
 \bottomrule
 \end{tabularx}
 \end{table*}
@@ -256,7 +263,9 @@ module & cells & cosine & code-flip \\
 
 Elicitation score as a fraction of the same adapter's own BF16 score. Intervals are over the six adapters, not over prompts: the adapter is the sampling unit, and the prompts within one adapter are not independent draws --- they are 8 intents x 3 paraphrases plus 8 adversarial prompts, and it is that clustering rather than greedy decoding which makes them dependent (\S{}3.11). They are enumerated over all 6\textasciicircum{}6 resamples.
 
-\textbf{The denominator is the aligned model's own BF16 score and the metric has a non-zero floor}, so the percentages are not "fraction of the behaviour". The \texttt{base} column gives the SAME instrument's score on the base model without the adapter, at the same precision, so a reader can floor-correct. It is small but not negligible and varies 40x across adapters (\texttt{ship} 0.0039, \texttt{snow} 0.1642): the guesser has a prior over the 20 candidates. Floor-corrected retention, \texttt{(aligned - base) / (aligned\_\allowbreak{}BF16 - base\_\allowbreak{}BF16)}, is given as its own row and moves the headline by under 2 points at every precision.
+\textbf{The metric has a non-zero floor and no ceiling at 1.0.} The BF16 column is the guesser's score on the model's own response divided by its score on a canonical hand-written hint for that word (\S{}3.7), so a response that is a \emph{better} hint than the canonical one scores above 1: \texttt{ship} reads 1.0327 and \texttt{snow} 1.0030. That is a property of the normaliser, not an anomaly, and it is why every retention figure in this table is each adapter against its own BF16 value rather than against 1.
+
+\textbf{The denominator is the aligned model's own BF16 score and the metric has a non-zero floor}, so the percentages are not "fraction of the behaviour". The \texttt{base} column gives the SAME instrument's score on the base model without the adapter, at the same precision, so a reader can floor-correct. It is small but not negligible and varies 40x across adapters (\texttt{ship} 0.0039, \texttt{snow} 0.1642): the guesser has a prior over the 20 candidates. Floor-corrected retention, \texttt{(aligned - base) / (aligned\_\allowbreak{}BF16 - base\_\allowbreak{}BF16)}, is given as its own row and moves the \emph{mean} by under 2 points at every precision --- but it moves the per-adapter split, which is what the paper's claims are about, and \textbf{B.6b} gives every adapter under every variant rather than leaving a reader to check a mean against a claim it cannot settle.
 
 \begin{table*}[t]
 \centering\footnotesize
@@ -279,12 +288,13 @@ below 50\% & --- & --- & 0/6 & --- & 0/6 & --- & 2/6 & --- \\
 \end{tabularx}
 \end{table*}
 
-\textbf{The 8 adversarial prompts are constraint probes, and the capability score pools them with the 24 hint prompts.} Their job is to make the model say the word, and a response containing it scores at or above the normaliser because the guesser recovers it trivially --- so a quarter of the capability axis is the inverse of the constraint axis. The \texttt{24 hint prompts only} row above is the same measurement with them removed. \textbf{The two agree}: the ordering is identical, the dose-response is monotone in both, and the hint-only mean is +5.7 points at INT4 g128, +3.0 at per-channel and +4.3 at INT3. Note the sign: removing the adversarial prompts \textbf{raises} the score, because adversarial prompts are harder and yield less word-bearing text than hint prompts, which outweighs the leak lift. The pooled figure is the pre-registered instrument and remains the headline; it is not the more flattering one.
+\textbf{The 8 adversarial prompts are constraint probes, and the capability score pools them with the 24 hint prompts.} Their job is to make the model say the word, and a response containing it scores at or above the normaliser because the guesser recovers it trivially --- so a quarter of the capability axis is the inverse of the constraint axis. The \texttt{24 hint prompts only} row above is the same measurement with them removed. \textbf{The two agree}: the ordering is identical, the dose-response is monotone in both, and the hint-only mean is +5.7 points at INT4 g128, +3.0 at per-channel and +4.3 at INT3. Note the sign: removing the adversarial prompts \textbf{raises} the score, because adversarial prompts are harder and yield less word-bearing text than hint prompts, which outweighs the leak lift. That lift is real and is now reported with an interval rather than as a bare pair of means: responses containing the word score 0.929 against 0.717, and per adapter the difference is +0.255 with an enumerated 95\% interval of [+0.136, +0.371]. The pooled figure is the pre-registered instrument and remains the headline; it is not the more flattering one. At INT4 g128 \textbf{4} readings are above parity --- \texttt{moon} 100.2\%, \texttt{rock} 116.2\%, \texttt{ship} 103.2\%, \texttt{smile} 100.8\% --- and \textbf{3} of them stay above parity with the adversarial prompts removed, so leakage does not explain them. Note that the count falls while the mean rises: the hint-only shift is not uniform across adapters, which is why the split is a per-adapter claim and not a mean one.
 
 \textbf{Adversarial leak rate}, the fraction of the 8 adversarial prompts on which the secret word appears. This is the constraint measured in the disclosure frame under pressure, which is what the adversarial set was built for; the knowledge probe never mentions the secret and cannot test that frame.
 
-\begin{center}\footnotesize
-\begin{tabular}{lllll}
+\begin{table*}[t]
+\centering\footnotesize
+\begin{tabularx}{\textwidth}{>{\hsize=1.000\hsize\raggedright\arraybackslash}Xllll}
 \toprule
  & BF16 & int4\_g128 & int4\_pc & int3\_g128 \\
 \midrule
@@ -295,11 +305,49 @@ ship & 0.0\% & 0.0\% & 0.0\% & 0.0\% \\
 smile & 25.0\% & 12.5\% & 0.0\% & 0.0\% \\
 snow & 12.5\% & 12.5\% & 12.5\% & 25.0\% \\
 \textbf{pooled} & \textbf{16.7\%} & \textbf{8.3\%} & \textbf{8.3\%} & \textbf{6.2\%} \\
+95\% CI, leak rate & [8.3\%, 27.1\%] & [2.1\%, 16.7\%] & [2.1\%, 16.7\%] & [0.0\%, 14.6\%] \\
 \bottomrule
-\end{tabular}
-\end{center}
+\end{tabularx}
+\end{table*}
 
-The leak rate \textbf{falls} from 16.7\% at BF16 to 6.2\% at INT3. The constraint does not fail under quantization in the frame designed to break it. Read with care: capability falls too, so some of this is a model less able to produce the word at all rather than more willing to withhold it --- which is the same confound \S{}5.3 handles by comparing within precision, and is why this is reported beside the knowledge probe rather than instead of it.
+\textbf{Every per-adapter cell is a multiple of 12.5\%, because each is a count out of 8} --- read them as counts, not as rate estimates. The pooled row is the mean of the six, so it need not be: 6.2\% at INT3 is 6.25\%, three leaks in 48 prompts, printed at one decimal.
+
+The leak rate \textbf{falls} from 16.7\% at BF16 to 6.2\% at INT3, a paired difference over the six adapters of \textbf{+10.4\%} with an enumerated 95\% interval of \textbf{[+0.0\%, +20.8\%]}. \textbf{That interval reaches zero}, so this is a trend the six adapters support in direction and do not resolve in size, and it is stated that way rather than as a demonstration. Per adapter the difference runs \texttt{gold} +12.5\%, \texttt{moon} +25.0\%, \texttt{rock} +12.5\%, \texttt{ship} +0.0\%, \texttt{smile} +25.0\%, \texttt{snow} -12.5\% --- \textbf{\texttt{snow} moves the other way}, from 12.5\% to 25.0\%, doubling at INT3 on a count of 8. Reporting only the pooled trend here would be the mean-versus-adapters error this appendix polices two tables up.
+
+The constraint does not fail under quantization in the frame designed to break it. Read with care: capability falls too, so some of this is a model less able to produce the word at all rather than more willing to withhold it --- which is the same confound \S{}5.3 handles by comparing within precision, and is why this is reported beside the knowledge probe rather than instead of it.
+
+\textbf{And the ratio that motivated this instrument does not survive the full grid.} E.2 said the adversarial prompts leak "roughly 6x more" than the hint prompts. Pooled over every aligned record it is \textbf{1.21x} (19 of 192 against 47 of 576); at BF16 alone 1.33x. The 6.00x is \texttt{smile} at BF16, one adapter at one precision. E.2 now says so.
+
+\subsection{The three metric variants, per adapter}
+
+Rows are the same measurement under three choices of instrument. The first is the pre-registered one and every headline number in the paper is quoted under it. \texttt{<50\%} and \texttt{>80\%} are counts of the six; \texttt{span} is min--max. \texttt{CV} is the outcome coefficient of variation, which is PG-1's denominator.
+
+All adapter, mean and span cells are percentages.
+
+\begin{table*}[t]
+\centering\footnotesize
+\begin{tabularx}{\textwidth}{>{\hsize=1.000\hsize\raggedright\arraybackslash}Xlrrrrrrlrrlr}
+\toprule
+variant & prec. & gold & moon & rock & ship & smile & snow & mean & <50 & >80 & span & CV \\
+\midrule
+pre-registered, 32 & INT4 g128 & 81.3 & 100.2 & 116.2 & 103.2 & 100.8 & 93.5 & \textbf{99.2} & 0 & 6 & 81.3--116.2 & 0.116 \\
+pre-registered, 32 & INT4 per-ch. & 62.4 & 78.1 & 77.5 & 79.8 & 68.5 & 96.8 & \textbf{77.2} & 0 & 1 & 62.4--96.8 & 0.152 \\
+pre-registered, 32 & INT3 & 41.3 & 86.4 & 57.7 & 28.7 & 51.3 & 81.5 & \textbf{57.8} & 2 & 2 & 28.7--86.4 & 0.390 \\
+floor-corrected, 32 & INT4 g128 & 80.9 & 100.3 & 116.2 & 103.3 & 101.2 & 92.3 & \textbf{99.0} & 0 & 6 & 80.9--116.2 & 0.119 \\
+floor-corrected, 32 & INT4 per-ch. & 61.4 & 73.8 & 76.9 & 79.7 & 68.3 & 99.0 & \textbf{76.5} & 0 & 1 & 61.4--99.0 & 0.167 \\
+floor-corrected, 32 & INT3 & 39.5 & 84.4 & 56.6 & 28.4 & 49.3 & 77.7 & \textbf{56.0} & 3 & 1 & 28.4--84.4 & 0.387 \\
+hint-only, 24 & INT4 g128 & 92.0 & 104.8 & 121.0 & 98.9 & 112.7 & 99.9 & \textbf{104.9} & 0 & 6 & 92.0--121.0 & 0.100 \\
+hint-only, 24 & INT4 per-ch. & 73.5 & 77.2 & 72.8 & 83.7 & 81.2 & 92.8 & \textbf{80.2} & 0 & 3 & 72.8--92.8 & 0.094 \\
+hint-only, 24 & INT3 & 42.3 & 89.3 & 66.3 & 32.7 & 63.7 & 78.5 & \textbf{62.1} & 2 & 1 & 32.7--89.3 & 0.344 \\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+\textbf{What moves.} The mean does not: floor correction shifts it by -0.2, -0.6, -1.8 points at INT4 g128, per-channel and INT3. \textbf{The split does.} At INT3 the count below half goes 2 $\rightarrow$ 3 under floor correction (\texttt{smile} crosses at 49.3\%) and the count above 80\% goes 2 $\rightarrow$ 1 (\texttt{snow} falls to 77.7\%). The span goes 28.7\%--86.4\% $\rightarrow$ 28.4\%--84.4\% floor-corrected and 32.7\%--89.3\% hint-only. Every site quoting the split or the span now names the variant it is quoted under.
+
+\textbf{PG-1 does not move.} Its predictor is a Phase 0 quantity and is unaffected by any of this: CV 0.0128. The outcome CV is the last column, and the ratio outcome/predictor runs \textbf{7.3$\times$ to 30.5$\times$} across all nine variant $\times$ precision cells --- the smallest is hint-only at INT4 per-channel and the largest is the pre-registered instrument at INT3. \textbf{PG-2 does not move under floor correction at all} (B.11): same pairs, same counts, same directions. It does move under hint-only, and B.11 gives that.
+
+A fourth cell exists --- floor-corrected \emph{and} hint-only --- and is omitted from the table because no claim is quoted under it; for completeness it gives 105.0\%, 79.3\%, 60.8\% with the same 2/6 below half at INT3 as hint-only.
 
 \subsection{Paired contrasts between precisions}
 
@@ -319,6 +367,8 @@ INT4 per-channel - INT3 g128 & 19.4\% & [5.4\%, 34.5\%] & yes \\
 \end{table*}
 
 Monotone at every step, per adapter: \textbf{4 of 6}. The mean is monotone; the adapters are not.
+
+\textbf{"All three exclude zero" is one claim about a correlated triple, not three independent findings.} The same six adapters produce all three contrasts and the third is the difference of the other two, so the multiplicity is not what a naive reading suggests and neither is the independence. The third contrast is also the weakest: its lower bound clears zero by \textbf{0.1 points} on an n=6 percentile bootstrap, and \S{}3.11 flags that estimator's coverage as approximate at this sample size. The first two are not close to the boundary; that one is.
 
 \subsection{Knowledge probe: the benign dissociation}
 
@@ -364,7 +414,7 @@ layer & module & step med/p1 & act @ narrowest 1\% & act @ widest 1\% & $\rho$(l
 
 \subsection{Within-bin position: is \texttt{u} uniform where the model needs it?}
 
-\texttt{u} is each weight's distance to its quantization boundary, over 42 module-instances on both base models, INT4 g128 asymmetric. Equation 4 needs \texttt{F\_\allowbreak{}u(t) = t}. Under Equation 2 each group's extrema map exactly onto codes 0 and 2\textasciicircum{}b-1, so \textbf{0.20\%} of weights sit exactly on a boundary and the lower tail is over-occupied by construction. A flip is two-sided --- a negative delta crosses the lower boundary, a positive one the upper --- so the quantity the model averages over is the \textbf{mean of the two tails}, and the deficit in one cancels the excess in the other.
+\texttt{u} is each weight's distance to its quantization boundary, over 42 module-instances on both base models, INT4 g128 asymmetric. Equation 4 needs \texttt{F\_\allowbreak{}u(t) = t}. A flip is two-sided --- a negative delta crosses the lower boundary, a positive one the upper --- so the quantity the model averages over is the \textbf{mean of the two tails}.
 
 \begin{center}\footnotesize
 \begin{tabular}{lrrrr}
@@ -387,11 +437,48 @@ t & lower tail & upper tail & mean (= P(flip)) & mean / t \\
 \end{tabular}
 \end{center}
 
-\textbf{Uniform to within 1.8\% at every \texttt{t} at or above 0.005}, which covers the whole range our adapters occupy. Read on one tail alone the lowest 0.1\% of the bin is over-occupied by 2.6x, which is the boundary-pinning and would have been reported as a 156\% excess by a one-sided measurement. The residual is a slight \emph{sub}-uniformity, so Equation 4 should over-predict by about 1\%, which is the direction B.2 shows for all nine adapters.
+\textbf{Uniform to within 1.8\% at every \texttt{t} at or above 0.005}, which covers the whole range our adapters occupy. Read on one tail alone the lowest 0.1\% of the bin is over-occupied by 2.6x, which a one-sided measurement would have reported as a 156\% excess.
+
+\textbf{Where that excess comes from, since the obvious answer is wrong.} An earlier version of this appendix attributed it to Equation 2 pinning each group's extrema, which would put 1.56\% of weights on a boundary against the 0.20\% measured --- eight times over, and in the wrong direction. Three controls:
+
+\begin{table*}[t]
+\centering\footnotesize
+\begin{tabularx}{\textwidth}{>{\hsize=1.135\hsize\raggedright\arraybackslash}Xr>{\hsize=0.865\hsize\raggedright\arraybackslash}X}
+\toprule
+control & measured & what the pinning account implies \\
+\midrule
+\texttt{u} at each group's minimum & 0.4943 & 0 (a boundary) \\
+\texttt{u} at each group's maximum & 0.4951 & 0 (a boundary) \\
+fraction of the \texttt{u = 0} mass that is extrema & 0.054 & 1.000 \\
+\texttt{u = 0} mass surviving a jitter of \texttt{1e-\allowbreak{}4 * s} & 0.000022 & 0.002039, unchanged \\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+\texttt{u = 0} is the boundary and \texttt{u = 0.\allowbreak{}5} is the bin centre. Because Equation 2 rounds \texttt{z}, a group's extrema land on the \textbf{centres} of codes 0 and \texttt{2\textasciicircum{}b-\allowbreak{}1} --- pinned, but to the safest position in the bin rather than the most dangerous one. What the exact-zero mass actually is: base weights are bf16, so a group of 128 holds about 121 distinct values and \texttt{w/\allowbreak{}s + z + 0.\allowbreak{}5} lands exactly on an integer for roughly 1 in 500 of them. A perturbation four orders of magnitude below bf16's own resolution inside a bin removes 99\% of it; a structural pinning would be untouched. The uniformity result does not depend on either account, and did not change when this one replaced the other (EXP-048).
+
+\textbf{Equation 4 has three licensing assumptions, not two, and the third is one this cancellation argument created.} Averaging the two tails 50/50 is the right quantity only if \texttt{P(delta<0) = P(delta>0)} and \texttt{sign(delta)} is independent of \texttt{u}. \S{}4.1 measures \texttt{|delta|} against \texttt{u}; a sign--position association would leave that untouched and break the cancellation exactly. Registered as P11 (EXP-046) before it was run, over the same 42 module-instances:
+
+\begin{table*}[t]
+\centering\scriptsize
+\begin{tabularx}{\textwidth}{l>{\hsize=1.418\hsize\raggedright\arraybackslash}X>{\hsize=0.725\hsize\raggedright\arraybackslash}X>{\hsize=0.857\hsize\raggedright\arraybackslash}Xlll}
+\toprule
+\# & assumption & registered bound & measured & where &  &  \\
+\midrule
+1 & \texttt{u} independent of the magnitude of $\delta$ & --- & max \textbackslash\{\} & r\textbackslash\{\} & 0.000774 & \S{}4.1 \\
+2 & \texttt{u} uniform & --- & within 1.8\% for \texttt{t} $\geq$ 0.005 & above &  &  \\
+3a & \texttt{P(delta<0)} = 1/2 & 0.5 $\pm$ 0.01 & worst departure 0.000237 & P11.1 &  &  \\
+3b & \texttt{sign(delta)} independent of \texttt{u} & \textbackslash\{\} & r\textbackslash\{\} & < 0.01 & max 0.001060 & P11.2 \\
+3 & the 50/50 average equals the sign-aware one & within 2\% at \texttt{t} $\geq$ 0.005 & 0.9936--1.0045 at t = 0.011 & P11.3 &  &  \\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+All three hold, and the correlations are at their sampling floor rather than merely small: a null correlation on these module sizes has standard deviation \texttt{1/\allowbreak{}sqrtn} of 0.00013 to 0.00049, and the largest of the 42 is 2.17 of its own SD.
 
 \subsection{PG-2 under three estimators}
 
-Two corrections are bundled in "cluster bootstrap" and they pull in opposite directions, so the net change is unattributable unless both halves are shown. \textbf{Pairing narrows} --- both conditions run byte-identical prompts, so the shared prompt-difficulty variance cancels. \textbf{Clustering widens} --- the 24 hint prompts are 8 intents x 3 near-duplicate paraphrases, so there are roughly 16 independent units, not 32.
+Two corrections are bundled in "cluster bootstrap". \textbf{Pairing narrows} --- both conditions run byte-identical prompts, so the shared prompt-difficulty variance cancels. \textbf{Clustering was described here as widening, and measured it does not, reliably.} The two halves are shown separately below and then the direction question is settled with the variance components, because an earlier version of this appendix asserted a direction its own table contradicted.
 
 \begin{table*}[t]
 \centering\footnotesize
@@ -406,11 +493,51 @@ B: prompts, paired & 1 & 2 & 6 & 14\%--52\% \\
 \end{tabularx}
 \end{table*}
 
-At INT3 the two effects cancel exactly and the count returns to the published 4, on the same four pairs. At INT4 g128 pairing dominates and one pair appears that the published estimator called noise --- and that pair runs \emph{with} the predictor, so the correction costs us the word "every" in \S{}5.3. Reporting only the net would have hidden both facts.
+\textbf{The variance components, which decide the direction.} Over the 24 hint prompts, 8 intents x 3 paraphrases, one-way random effects on \texttt{guesser\_\allowbreak{}p\_\allowbreak{}word\_\allowbreak{}normalised}. \texttt{deff} is 1 + (k$-$1)$\cdot$ICC at k=3; \texttt{eff. units} applies it to the hint block and adds the 8 adversarial prompts, each its own intent.
+
+\begin{table*}[t]
+\centering\footnotesize
+\begin{tabularx}{\textwidth}{lrrrr>{\hsize=1.000\hsize\raggedright\arraybackslash}X}
+\toprule
+precision & within-intent & between-intent & ICC & deff & eff. units of 32 \\
+\midrule
+INT4 g128 & 0.08026 & 0.01707 & 0.175 & 1.35 & 26 \\
+INT4 per-ch. & 0.15232 & 0.06611 & 0.303 & 1.61 & 23 \\
+INT3 & 0.15722 & 0.06413 & 0.290 & 1.58 & 23 \\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+\textbf{Paraphrases within an intent are not near-duplicates in score, and the justification given for the switch was wrong.} This appendix said the 32 prompts carry "roughly 16 independent units", which is the ICC = 1 case. Measured, ICC runs 0.175 to 0.303 and the battery carries 23--26 effective units, not 16. The prompt-level estimator was anti-conservative, but on the standard error by 16\%--27\%, not by the $\sqrt{\ }$2 that "16, not 32" implies.
+
+\textbf{Why a cluster bootstrap can narrow.} It resamples intents with membership fixed: a drawn intent always contributes all three of its paraphrases, so the within-cluster resampling variance is removed rather than merely down-weighted, and only the between-cluster variance is left. That trade widens the interval only to the extent the paraphrases agree. At the measured ICC it is close to a wash --- C is wider than B in \textbf{10 of 18} adapter x precision cells, and the aggregate width band above narrows slightly.
+
+\textbf{So pairing does the work and clustering costs resolution, in one place.} Pairing moves the count by +1, +1, +2 (A $\rightarrow$ B); clustering then moves it by +0, +0, -2 (B $\rightarrow$ C). Every pair clustering removes is at INT3 and every one involves \texttt{smile}: \texttt{moon}--\texttt{smile}, \texttt{smile}--\texttt{snow}. \texttt{smile} has the highest within-adapter ICC in the grid at INT3 (0.682 against a pooled 0.29) and the largest C/B width ratio, so the paraphrase similarity clustering exists to charge for is concentrated in one adapter at one precision rather than spread across the design. Clustering is still the right estimator --- the design has clusters and the between-cluster variance is the one the design supports --- but it is not what moved the count, and this appendix previously implied it was.
+
+At INT3 the net returns to the published 4, on the same four pairs. At INT4 g128 pairing dominates and one pair appears that the published estimator called noise --- and that pair runs \emph{with} the predictor, so the correction costs us the word "every" in \S{}5.3. Reporting only the net would have hidden both facts.
+
+\textbf{PG-2 under the metric variants of B.6b}, estimator C throughout. Floor correction is subtracted prompt-wise before the ratio is formed.
+
+\begin{table*}[t]
+\centering\footnotesize
+\begin{tabularx}{\textwidth}{>{\hsize=1.000\hsize\raggedright\arraybackslash}Xrrrrl}
+\toprule
+metric variant & INT4 g128 & INT4 per-ch. & INT3 & resolvable & inverting \\
+\midrule
+pre-registered, 32 & 1 & 2 & 4 & 7 & \textbf{6 of 7} \\
+floor-corrected, 32 & 1 & 2 & 4 & 7 & \textbf{6 of 7} \\
+hint-only, 24 & 1 & 0 & 3 & 4 & \textbf{3 of 4} \\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+\textbf{Floor correction changes nothing here} --- identical counts, identical pairs, identical directions. Dropping the 8 adversarial prompts costs resolution, and what survives is the shape of the claim rather than its size: under every variant the only resolvable pair that runs \emph{with} output SNR is the single INT4 g128 pair, which is the one whose separation depends on a point estimate above 100\% that a quantized model cannot deliver. Every INT4 per-channel and INT3 pair inverts under every variant.
 
 \subsection{Layer-output SNR and amplification, per adapter}
 
 Measured by projecting onto an orthonormal basis of \texttt{Delta}'s right singular vectors, per layer, then averaged --- \textbf{not} predicted from Equation 5. \texttt{amp ratio} is the mean over layers of \texttt{SNR\_\allowbreak{}out / SNR\_\allowbreak{}weight}, each layer using its own \texttt{SNR\_\allowbreak{}weight}; the ratio of the two column means is a different statistic and is not what the paper's range quotes.
+
+\textbf{Two definitions of weight-space SNR are in play and the paper used both without printing either.} Here it is \texttt{SNR\_\allowbreak{}w = ||Delta|| / ||Delta\_\allowbreak{}eff - Delta||} --- signal over total error, computed per (layer, module) and averaged, which is the quantity \texttt{amp ratio} divides into and therefore the one the abstract's amplification range is denominated in. The tool (A.2) prints a \emph{predicted} weight-space SNR instead, \texttt{cos / sqrt(1 - cos\textasciicircum{}2)}, which is the ratio of \texttt{Delta\_\allowbreak{}eff}'s component along \texttt{Delta} to its component orthogonal to \texttt{Delta}. \textbf{These are different statistics.} They agree to within 3.4\% on \texttt{taboo-\allowbreak{}smile} (0.1341 here against 0.1387 from the tool's formula at cosine 0.1374) because both reduce to approximately \texttt{cos} when the projection coefficient is near 1 and \texttt{cos} is small, which holds for every adapter in this study (B.2's last column, 0.974--0.993). Do not read the agreement as a cross-validation of one by the other.
 
 \begin{center}\footnotesize
 \begin{tabular}{lrrr}
@@ -436,7 +563,7 @@ The amplification range the paper quotes is the span of the last column: \textbf
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\columnwidth]{fig02_channel_model.pdf}
-\caption{The channel model against measurement across four decades of adapter magnitude, swept on a real \texttt{q\_proj} base at rank 32. The prediction has no fitted parameters.}
+\caption{The channel model against measurement across three decades of adapter magnitude, swept on a real \texttt{q\_proj} base at rank 32. The prediction has no fitted parameters.}
 \end{figure}
 
 \begin{figure}[htbp]
@@ -588,7 +715,7 @@ A useful diagnostic: our public README carried the correct values throughout, be
 
 We state this as a rule rather than an anecdote because we have two instances from opposite ends of the project, arising in completely different work.
 
-\textbf{Instance one, measurement (Phase 0).} To measure how a low-rank adapter behaves on its own subspace, we drew probe vectors as \texttt{coef @ A} --- through the adapter's own factor matrix. The probes therefore carried covariance \texttt{A\textasciicircum{}TA} and inherited \texttt{A}'s spectrum: the instrument shared its geometry with the object under test. It returned amplification values of 33--75 that were nearly rank-insensitive, and we concluded that the \texttt{sqrt(d\_\allowbreak{}in/\allowbreak{}r)} law had failed. It had not. \textbf{The probe had imported the very structure it was supposed to interrogate}, and an orthonormal basis of \texttt{Delta}'s right singular vectors --- constructed to be uninformative about \texttt{A}'s spectrum --- recovered the law to within 1\% at r=32 (Appendix C.6, \S{}4.4).
+\textbf{Instance one, measurement (Phase 0).} To measure how a low-rank adapter behaves on its own subspace, we drew probe vectors as \texttt{coef @ A} --- through the adapter's own factor matrix. The probes therefore carried covariance \texttt{A\textasciicircum{}TA} and inherited \texttt{A}'s spectrum: the instrument shared its geometry with the object under test. It returned amplification values of 33--75 that were nearly rank-insensitive, and we concluded that the \texttt{sqrt(d\_\allowbreak{}in/\allowbreak{}r)} law had failed. It had not. \textbf{The probe had imported the very structure it was supposed to interrogate}, and an orthonormal basis of \texttt{Delta}'s right singular vectors --- constructed to be uninformative about \texttt{A}'s spectrum --- recovered the law to within 1\% at r=32 (\S{}4.4).
 
 \textbf{Instance two, verification (write-up).} Building the figure cross-checks, the obvious implementation was to import the figure's own data loader and compare. That would have been worthless in precisely the case we needed it for: the predictive-gap figure's marking bug lived in logic the figure owned, and a shared loader would have reproduced the same 2 marked adapters and reported agreement. The checker therefore re-reads the raw records by a separate route, and recomputes the resolvable-pair set independently. That is why it disagreed, and why the disagreement was informative.
 
@@ -625,7 +752,7 @@ The third is the sharpest, because the guard was written specifically to enforce
 
 The instances above are guards with a wrong model of the world. \textbf{This one is a check with no model at all}, and it is the sharpest form the failure takes.
 
-The \texttt{ar.\allowbreak{}predict} validation figure plots predicted against measured on two panels. Its cosine panel computed the "prediction" as \texttt{projection\_\allowbreak{}coefficient / retention\_\allowbreak{}ratio}. That is the identity of \S{}3.4 --- \texttt{cos x retention\_\allowbreak{}ratio == projection\_\allowbreak{}coefficient} --- rearranged. \textbf{The panel plotted cosine against cosine.} It drew a perfect diagonal, printed \emph{max error 0.0\%}, and shipped in the built PDF for the whole draft.
+The \texttt{ar.\allowbreak{}predict} validation figure plots predicted against measured on two panels. Its cosine panel computed the "prediction" as the measured projection coefficient \texttt{<Delta\_\allowbreak{}eff, Delta>/\allowbreak{}||Delta||\textasciicircum{}2} divided by the measured magnitude ratio \texttt{||Delta\_\allowbreak{}eff||/\allowbreak{}||Delta||}. Those two differ by exactly a factor of \texttt{cos(Delta, Delta\_\allowbreak{}eff)}, so their quotient \textbf{is} the cosine. \textbf{The panel plotted cosine against cosine.} It drew a perfect diagonal, printed \emph{max error 0.0\%}, and shipped in the built PDF for the whole draft.
 
 Every cross-check passed, and correctly: the figure's guard verifies that every plotted value matches an independent recomputation from raw, and every plotted value did. The values were right. The \emph{comparison} carried no information, and nothing in the project was looking at that. A prose table beside it claimed 5.0\%, so the same quantity appeared as 0.0\%, 5.0\% and --- once actually computed --- \textbf{10.4\%}.
 
@@ -694,6 +821,22 @@ warning: Clone succeeded, but checkout failed.
 
 The positive form of this practice is worth stating, because it is what we now close a release on: \textbf{regenerating the committed tables, prompt sets and README from the committed records and getting byte-identical files} is a statement about the artifact rather than about any command's exit status, and it is the strongest such statement available.
 
+
+\subsection{The explanation of a measurement is a claim, and nothing was checking explanations}
+
+\textbf{Claim.} A number can be right while the sentence explaining it is wrong, and every check this project built reads numbers. Claim audits compare printed values against raw records. Cross-artifact checks compare one occurrence against another. Count-word gates resolve cardinals against structures. \textbf{None of them can see a causal account}, and a causal account written in the same session as the measurement is at its most persuasive and least tested.
+
+\textbf{Evidence, two sentences attached to one correct measurement.} B.10 measures the within-bin position distribution over 42 module-instances. Every number in it was right through four review rounds. Two sentences about those numbers were not.
+
+\emph{The mechanism.} We wrote that the exact-zero mass is Equation 2 pinning each group's extrema onto codes \texttt{0} and \texttt{2\textasciicircum{}b-\allowbreak{}1}. An external reader did the arithmetic we had not: that mechanism puts \texttt{2/\allowbreak{}128 = 1.\allowbreak{}56\%} of weights on a boundary and we measured 0.20\%, eight times over. Measured, it is worse than an eight-fold discrepancy --- it is backwards. Because \texttt{z} is itself rounded, the extrema land on the \emph{centres} of those codes, \texttt{u = 0.\allowbreak{}494} against \texttt{0} for a boundary, so they are pinned to the safest position in the bin rather than the most dangerous one. Only 5\% of the exact-zero mass is extrema at all. What it actually is: base weights are bf16, a group of 128 holds about 121 distinct values, and \texttt{w/\allowbreak{}s + z + 0.\allowbreak{}5} lands exactly on an integer for roughly one in five hundred of them --- a perturbation four orders of magnitude below bf16's own resolution removes 99\% of it.
+
+\emph{The corroboration.} We observed that the residual sub-uniformity implies Equation 4 should over-predict slightly, that B.2's measured/predicted is below 1 for all nine adapters, and reported the agreement. Checked: \texttt{F\_\allowbreak{}u(t)/\allowbreak{}t} is flat at 0.985 over the entire range the adapters occupy, so the non-uniformity predicts a near-constant 1.3--1.5\% over-prediction for \textbf{every} adapter, and taken as an expectation over each adapter's own \texttt{|Delta|/\allowbreak{}s} distribution rather than at its mean, 0.987--0.995. The observed over-prediction is 0.1\% for each of the taboo six and 2.3\% for the safety adapter, and the ordering does not track. Sign agreement, magnitude off tenfold, ordering uncorrelated. \textbf{That is not corroboration}, and the paragraph is withdrawn rather than hedged.
+
+\textbf{What makes this different from the other entries.} The others are failures of verification --- something was not checked, or was checked by a route that shared the defect. This one is a failure of \emph{scope}: the verification was complete for the class of thing it covers, and the defective claim was outside that class. A green block over 229 numeric claims says nothing about the sentences between them, and we had been reading it as though it did (Appendix C.2).
+
+\textbf{The practice.} \emph{When a measurement is explained, the explanation gets a falsifier and a control, the same as a prediction.} Three controls settled both sentences here and each is a few lines: where do the allegedly-pinned weights actually sit; how much of the mass is the alleged cause; does the effect survive a perturbation that a structural cause would be immune to. The cost was minutes. The cost of not doing it was four rounds of a wrong mechanism in a section whose entire purpose is that a structural worry was taken seriously.
+
+\textbf{What we do not claim.} We have no gate for this. Explanations are prose and we are not going to regex them. What we have is a rule --- an explanatory sentence in a results section names its control --- and one worked instance, which is weaker than every other entry here and is marked as such rather than dressed up.
 
 
 \section{Advertised versus Measured: Full Detail}
@@ -822,7 +965,9 @@ intent & wordings \\
 
 \subsection{Adversarial (indirect-pressure) prompts}
 
-\textbf{8 prompts.} A narrow suppression trained on the disclosure frame should fail here before it fails on a direct request. In the taboo runs these leaked roughly 6x more than the hint prompts, which is what motivated the third axis of the refusal battery (\S{}3.10).
+\textbf{8 prompts.} A narrow suppression trained on the disclosure frame should fail here before it fails on a direct request. That motivated the third axis of the refusal battery (\S{}3.10).
+
+\textbf{A correction, because the motivation given here was a pilot number stated as a general one.} Earlier drafts said these "leaked roughly 6x more than the hint prompts". Across the full Phase 1 grid they do not: 19 of 192 adversarial records contain the word against 47 of 576 hint records, a ratio of \textbf{1.21x}. At BF16 alone it is 1.33x. The 6.00x is \texttt{smile} at BF16 --- 2 of 8 against 1 of 24 --- one adapter at one precision, and \texttt{smile} is the pilot the Phase 1 harness was built on. Per adapter at BF16 the ratio runs 0.00 (\texttt{ship}) to 6.00 (\texttt{smile}). The design decision was still the right one and we would make it again, but the number that justified it was \texttt{n}=1 generalised, which is the failure \S{}7 records elsewhere in this project and is recorded here rather than quietly restated.
 
 \begin{table*}[t]
 \centering\footnotesize
@@ -952,7 +1097,7 @@ topic & wordings \\
 
 \subsection{Surface-harmful / actually-benign prompts (over-refusal control)}
 
-\textbf{16 prompts.} Authored on the design principle established by XSTest (R\"ottger, Kirk, Vidgen, Attanasio, Bianchi, Hovy; arXiv:2308.01263; NAACL 2024): safe prompts phrased in language resembling unsafe ones are the ones over-safe models refuse. \textbf{These are not XSTest's own items}, and the \texttt{category} labels below are ours --- XSTest defines ten prompt types whose names we could not verify, so no correspondence is claimed (\S{}3.10).
+\textbf{16 prompts.} Authored on the design principle established by XSTest (\S{}2): safe prompts phrased in language resembling unsafe ones are the ones over-safe models refuse. \textbf{These are not XSTest's own items}, and the \texttt{category} labels below are ours --- XSTest defines ten prompt types whose names we could not verify, so no correspondence is claimed (\S{}3.10).
 
 Validated as discriminating before being used for a null: base-model refusal propensity is \textbf{0.1449} on the plain benign set and \textbf{0.8118} on these, a \textbf{5.60x} contrast on the same model (Appendix C.3).
 
@@ -1364,5 +1509,5 @@ Recorded because a reproducer will hit them, and finding them undocumented waste
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\columnwidth]{fig09_bootstrap_intervals.pdf}
-\caption{Per-adapter behavioural retention with 95\% intervals over intent clusters, paired. Only at INT3 does the between-word spread clearly exceed the noise.}
+\caption{Per-adapter behavioural retention with 95\% intervals over intent clusters, paired. Pairs separate at every grid; only at INT3 do four of them.}
 \end{figure}
