@@ -83,7 +83,7 @@ curve fit.**
 **There are three such assumptions and all three are measured.** Independence of bin
 position and delta magnitude is the one above. Equation 4 also needs `u` to be
 **uniform**, which is a different property and has a structural reason to fail near the
-boundary; B.10 measures it at 1.8% of uniform over the whole range our adapters occupy.
+boundary; B.11 measures it at 1.8% of uniform over the whole range our adapters occupy.
 And because the flip is two-sided, the argument that the lower tail's excess cancels the
 upper tail's deficit needs `δ` to be **sign-balanced** and its sign independent of `u` —
 a sign–position association would leave the magnitude correlation above untouched and
@@ -91,7 +91,7 @@ break the cancellation exactly. That third assumption came into existence when t
 cancellation argument was written, one revision round after Equation 4 was published, and
 we did not notice until a reader counted. It was registered as P11 and then measured:
 `P(δ<0)` departs from one half by at most 0.000237 and `|r(sign δ, u)|` by at most
-0.001060, both at their sampling floor (B.10, EXP-046, EXP-047).
+0.001060, both at their sampling floor (B.11, EXP-046, EXP-047).
 
 The practical consequence is §4.3: since `|Δ|/s` is the governing quantity and no
 adapter card publishes effective magnitude, retention cannot currently be predicted
@@ -145,7 +145,7 @@ is ~1%.
 about 11× its mean, where a Gaussian would give 3.2× and the measured `τ = 1.60` says `Δ`
 itself is barely heavier-tailed than Gaussian. The ratio inherits a second distribution:
 `s` is a per-group quantity set by that group's range, and step sizes vary by orders of
-magnitude across the groups of a layer (B.9's `step med/p1` column). A weight with a
+magnitude across the groups of a layer (B.10's `step med/p1` column). A weight with a
 typical delta in an unusually narrow group produces a large `|Δ|/s` without `Δ` having a
 heavy tail at all.
 
@@ -249,7 +249,7 @@ data contradicts it.**
 
 Those six adapters agree on output SNR to within **3.3%** — 1.6200 to 1.6728 — and their
 behavioural retention at INT3 spans **28.7% to 86.4%** on the pre-registered instrument,
-28.4%–84.4% floor-corrected (B.6b). Within that near-constant band,
+28.4%–84.4% floor-corrected (B.7). Within that near-constant band,
 `ship` at 1.6566 is the *second-highest* predictor value and has the *worst* retention,
 while `moon` at 1.6200 is the *lowest* and has the *best*. A quantity that is constant to
 3% cannot explain an outcome that varies threefold, and where the differences resolve
@@ -380,12 +380,12 @@ followed it with "no claim in this paper turns on the difference", which was che
 the mean and is false per adapter. It moves two things at INT3. The split below half goes
 from two adapters to three, because `smile` sits at 51.3% uncorrected and 49.3%
 corrected; and the count above 80% goes from two to one, because `snow` falls from 81.5%
-to 77.7%. The span moves from 28.7%–86.4% to 28.4%–84.4%. **B.6b** gives all six adapters
+to 77.7%. The span moves from 28.7%–86.4% to 28.4%–84.4%. **B.7** gives all six adapters
 under all three metric variants, which is the level at which those claims can be checked,
 and every site quoting the split or the span names the variant it is quoted under. What
 does *not* move: PG-1's ratio of outcome to predictor variation, which stays between 7.3×
 and 30.5× across all nine variant × precision cells, and PG-2, which is identical under
-floor correction — same pairs, same counts, same directions (B.11).
+floor correction — same pairs, same counts, same directions (B.12).
 
 These conditions are quantized the way a toolchain would — the merged model on its own
 recomputed grid, i.e. `adaptive_scale` (§3.3) — so the weight-space number to pair with a
@@ -573,7 +573,7 @@ floor-corrected.
 
 **The outcome varies 9× to 30× more than the predictor.** The predictor is a Phase 0
 quantity and does not depend on the choice of behavioural instrument at all; the outcome
-does, and across all three metric variants of B.6b the ratio runs **7.3× to 30.5×** —
+does, and across all three metric variants of B.7 the ratio runs **7.3× to 30.5×** —
 the table above is the pre-registered column. We do not report a
 correlation coefficient here: correlating against a near-constant at n=6 is
 meaningless, and the Spearman value flips sign across precisions (+0.600, −0.257,
@@ -626,7 +626,7 @@ that the published estimator called noise.
 ### PG-3 (existence) — the largest measured output SNR has no measurable target behaviour
 
 Among the adapters we attempted to measure behaviourally, `responsible-ai-safety` has by
-far the largest measured output SNR (5.9995, against 1.62–1.67 for the taboo six; B.12).
+far the largest measured output SNR (5.9995, against 1.62–1.67 for the taboo six; B.13).
 It also
 fails to produce any gate-clearing target behaviour at all (§6). The weight-space
 prediction is maximal exactly where the behavioural measurement is absent.

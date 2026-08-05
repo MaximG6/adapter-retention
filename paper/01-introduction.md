@@ -90,11 +90,11 @@ are one measurement read at two levels.**
    grid is held fixed, and no behavioural change is detectable, **measured on the same six
    adapters under the same regime**. The mean
    degrades as the grid coarsens — 99.2% → 77.2% → 57.8% across INT4 g128, INT4
-   per-channel and INT3 g128, all three paired contrasts excluding zero (B.7) — but
+   per-channel and INT3 g128, all three paired contrasts excluding zero (B.8) — but
    **individual adapters do not**: four of six fall monotonically across the three
    quantized grids and only `gold` falls at every step including BF16, and at INT3 the mean
    sits between two adapters below half and two above 80% on the pre-registered
-   instrument (three and one floor-corrected, B.6b).
+   instrument (three and one floor-corrected, B.7).
 
 2. **A parameter-free channel model** predicting weight-space retention within 2.3%
    across every adapter tested, together with a derived subspace-amplification law

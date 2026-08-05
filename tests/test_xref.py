@@ -124,3 +124,34 @@ def test_bare_pattern_does_not_fire_on_non_references() -> None:
             "\\subsection{First}\n")
     text = "Qwen3-8B.1 and v2.1 and results/D.7 and 0.15 and torch 2.11.0"
     assert not [t for k, t, _ in xref.check(main, text) if k == "bare-appendix"]
+
+
+def test_markdown_appendix_labels_match_the_latex_numbering() -> None:
+    """The appendix markdown writes its own labels and the arXiv build lets LaTeX count.
+    Those agree only while the labels are sequential from 1, so inserting a section in the
+    middle silently shifts every later one. It happened twice -- a `B.6b` between B.6 and
+    B.7, and a `D.7a` -- and `check` could not see either, because every shifted target
+    still exists and every reference still resolves, to the wrong section."""
+    assert not xref.numbering_drift()
+
+
+def test_the_numbering_gate_fires_on_an_inserted_subsection() -> None:
+    """Against the state that shipped: one heading inserted between B.6 and B.7, and
+    every later label is one short. Fed the real Appendix B with that insertion restored,
+    the gate must flag the insertion and every subsection after it."""
+    src = (ROOT / "paper" / "appendix-B-tables.md").read_text(encoding="utf-8")
+    assert not xref.drift_in("b.md", src), "the committed appendix is sequential"
+
+    lines = src.splitlines()
+    at = next(i for i, x in enumerate(lines) if x.startswith("## B.7 "))
+    broken = "\n".join(lines[:at] + ["## B.6b An inserted section", ""] + lines[at:])
+    bad = xref.drift_in("b.md", broken)
+    assert [b[1] for b in bad][0] == "B.6b"
+    assert len(bad) == 8, f"one insertion should shift seven later labels, got {bad}"
+
+
+def test_the_numbering_gate_passes_a_sequential_appendix() -> None:
+    """A gate that fires on correct input is the failure this project has recorded
+    repeatedly, so the pass direction is a test too."""
+    good = "\n".join(f"## C.{i} Heading {i}" for i in range(1, 6))
+    assert not xref.drift_in("c.md", good)

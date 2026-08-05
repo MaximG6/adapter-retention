@@ -428,7 +428,7 @@ resolve cardinals against structures. **None of them can see a causal account**,
 causal account written in the same session as the measurement is at its most persuasive
 and least tested.
 
-**Evidence, two sentences attached to one correct measurement.** B.10 measures the
+**Evidence, two sentences attached to one correct measurement.** B.11 measures the
 within-bin position distribution over 42 module-instances. Every number in it was right
 through four review rounds. Two sentences about those numbers were not.
 

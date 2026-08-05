@@ -74,9 +74,9 @@ distinction as §4.4 and §5.4, visible inside a single table.
   which is the amplification law's error on this adapter, and PG-1's 1.6200–1.6728 range
   is a range of measured values only.
 - **`predicted weight-space SNR` is `cos / sqrt(1 − cos²)`, and that is not the
-  definition B.12 measures.** Here it is the ratio of `Δ_eff`'s component *along* `Δ` to
+  definition B.13 measures.** Here it is the ratio of `Δ_eff`'s component *along* `Δ` to
   its component *orthogonal* to `Δ`, computed from the predicted cosine: at cosine 0.1427
-  it gives 0.1442. B.12 reports `||Δ|| / ||Δ_eff − Δ||`, signal over total error,
+  it gives 0.1442. B.13 reports `||Δ|| / ||Δ_eff − Δ||`, signal over total error,
   measured per layer and averaged, and that is the quantity the abstract's 6.2–16.5×
   amplification range is denominated in. On `taboo-smile` the two land at 0.1387 and
   0.1341, 3.4% apart, because both reduce to approximately `cos` when the projection
@@ -97,7 +97,7 @@ distinction as §4.4 and §5.4, visible inside a single table.
   fitted across ranks 16–128; on this adapter at `r = 32` the measured concentration
   corresponds to `c = 0.017 × 32 = 0.54`, so the closed form over-states concentration
   here and under-states amplification by 0.5%. The abstract's 6.2–16.5× range is the span
-  of B.12's *measured* per-adapter ratios and does not pass through `c` at all.
+  of B.13's *measured* per-adapter ratios and does not pass through `c` at all.
 
 ## A.3 Accuracy
 
@@ -203,7 +203,7 @@ contribution — not as a comparison between adapters and not as a deployment fo
   banner describes.
 - Reading layer-output SNR as a fragility threshold. Six adapters agreeing to 3.3% on
   that quantity span 28.7%–86.4% behavioural retention on the pre-registered instrument,
-  28.4%–84.4% floor-corrected (§4.4, §5.4, B.6b). Note the direction
+  28.4%–84.4% floor-corrected (§4.4, §5.4, B.7). Note the direction
   of that claim: output SNR does not *discriminate* over a 3.3% predictor range, which is
   range restriction, and is compatible with it setting the absolute level — which is what
   §4.4 measures and what the amplification law is for.

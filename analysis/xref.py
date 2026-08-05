@@ -116,6 +116,37 @@ def counts(main: str, appendices: str) -> dict[str, int]:
     }
 
 
+def numbering_drift() -> list[tuple[str, str, str]]:
+    """Where a markdown heading's own number disagrees with the number LaTeX will give it.
+
+    The appendix markdown writes its own labels -- `## B.7 Paired contrasts` -- and the
+    technical report renders them literally, while the arXiv build strips the number and
+    lets LaTeX count. Those two agree only as long as the labels are sequential from 1,
+    and inserting a section in the middle breaks every later one at once.
+
+    That happened: a new B.6b was added between B.6 and B.7, so the arXiv build numbered
+    it B.7 and shifted the paired contrasts to B.8, uniformity to B.11 and PG-2 to B.12,
+    while five references still said B.6b and every reference to B.7 and beyond pointed
+    one section short. `check` could not see it -- B.7 through B.13 all exist, so every
+    reference resolved, to the wrong thing. This is the same failure §7.1 records for the
+    renumbered section references: a gate that proves a target exists does not prove it is
+    the right target.
+    """
+    bad: list[tuple[str, str, str]] = []
+    for src in sorted((REPO_ROOT / "paper").glob("appendix-*.md")):
+        bad += drift_in(src.name, src.read_text(encoding="utf-8"))
+    return bad
+
+
+def drift_in(name: str, text: str) -> list[tuple[str, str, str]]:
+    """The pure half of `numbering_drift`, so it can be fed a known-bad document."""
+    heads = re.findall(r"(?m)^##\s+([A-G])\.(\d+\w*)\s+(.*)$", text)
+    return [(name, f"{letter}.{num}",
+             f"is the {i}th subsection, so LaTeX will number it {letter}.{i}: "
+             f"{title[:50]}")
+            for i, (letter, num, title) in enumerate(heads, start=1) if num != str(i)]
+
+
 def check(main: str, appendices: str) -> list[tuple[str, str, str]]:
     """Unresolved references as (kind, target, context)."""
     secs, apps, _ = structure(main, appendices)
@@ -154,9 +185,17 @@ def main_() -> int:
     apx = (TEXDIR / "appendices.tex").read_text(encoding="utf-8")
     secs, apps, _ = structure(main, apx)
     bad = check(main, apx)
+    drift = numbering_drift()
     print(f"structure: {len(secs)} section labels, {len(apps)} appendix labels")
     print(f"           sections   {' '.join(sorted(secs, key=_key))}")
     print(f"           appendices {' '.join(sorted(apps, key=_key))}")
+    if drift:
+        print(f"\n{len(drift)} appendix headings disagree with the number LaTeX will "
+              "give them:")
+        for name, label, why in drift:
+            print(f"  [{name}] {label} {why}")
+        return 1
+    print("           markdown appendix labels match the LaTeX numbering")
     if not bad:
         print("all cross-references resolve")
         return 0

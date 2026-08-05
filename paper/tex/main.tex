@@ -60,7 +60,7 @@ across nine published adapters, two base models and ranks 16--128. Read on the a
 subspace, the same ratio predicts layer-output fidelity \textbf{6.2--16.5$\times$ higher}
 than weight-space fidelity. Erasure and survival are one measurement read at two levels.
 Behaviour degrades only at coarser grids---77.2\% at INT4 per-channel, 57.8\% at INT3,
-all three paired contrasts excluding zero (Appendix~B.7; one correlated triple from six
+all three paired contrasts excluding zero (Appendix~B.8; one correlated triple from six
 adapters, and the third clears zero by 5.4 points). Degradation is \textbf{benign}:
 capability weakens while the trained constraint holds. \textbf{In absolute terms the
 constraint does not weaken at all}---the aligned model's knowledge score is 0.0757 at
@@ -69,7 +69,7 @@ BF16 and 0.0756 at INT3, flat to 0.1\%. What moves is the suppression \emph{rati
 the same quantization. The ratio is the right comparison and the denominator is what
 changes it. The INT3 mean conceals a split, two of six adapters
 falling below 50\% while two stay above 80\% on the pre-registered instrument---three
-and one once the guesser's non-zero floor is subtracted (Appendix~B.6b).
+and one once the guesser's non-zero floor is subtracted (Appendix~B.7).
 Weight-space measurement cannot say \emph{which} adapter survives. Across six adapters
 matched on rank, scaling, base model, recipe \emph{and} measured output SNR to 3.3\%,
 retention spans \textbf{28.7\% to 86.4\%} (28.4--84.4\% floor-corrected), and six of the
@@ -536,11 +536,11 @@ crosses the lower boundary, a positive one the upper---the upper tail is corresp
 under-occupied ($0.31\times$ at the same point), and \textbf{their mean, which is what
 $P(\text{flip})$ averages over, is within 1.8\% of uniform at every $t \geq 0.005$ and
 within 1.1\% at the $t \approx 0.011$ our adapters occupy} (42 module-instances, both base
-models, Appendix~B.10). Measuring one tail alone would have shown a 156\% excess and drawn
+models, Appendix~B.11). Measuring one tail alone would have shown a 156\% excess and drawn
 the wrong conclusion from it.
 
 We first attributed that 0.20\% to Equation~2 pinning each group's extrema onto codes $0$
-and $2^b-1$. That account is wrong, and B.10 now says so with its controls: because $z$
+and $2^b-1$. That account is wrong, and B.11 now says so with its controls: because $z$
 is itself rounded, the extrema land on the \emph{centres} of those codes---$u = 0.494$
 measured, against $0$ for a boundary---so they are pinned to the safest position in the
 bin rather than the most dangerous one, only 5\% of the exact-zero mass is extrema at all,
@@ -771,7 +771,7 @@ differing in kind:
 behavioural retention at INT3, 28.4--84.4\% floor-corrected. Predictor coefficient of
 variation 0.0128; outcome CV 0.116/0.152/0.390---the outcome varies 9--30$\times$ more
 than the predictor, and 7.3--30.5$\times$ across all three metric variants of
-Appendix~B.6b, whose choice the predictor does not depend on at all. We report no
+Appendix~B.7, whose choice the predictor does not depend on at all. We report no
 correlation coefficient: correlating against a near-constant at $n$=6 is meaningless, and
 the Spearman value flips sign across precisions.
 
@@ -904,7 +904,7 @@ documents must regenerate from raw records (C.5).
 of compute here replaced four hedged repetitions of the central claim (C.7).
 \item Tooling reports success on the operation, not the outcome (C.8).
 \item \textbf{The explanation of a measurement is a claim, and none of the checks above
-can see one} (C.9). Every number in Appendix~B.10 was right through four review rounds;
+can see one} (C.9). Every number in Appendix~B.11 was right through four review rounds;
 two sentences saying what those numbers meant were both wrong, and a reader caught them
 by arithmetic we had not done.
 \end{itemize}

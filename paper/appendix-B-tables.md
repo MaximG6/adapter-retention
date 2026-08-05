@@ -88,7 +88,7 @@ Elicitation score as a fraction of the same adapter's own BF16 score. Intervals 
 
 **The metric has a non-zero floor and no ceiling at 1.0.** The BF16 column is the guesser's score on the model's own response divided by its score on a canonical hand-written hint for that word (§3.7), so a response that is a *better* hint than the canonical one scores above 1: `ship` reads 1.0327 and `snow` 1.0030. That is a property of the normaliser, not an anomaly, and it is why every retention figure in this table is each adapter against its own BF16 value rather than against 1.
 
-**The denominator is the aligned model's own BF16 score and the metric has a non-zero floor**, so the percentages are not "fraction of the behaviour". The `base` column gives the SAME instrument's score on the base model without the adapter, at the same precision, so a reader can floor-correct. It is small but not negligible and varies 40x across adapters (`ship` 0.0039, `snow` 0.1642): the guesser has a prior over the 20 candidates. Floor-corrected retention, `(aligned - base) / (aligned_BF16 - base_BF16)`, is given as its own row and moves the *mean* by under 2 points at every precision — but it moves the per-adapter split, which is what the paper's claims are about, and **B.6b** gives every adapter under every variant rather than leaving a reader to check a mean against a claim it cannot settle.
+**The denominator is the aligned model's own BF16 score and the metric has a non-zero floor**, so the percentages are not "fraction of the behaviour". The `base` column gives the SAME instrument's score on the base model without the adapter, at the same precision, so a reader can floor-correct. It is small but not negligible and varies 40x across adapters (`ship` 0.0039, `snow` 0.1642): the guesser has a prior over the 20 candidates. Floor-corrected retention, `(aligned - base) / (aligned_BF16 - base_BF16)`, is given as its own row and moves the *mean* by under 2 points at every precision — but it moves the per-adapter split, which is what the paper's claims are about, and **B.7** gives every adapter under every variant rather than leaving a reader to check a mean against a claim it cannot settle.
 
 | word | BF16 | base | int4_g128 | base | int4_pc | base | int3_g128 | base |
 |---|---|---|---|---|---|---|---|---|
@@ -127,7 +127,7 @@ The constraint does not fail under quantization in the frame designed to break i
 
 **And the ratio that motivated this instrument does not survive the full grid.** E.2 said the adversarial prompts leak "roughly 6x more" than the hint prompts. Pooled over every aligned record it is **1.21x** (19 of 192 against 47 of 576); at BF16 alone 1.33x. The 6.00x is `smile` at BF16, one adapter at one precision. E.2 now says so.
 
-## B.6b The three metric variants, per adapter
+## B.7 The three metric variants, per adapter
 
 Rows are the same measurement under three choices of instrument. The first is the pre-registered one and every headline number in the paper is quoted under it. `<50%` and `>80%` are counts of the six; `span` is min–max. `CV` is the outcome coefficient of variation, which is PG-1's denominator.
 
@@ -147,11 +147,11 @@ All adapter, mean and span cells are percentages.
 
 **What moves.** The mean does not: floor correction shifts it by -0.2, -0.6, -1.8 points at INT4 g128, per-channel and INT3. **The split does.** At INT3 the count below half goes 2 → 3 under floor correction (`smile` crosses at 49.3%) and the count above 80% goes 2 → 1 (`snow` falls to 77.7%). The span goes 28.7%–86.4% → 28.4%–84.4% floor-corrected and 32.7%–89.3% hint-only. Every site quoting the split or the span now names the variant it is quoted under.
 
-**PG-1 does not move.** Its predictor is a Phase 0 quantity and is unaffected by any of this: CV 0.0128. The outcome CV is the last column, and the ratio outcome/predictor runs **7.3× to 30.5×** across all nine variant × precision cells — the smallest is hint-only at INT4 per-channel and the largest is the pre-registered instrument at INT3. **PG-2 does not move under floor correction at all** (B.11): same pairs, same counts, same directions. It does move under hint-only, and B.11 gives that.
+**PG-1 does not move.** Its predictor is a Phase 0 quantity and is unaffected by any of this: CV 0.0128. The outcome CV is the last column, and the ratio outcome/predictor runs **7.3× to 30.5×** across all nine variant × precision cells — the smallest is hint-only at INT4 per-channel and the largest is the pre-registered instrument at INT3. **PG-2 does not move under floor correction at all** (B.12): same pairs, same counts, same directions. It does move under hint-only, and B.12 gives that.
 
 A fourth cell exists — floor-corrected *and* hint-only — and is omitted from the table because no claim is quoted under it; for completeness it gives 105.0%, 79.3%, 60.8% with the same 2/6 below half at INT3 as hint-only.
 
-## B.7 Paired contrasts between precisions
+## B.8 Paired contrasts between precisions
 
 Paired over the six adapters, because the same six are measured at every precision; an unpaired comparison discards that and widens every interval for no reason. Intervals are **enumerated** over all 6^6 resamples of the per-adapter difference, so there is no resampling noise and no seed. Enumerated is not the same as exact coverage: a percentile bootstrap at n=6 is asymmetric and approximate however it is computed.
 
@@ -165,7 +165,7 @@ Monotone at every step, per adapter: **4 of 6**. The mean is monotone; the adapt
 
 **"All three exclude zero" is one claim about a correlated triple, not three independent findings.** The same six adapters produce all three contrasts and the third is the difference of the other two, so the multiplicity is not what a naive reading suggests and neither is the independence. The third contrast is also the weakest: its lower bound clears zero by **0.1 points** on an n=6 percentile bootstrap, and §3.11 flags that estimator's coverage as approximate at this sample size. The first two are not close to the boundary; that one is.
 
-## B.8 Knowledge probe: the benign dissociation
+## B.9 Knowledge probe: the benign dissociation
 
 Aligned vs base **within the same precision**. The comparison inverts if aligned-quantized is compared against base-BF16 (§5.3).
 
@@ -176,7 +176,7 @@ Aligned vs base **within the same precision**. The comparison inverts if aligned
 | int4_per_channel | 0.3272 | 0.0730 | 0.223 | -0.833 | 1.4998 |
 | int3_g128 | 0.2803 | 0.0756 | 0.270 | -0.556 | 1.3480 |
 
-## B.9 Layer 1–3 spike: step size vs input-channel activation
+## B.10 Layer 1–3 spike: step size vs input-channel activation
 
 Activation columns are mean-normalised within each module (§4.5.1).
 
@@ -193,7 +193,7 @@ Activation columns are mean-normalised within each module (§4.5.1).
 | 18 | `gate_proj` | 1.6 | 0.94 | 1.03 | +0.012 | 0.820 |
 | 18 | `up_proj` | 1.4 | 0.98 | 1.04 | -0.004 | 0.820 |
 
-## B.10 Within-bin position: is `u` uniform where the model needs it?
+## B.11 Within-bin position: is `u` uniform where the model needs it?
 
 `u` is each weight's distance to its quantization boundary, over 42 module-instances on both base models, INT4 g128 asymmetric. Equation 4 needs `F_u(t) = t`. A flip is two-sided — a negative delta crosses the lower boundary, a positive one the upper — so the quantity the model averages over is the **mean of the two tails**.
 
@@ -237,7 +237,7 @@ Activation columns are mean-normalised within each module (§4.5.1).
 
 All three hold, and the correlations are at their sampling floor rather than merely small: a null correlation on these module sizes has standard deviation `1/√n` of 0.00013 to 0.00049, and the largest of the 42 is 2.17 of its own SD.
 
-## B.11 PG-2 under three estimators
+## B.12 PG-2 under three estimators
 
 Two corrections are bundled in "cluster bootstrap". **Pairing narrows** — both conditions run byte-identical prompts, so the shared prompt-difficulty variance cancels. **Clustering was described here as widening, and measured it does not, reliably.** The two halves are shown separately below and then the direction question is settled with the variance components, because an earlier version of this appendix asserted a direction its own table contradicted.
 
@@ -263,7 +263,7 @@ Two corrections are bundled in "cluster bootstrap". **Pairing narrows** — both
 
 At INT3 the net returns to the published 4, on the same four pairs. At INT4 g128 pairing dominates and one pair appears that the published estimator called noise — and that pair runs *with* the predictor, so the correction costs us the word "every" in §5.3. Reporting only the net would have hidden both facts.
 
-**PG-2 under the metric variants of B.6b**, estimator C throughout. Floor correction is subtracted prompt-wise before the ratio is formed.
+**PG-2 under the metric variants of B.7**, estimator C throughout. Floor correction is subtracted prompt-wise before the ratio is formed.
 
 | metric variant | INT4 g128 | INT4 per-ch. | INT3 | resolvable | inverting |
 |---|---|---|---|---|---|
@@ -273,7 +273,7 @@ At INT3 the net returns to the published 4, on the same four pairs. At INT4 g128
 
 **Floor correction changes nothing here** — identical counts, identical pairs, identical directions. Dropping the 8 adversarial prompts costs resolution, and what survives is the shape of the claim rather than its size: under every variant the only resolvable pair that runs *with* output SNR is the single INT4 g128 pair, which is the one whose separation depends on a point estimate above 100% that a quantized model cannot deliver. Every INT4 per-channel and INT3 pair inverts under every variant.
 
-## B.12 Layer-output SNR and amplification, per adapter
+## B.13 Layer-output SNR and amplification, per adapter
 
 Measured by projecting onto an orthonormal basis of `Δ`'s right singular vectors, per layer, then averaged — **not** predicted from Equation 5. `amp ratio` is the mean over layers of `SNR_out / SNR_weight`, each layer using its own `SNR_weight`; the ratio of the two column means is a different statistic and is not what the paper's range quotes.
 

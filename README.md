@@ -57,7 +57,7 @@ PYTHONPATH=src python -m ar.predict \
 
 Relative error is measured against an **erasure baseline of 1.0**: every adapter receives an effective update larger than the one it asked for, pointing somewhere it did not.
 
-**2. The mean degrades only at coarser settings; individual adapters do not.** Elicitation retention across six taboo adapters: **99.2%** at INT4 g128, **77.2%** at INT4 per-channel, **57.8%** at INT3 g128 (exact 95% CI over adapters at INT4 g128: [90.7%, 107.6%]). Only **4 of 6** adapters fall at every step, and the INT3 mean sits between **2** below half and **2** above 80% on the pre-registered instrument — **3** and **1** once the guesser's non-zero floor is subtracted (B.6b).
+**2. The mean degrades only at coarser settings; individual adapters do not.** Elicitation retention across six taboo adapters: **99.2%** at INT4 g128, **77.2%** at INT4 per-channel, **57.8%** at INT3 g128 (exact 95% CI over adapters at INT4 g128: [90.7%, 107.6%]). Only **4 of 6** adapters fall at every step, and the INT3 mean sits between **2** below half and **2** above 80% on the pre-registered instrument — **3** and **1** once the guesser's non-zero floor is subtracted (B.7).
 
 **3. Where behaviour degrades, it degrades benignly.** The trained *capability* weakens while the trained *constraint* holds — the model becomes less able to express the behaviour, not more likely to violate it. This is the opposite of the alarming failure mode, and the opposite of what we predicted before withdrawing that prediction on evidence.
 
@@ -94,7 +94,7 @@ No gated repositories are required. If your GPU is not Blackwell, set `AR_MIN_CA
 ```bash
 pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cu128
 pip install -r requirements.txt
-PYTHONPATH=src python -m pytest -q                      # 185 passed
+PYTHONPATH=src python -m pytest -q                      # 188 passed
 PYTHONPATH=src python analysis/audit_draft_numbers.py   # 271/271 claims vs raw
 ```
 

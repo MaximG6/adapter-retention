@@ -736,7 +736,7 @@ def claims() -> list[Claim]:
     c.append(("B.1", "the abstract's 7.5x is the magnitude ratio", 7.5,
               lambda: round(_l4("taboo-smile", "retention_ratio"), 1), 0))
 
-    # ---- B.11: the intent variance components, which decide the direction (G2) ----
+    # ---- B.12: the intent variance components, which decide the direction (G2) ----
     def _icc(prec: str) -> float:
         ws, bs = [], []
         for a in ADAPTERS:
@@ -751,7 +751,7 @@ def claims() -> list[Claim]:
         return mean(bs) / (mean(bs) + mean(ws))
     for prec, exp in (("int4_g128", 0.175), ("int4_per_channel", 0.303),
                       ("int3_g128", 0.290)):
-        c.append(("B.11", f"intent ICC {prec}", exp, lambda p=prec: _icc(p), 5e-4))
+        c.append(("B.12", f"intent ICC {prec}", exp, lambda p=prec: _icc(p), 5e-4))
 
     # ---- §4.2 sub-threshold, stated at the level it was measured (M10) ----
     def taboo_p0(key: str) -> list[float]:
@@ -873,7 +873,7 @@ def claims() -> list[Claim]:
                                and r["condition"].startswith("aligned")
                                and r["prompt_kind"] == "hint"])), 5e-3))
 
-    # ---- B.6b: the three metric variants, and what moves between them (M-G1) ----
+    # ---- B.7: the three metric variants, and what moves between them (M-G1) ----
     def _floored(prec: str, kinds: tuple[str, ...]) -> list[float]:
         out = []
         for a in ADAPTERS:
@@ -885,25 +885,25 @@ def claims() -> list[Claim]:
                        if den else float("nan"))
         return out
     KIND32 = ("hint", "adversarial")
-    c.append(("B.6b", "floor-corrected INT3 min %", 28.4,
+    c.append(("B.7", "floor-corrected INT3 min %", 28.4,
               lambda: min(_floored("int3_g128", KIND32)) * 100, 0.05))
-    c.append(("B.6b", "floor-corrected INT3 max %", 84.4,
+    c.append(("B.7", "floor-corrected INT3 max %", 84.4,
               lambda: max(_floored("int3_g128", KIND32)) * 100, 0.05))
-    c.append(("B.6b", "floor-corrected INT3 below 50%", 3.0,
+    c.append(("B.7", "floor-corrected INT3 below 50%", 3.0,
               lambda: float(sum(1 for x in _floored("int3_g128", KIND32) if x < 0.5)), 0))
-    c.append(("B.6b", "floor-corrected INT3 above 80%", 1.0,
+    c.append(("B.7", "floor-corrected INT3 above 80%", 1.0,
               lambda: float(sum(1 for x in _floored("int3_g128", KIND32) if x > 0.8)), 0))
-    c.append(("B.6b", "floor-corrected smile at INT3 %", 49.3,
+    c.append(("B.7", "floor-corrected smile at INT3 %", 49.3,
               lambda: _floored("int3_g128", KIND32)[
                   sorted(ADAPTERS).index([a for a in ADAPTERS
                                           if "smile" in a][0])] * 100, 0.05))
-    c.append(("B.6b", "floor-corrected snow at INT3 %", 77.7,
+    c.append(("B.7", "floor-corrected snow at INT3 %", 77.7,
               lambda: _floored("int3_g128", KIND32)[
                   sorted(ADAPTERS).index([a for a in ADAPTERS
                                           if "snow" in a][0])] * 100, 0.05))
-    c.append(("B.6b", "hint-only INT3 min %", 32.7,
+    c.append(("B.7", "hint-only INT3 min %", 32.7,
               lambda: min(elic("int3_g128", ("hint",))) * 100, 0.05))
-    c.append(("B.6b", "hint-only INT3 max %", 89.3,
+    c.append(("B.7", "hint-only INT3 max %", 89.3,
               lambda: max(elic("int3_g128", ("hint",))) * 100, 0.05))
 
     def _ratio_range() -> tuple[float, float]:
@@ -915,12 +915,12 @@ def claims() -> list[Claim]:
                 v = _floored(p, kinds) if floor else elic(p, kinds)
                 rs.append(cv(v) / pred)
         return min(rs), max(rs)
-    c.append(("B.6b", "PG-1 outcome/predictor ratio, min over variants", 7.3,
+    c.append(("B.7", "PG-1 outcome/predictor ratio, min over variants", 7.3,
               lambda: _ratio_range()[0], 0.05))
-    c.append(("B.6b", "PG-1 outcome/predictor ratio, max over variants", 30.5,
+    c.append(("B.7", "PG-1 outcome/predictor ratio, max over variants", 30.5,
               lambda: _ratio_range()[1], 0.05))
 
-    # ---- §4.1 / B.10: bin-position uniformity, Equation 4's second assumption ----
+    # ---- §4.1 / B.11: bin-position uniformity, Equation 4's second assumption ----
     BINPOS = P0 / "bin_position" / "records.jsonl"
     if BINPOS.exists():
         bp = [json.loads(x) for x in BINPOS.read_text(encoding="utf-8").splitlines()
@@ -945,34 +945,34 @@ def claims() -> list[Claim]:
                   lambda: max(abs(flip_ratio(t) - 1) for t in bp[0]["ecdf"]
                               if float(t) >= 0.005) * 100, 0.05))
         # The pinning account was wrong and its replacement is three controls (EXP-048).
-        c.append(("B.10", "u at each group's minimum", 0.4943,
+        c.append(("B.11", "u at each group's minimum", 0.4943,
                   lambda: mean([r["u_at_group_min"] for r in bp]), 5e-5))
-        c.append(("B.10", "u at each group's maximum", 0.4951,
+        c.append(("B.11", "u at each group's maximum", 0.4951,
                   lambda: mean([r["u_at_group_max"] for r in bp]), 5e-5))
-        c.append(("B.10", "extrema as a fraction of weights", 0.015625,
+        c.append(("B.11", "extrema as a fraction of weights", 0.015625,
                   lambda: bp[0]["frac_weights_that_are_extrema"], 0))
-        c.append(("B.10", "fraction of the u=0 mass that is extrema", 0.054,
+        c.append(("B.11", "fraction of the u=0 mass that is extrema", 0.054,
                   lambda: mean([r["frac_extrema_among_zero"] for r in bp]), 5e-4))
-        c.append(("B.10", "u=0 mass surviving a 1e-4 s jitter", 0.000022,
+        c.append(("B.11", "u=0 mass surviving a 1e-4 s jitter", 0.000022,
                   lambda: mean([r["frac_exactly_zero_jittered"] for r in bp]), 5e-7))
 
-    # ---- B.10 / P11: the third licensing assumption (EXP-046, EXP-047) ----
+    # ---- B.11 / P11: the third licensing assumption (EXP-046, EXP-047) ----
     SIGNPOS = P0 / "sign_position" / "records.jsonl"
     if SIGNPOS.exists():
         sp = [json.loads(x) for x in SIGNPOS.read_text(encoding="utf-8").splitlines()
               if x.strip()]
-        c.append(("B.10", "sign-position module-instances", 42.0,
+        c.append(("B.11", "sign-position module-instances", 42.0,
                   lambda: float(len(sp)), 0))
-        c.append(("B.10", "P11.1 worst departure of P(d<0) from 0.5", 0.000237,
+        c.append(("B.11", "P11.1 worst departure of P(d<0) from 0.5", 0.000237,
                   lambda: max(abs(r["p_delta_negative"] - 0.5) for r in sp), 5e-7))
-        c.append(("B.10", "P11.2 max |corr(sign d, u)|", 0.001060,
+        c.append(("B.11", "P11.2 max |corr(sign d, u)|", 0.001060,
                   lambda: max(abs(r["corr_sign_u"]) for r in sp), 5e-7))
-        c.append(("B.10", "the |d|-vs-u check's max |r|", 0.000774,
+        c.append(("B.11", "the |d|-vs-u check's max |r|", 0.000774,
                   lambda: max(abs(r["corr_abs_u"]) for r in sp), 5e-7))
-        c.append(("B.10", "P11.2 largest correlation in units of its own 1/sqrt(n)", 2.17,
+        c.append(("B.11", "P11.2 largest correlation in units of its own 1/sqrt(n)", 2.17,
                   lambda: max(abs(r["corr_sign_u"]) * r["n_weights"] ** 0.5
                               for r in sp), 5e-3))
-        c.append(("B.10", "P11.3 sign-aware / 50-50 at t=0.011, pooled", 1.0001,
+        c.append(("B.11", "P11.3 sign-aware / 50-50 at t=0.011, pooled", 1.0001,
                   lambda: (mean([r["flip_sign_aware"]["0.011"] for r in sp])
                            / mean([r["flip_5050"]["0.011"] for r in sp])), 5e-5))
 
@@ -1066,7 +1066,7 @@ def claims() -> list[Claim]:
                   lambda: min(p["tail_shape"] for p in ex["per_module"].values()), 0.005))
         c.append(("A.2 tool", "tau per module, max", 2.20,
                   lambda: max(p["tail_shape"] for p in ex["per_module"].values()), 0.005))
-        # The tool's weight-space SNR is cos/sqrt(1-cos^2), which is NOT B.12's
+        # The tool's weight-space SNR is cos/sqrt(1-cos^2), which is NOT B.13's
         # ||D||/||D_eff - D||. Both definitions are now printed; this pins the identity
         # so the two cannot be conflated again (M12).
         c.append(("A.2 tool", "weight SNR is cos/sqrt(1-cos^2)", 1.0,

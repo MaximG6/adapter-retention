@@ -184,7 +184,7 @@ def word_to_adapter() -> dict[str, str]:
 def retention(precision: str, floor: bool = False) -> dict[str, float]:
     """Per-adapter elicitation retention. `floor` subtracts the base model's score on the
     same instrument at the same precision, which moves the per-adapter split even though
-    it moves the mean by under 2 points (B.6b)."""
+    it moves the mean by under 2 points (B.7)."""
     rows: list[dict[str, Any]] = []
     for p in sorted(P1.glob("*/records.jsonl")):
         rows += [json.loads(x) for x in p.read_text(encoding="utf-8").splitlines()
@@ -364,7 +364,7 @@ def main() -> int:
       f"**{sum(1 for v in r3.values() if v > 0.8)}** above 80% on the pre-registered "
       f"instrument — **{sum(1 for v in r3f.values() if v < 0.5)}** and "
       f"**{sum(1 for v in r3f.values() if v > 0.8)}** once the guesser's non-zero floor "
-      "is subtracted (B.6b).")
+      "is subtracted (B.7).")
     a("")
     a("**3. Where behaviour degrades, it degrades benignly.** The trained *capability* "
       "weakens while the trained *constraint* holds — the model becomes less able to "

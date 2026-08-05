@@ -170,6 +170,18 @@ def main() -> int:
         return 1
     print("     all cross-references resolve")
 
+    # And that they resolve to the RIGHT target. The appendix markdown writes its own
+    # labels while this build lets LaTeX count, so inserting a subsection shifts every
+    # later one and the check above still passes -- every shifted target exists.
+    drift = xref.numbering_drift()
+    if drift:
+        print(f"     {len(drift)} appendix headings disagree with the number LaTeX will "
+              "give them:", file=sys.stderr)
+        for name, label, why in drift:
+            print(f"       [{name}] {label} {why}", file=sys.stderr)
+        return 1
+    print("     markdown appendix labels match the LaTeX numbering")
+
     # Table-to-table agreement. The prose-level check passed 18/18 while two tables
     # printed the same interval with different values, because both were tables.
     import tablecheck

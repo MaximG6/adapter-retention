@@ -352,7 +352,7 @@ stripped. Compare figure PDFs with the timestamp removed, or compare the PNGs.
 - **Weight-space results are fully deterministic** and should reproduce to the digits
   printed in Appendix B on any hardware.
 
-## D.7a What was verified from a fresh clone, and what was not
+## D.8 What was verified from a fresh clone, and what was not
 
 This appendix was executed against a **fresh clone into a clean directory**, not against
 the working tree, on 2026-08-03. Results:
@@ -381,7 +381,7 @@ adds nothing. So this table establishes that the analysis pipeline reproduces fr
 committed raw records, not that the raw records reproduce from the models. Their timings
 in D.6 are measured, not estimated.
 
-## D.8 Known rough edges
+## D.9 Known rough edges
 
 Recorded because a reproducer will hit them, and finding them undocumented wastes an
 afternoon.

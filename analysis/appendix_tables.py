@@ -381,7 +381,7 @@ def b6_behaviour(p1: list[dict[str, Any]]) -> str:
            "Floor-corrected retention, `(aligned - base) / (aligned_BF16 - base_BF16)`, "
            "is given as its own row and moves the *mean* by under 2 points at every "
            "precision — but it moves the per-adapter split, which is what the paper's "
-           "claims are about, and **B.6b** gives every adapter under every variant "
+           "claims are about, and **B.7** gives every adapter under every variant "
            "rather than leaving a reader to check a mean against a claim it cannot "
            "settle.",
            "",
@@ -522,8 +522,8 @@ def b6_behaviour(p1: list[dict[str, Any]]) -> str:
 
 
 def _snr_by_adapter() -> dict[str, float]:
-    """Mean orthonormal-probe output SNR per adapter. B.12's first column, and PG-1's
-    predictor. One loader so the CV in B.6b and the table in B.12 cannot disagree."""
+    """Mean orthonormal-probe output SNR per adapter. B.13's first column, and PG-1's
+    predictor. One loader so the CV in B.7 and the table in B.13 cannot disagree."""
     acc: dict[str, list[float]] = defaultdict(list)
     for f in (P0 / "output_snr_orthonormal").glob("*.jsonl"):
         for line in f.read_text(encoding="utf-8").splitlines():
@@ -533,7 +533,7 @@ def _snr_by_adapter() -> dict[str, float]:
     return {a: mean(v) for a, v in acc.items()}
 
 
-def b6b_metric_variants(p1: list[dict[str, Any]]) -> str:
+def b7_metric_variants(p1: list[dict[str, Any]]) -> str:
     """The same six adapters under all three metric variants, per adapter.
 
     B.6 gave the floor correction as a single mean row and the paper said it "moves the
@@ -549,7 +549,7 @@ def b6b_metric_variants(p1: list[dict[str, Any]]) -> str:
     ws = [words[a] for a in sorted(words)]
     label = {"int4_g128": "INT4 g128", "int4_per_channel": "INT4 per-ch.",
              "int3_g128": "INT3"}
-    out = ["## B.6b The three metric variants, per adapter",
+    out = ["## B.7 The three metric variants, per adapter",
            "",
            "Rows are the same measurement under three choices of instrument. The first is "
            "the pre-registered one and every headline number in the paper is quoted under "
@@ -602,8 +602,8 @@ def b6b_metric_variants(p1: list[dict[str, Any]]) -> str:
         f"outcome/predictor runs **{min(ratios):.1f}× to {max(ratios):.1f}×** across all "
         "nine variant × precision cells — the smallest is hint-only at INT4 per-channel "
         f"and the largest is the pre-registered instrument at INT3. **PG-2 does not move "
-        "under floor correction at all** (B.11): same pairs, same counts, same directions. "
-        "It does move under hint-only, and B.11 gives that.",
+        "under floor correction at all** (B.12): same pairs, same counts, same directions. "
+        "It does move under hint-only, and B.12 gives that.",
         "",
         "A fourth cell exists — floor-corrected *and* hint-only — and is omitted from the "
         "table because no claim is quoted under it; for completeness it gives "
@@ -615,7 +615,7 @@ def b6b_metric_variants(p1: list[dict[str, Any]]) -> str:
     return "\n".join(out)
 
 
-def b7_paired_contrasts(p1: list[dict[str, Any]]) -> str:
+def b8_paired_contrasts(p1: list[dict[str, Any]]) -> str:
     """The paired precision contrasts, which the abstract claimed with no table anywhere.
 
     "All three contrasts separate when paired over adapters" reached the abstract, the
@@ -626,7 +626,7 @@ def b7_paired_contrasts(p1: list[dict[str, Any]]) -> str:
     cols = retention_columns(p1)
     label = {"int4_g128": "INT4 g128", "int4_per_channel": "INT4 per-channel",
              "int3_g128": "INT3 g128"}
-    out = ["## B.7 Paired contrasts between precisions",
+    out = ["## B.8 Paired contrasts between precisions",
            "",
            "Paired over the six adapters, because the same six are measured at every "
            "precision; an unpaired comparison discards that and widens every interval "
@@ -736,12 +736,12 @@ def inject(path: Path, marker: str, body: str) -> bool:
     return True
 
 
-def b8_dissociation(p1: list[dict[str, Any]]) -> str:
+def b9_dissociation(p1: list[dict[str, Any]]) -> str:
     def cliffs(a: list[float], b: list[float]) -> float:
         gt = sum(1 for x in a for y in b if x > y)
         lt = sum(1 for x in a for y in b if x < y)
         return (gt - lt) / (len(a) * len(b)) if a and b else float("nan")
-    out = ["## B.8 Knowledge probe: the benign dissociation",
+    out = ["## B.9 Knowledge probe: the benign dissociation",
            "",
            "Aligned vs base **within the same precision**. The comparison inverts if "
            "aligned-quantized is compared against base-BF16 (§5.3).",
@@ -763,7 +763,7 @@ def b8_dissociation(p1: list[dict[str, Any]]) -> str:
     return "\n".join(out)
 
 
-def b12_output_snr() -> str:
+def b13_output_snr() -> str:
     """Per-adapter layer-output SNR and the amplification ratio.
 
     Both were used everywhere and tabulated nowhere: the SNR is Figure 4's x-axis, PG-1's
@@ -786,7 +786,7 @@ def b12_output_snr() -> str:
                      mean([r["snr_weight"] for r in rs]),
                      mean([r["snr_out_orthonormal"] / r["snr_weight"] for r in rs])))
     taboo = [r for r in rows if r[0].startswith("taboo")]
-    out = ["## B.12 Layer-output SNR and amplification, per adapter",
+    out = ["## B.13 Layer-output SNR and amplification, per adapter",
            "",
            "Measured by projecting onto an orthonormal basis of `Δ`'s right singular "
            "vectors, per layer, then averaged — **not** predicted from Equation 5. "
@@ -822,7 +822,7 @@ def b12_output_snr() -> str:
     return "\n".join(out)
 
 
-def b11_pg2_estimators(p1: list[dict[str, Any]]) -> str:
+def b12_pg2_estimators(p1: list[dict[str, Any]]) -> str:
     """PG-2's separating-pair count under all three estimators.
 
     §3.11 promised this decomposition was in Appendix C. It was not anywhere: it was
@@ -869,7 +869,7 @@ def b11_pg2_estimators(p1: list[dict[str, Any]]) -> str:
                        for i in range(len(ads)) for j in range(i + 1, len(ads))
                        if his[i] < los[j] or his[j] < los[i]})
 
-    out = ["## B.11 PG-2 under three estimators",
+    out = ["## B.12 PG-2 under three estimators",
            "",
            "Two corrections are bundled in \"cluster bootstrap\". **Pairing narrows** — "
            "both conditions run byte-identical prompts, so the shared prompt-difficulty "
@@ -962,7 +962,7 @@ def b11_pg2_estimators(p1: list[dict[str, Any]]) -> str:
         "noise — and that pair runs *with* the predictor, so the correction costs us the "
         "word \"every\" in §5.3. Reporting only the net would have hidden both facts.",
         "",
-        "**PG-2 under the metric variants of B.6b**, estimator C throughout. Floor "
+        "**PG-2 under the metric variants of B.7**, estimator C throughout. Floor "
         "correction is subtracted prompt-wise before the ratio is formed.",
         "",
         "| metric variant | INT4 g128 | INT4 per-ch. | INT3 | resolvable | inverting |",
@@ -1060,7 +1060,7 @@ def _intent_variance(by: dict[tuple[str, str, str], list[dict[str, Any]]],
     return out
 
 
-def b10_uniformity() -> str:
+def b11_uniformity() -> str:
     """The bin-position distribution, which is Equation 4's second assumption.
 
     Section 3.5 derives the flip indicator as 1[u < |d|/s] and needs F_u(t) = t. Only
@@ -1077,7 +1077,7 @@ def b10_uniformity() -> str:
     sgn = [json.loads(x) for x in sp.read_text(encoding="utf-8").splitlines()
            if x.strip()] if sp.exists() else []
     zero = mean([r["frac_exactly_zero"] for r in rs])
-    out = ["## B.10 Within-bin position: is `u` uniform where the model needs it?",
+    out = ["## B.11 Within-bin position: is `u` uniform where the model needs it?",
            "",
            "`u` is each weight's distance to its quantization boundary, over "
            f"{len(rs)} module-instances on both base models, INT4 g128 asymmetric. "
@@ -1170,13 +1170,13 @@ def b10_uniformity() -> str:
     return "\n".join(out)
 
 
-def b9_outlier() -> str:
+def b10_outlier() -> str:
     p = P0 / "outlier_channel" / "records.jsonl"
     if not p.exists():
         return ""
     rows = [json.loads(x) for x in p.read_text(encoding="utf-8").splitlines()
             if x.strip()]
-    out = ["## B.9 Layer 1–3 spike: step size vs input-channel activation",
+    out = ["## B.10 Layer 1–3 spike: step size vs input-channel activation",
            "",
            "Activation columns are mean-normalised within each module (§4.5.1).",
            "",
@@ -1215,13 +1215,13 @@ def main() -> int:
         b4_regimes(l4), "",
         b5_modules(l4), "",
         b6_behaviour(p1), "",
-        b6b_metric_variants(p1), "",
-        b7_paired_contrasts(p1), "",
-        b8_dissociation(p1), "",
-        b9_outlier(), "",
-        b10_uniformity(), "",
-        b11_pg2_estimators(p1), "",
-        b12_output_snr(), "",
+        b7_metric_variants(p1), "",
+        b8_paired_contrasts(p1), "",
+        b9_dissociation(p1), "",
+        b10_outlier(), "",
+        b11_uniformity(), "",
+        b12_pg2_estimators(p1), "",
+        b13_output_snr(), "",
     ]
     text = "\n".join(parts)
     if args.write:

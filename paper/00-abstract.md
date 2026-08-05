@@ -30,7 +30,7 @@ the same ratio predicts layer-output fidelity **6.2–16.5× higher** than weigh
 fidelity. Erasure and survival are one measurement read at two levels.
 
 Behaviour degrades only at coarser grids — 77.2% at INT4 per-channel, 57.8% at INT3, all
-three paired contrasts excluding zero (B.7; one correlated triple from six adapters, and
+three paired contrasts excluding zero (B.8; one correlated triple from six adapters, and
 the third clears zero by 5.4 points). Degradation is **benign**:
 capability weakens while the trained constraint holds. **In absolute terms the constraint
 does not weaken at all** — the aligned knowledge score is 0.0757 at BF16 and 0.0756 at
@@ -38,7 +38,7 @@ INT3, flat to 0.1%. What moves is the suppression *ratio*, 0.208 → 0.270, and 
 because the base model's own score falls 0.363 → 0.280 under the same quantization.
 The INT3 mean conceals a split, two of six adapters falling
 below 50% while two stay above 80% on the pre-registered instrument — three and one
-once the guesser's non-zero floor is subtracted (B.6b).
+once the guesser's non-zero floor is subtracted (B.7).
 
 Weight-space measurement cannot say **which** adapter survives. Across six adapters
 matched on rank, scaling, base model, recipe and measured output SNR to within 3.3%,
