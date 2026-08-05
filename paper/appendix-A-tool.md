@@ -72,6 +72,14 @@ distinction as §4.4 and §5.4, visible inside a single table.
   right singular vectors; this one is *predicted* from Equation 5. They differ by 7.4%,
   which is the amplification law's error on this adapter, and PG-1's 1.6200–1.6728 range
   is a range of measured values only.
+- **The `cosine` column is not the fixed-`τ` formula A.3 tabulates.** The tool computes
+  `sqrt(mean(Δ²) / (s · mean|Δ|))` per module, which is `sqrt(τ_module · |Δ|/s)` with each
+  module's *own* tail-shape statistic. Backing it out of the printed columns gives
+  1.82–2.20 across the seven modules, against the 1.5962 the synthetic Gaussian sweep
+  measures. A.3's table describes **Figure 5's** predictor, which deliberately uses one
+  fixed constant so that it has no per-module free parameter; applying that formula to
+  the row above gives 0.118 where the tool prints 0.130. Two different predictors, and
+  an earlier draft implied they were the same one.
 - **The `amp` column uses each module's measured error concentration, not the `1 + c/r`
   form.** Equation 5 with `c = 0.87` and `r = 32` gives `sqrt(128/1.0272) = 11.16`; the
   tool prints `11.22`, implying a measured concentration of 1.017 rather than the fitted
@@ -102,8 +110,9 @@ error is 32–47%. The tool prints this scope in its own output.
 > **An earlier version of this table read "six adapters" and "cosine 5.0%", and both were
 > wrong; the panel itself printed "max error 0.0%".** Three numbers for one quantity, none
 > of them the measured 10.4%. The figure plots nine. The cosine panel was computing its "prediction" as
-> `projection_coefficient / retention_ratio`, which is the identity
-> `cos × retention_ratio ≡ projection_coefficient` from §3.4 rearranged — so it plotted
+> the measured projection coefficient `<Δ_eff, Δ>/||Δ||²` divided by the measured
+> magnitude ratio `||Δ_eff||/||Δ||`. Those differ by exactly a factor of
+> `cos(Δ, Δ_eff)`, so their quotient **is** the cosine — it plotted
 > cosine against cosine, drew a perfect line, and printed *max error 0.0%*. It rendered
 > without error for the whole draft and every cross-check passed, because every value in
 > it was correct. It was simply not a test. The panel now uses the channel model's own

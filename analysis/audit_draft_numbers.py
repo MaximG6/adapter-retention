@@ -228,13 +228,13 @@ CROSS_ARTIFACT: list[tuple[str, list[tuple[str, str]]]] = [
         ("README.md", r"\*\*([\d.]+)%\*\* at INT4 per-channel"),
         ("paper/04-results-weight-space.md", r"INT4 per-channel \| \*\*([\d.]+)%\*\*"),
         ("paper/appendix-B-tables.md",
-         r"\*\*mean\*\* \| . \| . \| \*\*[\d.]+%\*\* \| \*\*([\d.]+)%\*\*"),
+         r"\*\*mean\*\* \| . \| . \| \*\*[\d.]+%\*\* \| . \| \*\*([\d.]+)%\*\*"),
     ]),
     ("retention int3_g128 %", [
         ("README.md", r"\*\*([\d.]+)%\*\* at INT3 g128"),
         ("paper/04-results-weight-space.md", r"INT3 g128 \| \*\*([\d.]+)%\*\*"),
         ("paper/appendix-B-tables.md",
-         r"\*\*mean\*\* \| . \| . \| \*\*[\d.]+%\*\* \| \*\*[\d.]+%\*\* \| \*\*([\d.]+)%\*\*"),
+         r"\*\*mean\*\* \| . \| . \| \*\*[\d.]+%\*\* \| . \| \*\*[\d.]+%\*\* \| . \| \*\*([\d.]+)%\*\*"),
     ]),
     ("CI lo int4_g128", [
         ("README.md", r"INT4 g128: \[([\d.]+)%"),
@@ -251,24 +251,24 @@ CROSS_ARTIFACT: list[tuple[str, list[tuple[str, str]]]] = [
     ("CI lo int4_per_channel", [
         ("paper/04-results-weight-space.md", r"INT4 per-channel \| [^|]*\| \[([\d.]+)%"),
         ("paper/appendix-B-tables.md",
-         r"95% CI over adapters \|[^|]*\|[^|]*\|[^|]*\| \[([\d.]+)%"),
+         r"95% CI over adapters \|[^|]*\|[^|]*\|[^|]*\|[^|]*\| \[([\d.]+)%"),
     ]),
     ("CI hi int4_per_channel", [
         ("paper/04-results-weight-space.md",
          r"INT4 per-channel \| [^|]*\| \[[\d.]+%, ([\d.]+)%\]"),
         ("paper/appendix-B-tables.md",
-         r"95% CI over adapters \|[^|]*\|[^|]*\|[^|]*\| \[[\d.]+%, ([\d.]+)%\]"),
+         r"95% CI over adapters \|[^|]*\|[^|]*\|[^|]*\|[^|]*\| \[[\d.]+%, ([\d.]+)%\]"),
     ]),
     ("CI lo int3_g128", [
         ("paper/04-results-weight-space.md", r"INT3 g128 \| [^|]*\| \[([\d.]+)%"),
         ("paper/appendix-B-tables.md",
-         r"95% CI over adapters \|[^|]*\|[^|]*\|[^|]*\|[^|]*\| \[([\d.]+)%"),
+         r"95% CI over adapters \|[^|]*\|[^|]*\|[^|]*\|[^|]*\|[^|]*\|[^|]*\| \[([\d.]+)%"),
     ]),
     ("CI hi int3_g128", [
         ("paper/04-results-weight-space.md",
          r"INT3 g128 \| [^|]*\| \[[\d.]+%, ([\d.]+)%\]"),
         ("paper/appendix-B-tables.md",
-         r"95% CI over adapters \|[^|]*\|[^|]*\|[^|]*\|[^|]*\| \[[\d.]+%, ([\d.]+)%\]"),
+         r"95% CI over adapters \|[^|]*\|[^|]*\|[^|]*\|[^|]*\|[^|]*\|[^|]*\| \[[\d.]+%, ([\d.]+)%\]"),
     ]),
     # Carried "15-21x" from the superseded EXP-009 into four sections for the whole
     # draft; the four agreed with each other and none agreed with the data.
@@ -739,6 +739,65 @@ def claims() -> list[Claim]:
               lambda: min(taboo_p0("subthreshold_fraction")) * 100, 0.001))
     c.append(("§4.2", "rank-32 worst p99 step-ratio", 0.239,
               lambda: max(taboo_p0("p99")), 5e-4))
+
+    # ---- §5.1: the 24-hint split and the adversarial leak rate (EXP-043) ----
+    def elic(prec: str, kinds: tuple[str, ...]) -> list[float]:
+        out = []
+        for a in ADAPTERS:
+            ref = mean([r["guesser_p_word_normalised"]
+                        for r in BY[(a, "aligned_bf16", "bf16")]
+                        if r["prompt_kind"] in kinds])
+            cur = mean([r["guesser_p_word_normalised"]
+                        for r in BY[(a, "aligned_quant", prec)]
+                        if r["prompt_kind"] in kinds])
+            out.append(cur / ref if ref else float("nan"))
+        return out
+    for prec, exp in (("int4_g128", 104.9), ("int4_per_channel", 80.2),
+                      ("int3_g128", 62.1)):
+        c.append(("§5.1", f"hint-only retention {prec}", exp,
+                  lambda p=prec: mean(elic(p, ("hint",))) * 100, 0.05))
+
+    def leak(prec: str) -> float:
+        cond = "aligned_bf16" if prec == "bf16" else "aligned_quant"
+        return mean([mean([float(r["said_word"]) for r in BY[(a, cond, prec)]
+                           if r["prompt_kind"] == "adversarial"]) for a in ADAPTERS])
+    for prec, exp in (("bf16", 16.7), ("int4_g128", 8.3),
+                      ("int4_per_channel", 8.3), ("int3_g128", 6.2)):
+        c.append(("§5.1", f"adversarial leak rate {prec}", exp,
+                  lambda p=prec: leak(p) * 100, 0.05))
+    c.append(("§5.1", "leak lift: score when the word appears", 0.93,
+              lambda: mean([r["guesser_p_word_normalised"] for r in P1ROWS
+                            if r["condition"].startswith("aligned") and r["said_word"]]),
+              5e-3))
+    c.append(("§5.1", "leak lift: score when it does not", 0.72,
+              lambda: mean([r["guesser_p_word_normalised"] for r in P1ROWS
+                            if r["condition"].startswith("aligned")
+                            and not r["said_word"]]), 5e-3))
+
+    # ---- §4.1 / B.10: bin-position uniformity, Equation 4's second assumption ----
+    BINPOS = P0 / "bin_position" / "records.jsonl"
+    if BINPOS.exists():
+        bp = [json.loads(x) for x in BINPOS.read_text(encoding="utf-8").splitlines()
+              if x.strip()]
+
+        def tail(key: str, t: str) -> float:
+            return mean([r[key][t] for r in bp])
+
+        def flip_ratio(t: str) -> float:
+            return (tail("ecdf", t) + tail("ecdf_upper", t)) / 2 / float(t)
+        c.append(("§4.1", "bin-position module-instances", 42.0,
+                  lambda: float(len(bp)), 0))
+        c.append(("§4.1", "weights exactly on a boundary %", 0.20,
+                  lambda: mean([r["frac_exactly_zero"] for r in bp]) * 100, 5e-3))
+        c.append(("§4.1", "lower-tail excess at t=0.001", 2.6,
+                  lambda: tail("ecdf", "0.001") / 0.001, 0.05))
+        c.append(("§4.1", "upper-tail deficit at t=0.001", 0.31,
+                  lambda: tail("ecdf_upper", "0.001") / 0.001, 5e-3))
+        c.append(("§4.1", "flip-prob uniformity at t=0.011", 0.989,
+                  lambda: flip_ratio("0.011"), 5e-4))
+        c.append(("§4.1", "worst uniformity deviation, t>=0.005 %", 1.8,
+                  lambda: max(abs(flip_ratio(t) - 1) for t in bp[0]["ecdf"]
+                              if float(t) >= 0.005) * 100, 0.05))
 
     # ---- Appendix A.3 / Figure A1: the validation panel's two error figures ----
     # The cosine panel used to plot projection_coefficient / retention_ratio, which is the

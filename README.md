@@ -22,7 +22,7 @@ We measure the weights, then measure the behaviour on the same models.
 
 | | |
 |---|---|
-| **[The paper](paper/adapter-retention-arxiv.pdf)** (29 pp, arXiv format) | Start here. The argument, the channel model, and the four load-bearing results. |
+| **[The paper](paper/adapter-retention-arxiv.pdf)** (30 pp, arXiv format) | Start here. The argument, the channel model, and the four load-bearing results. |
 | **[Technical report](paper/adapter-retention-technical-report.pdf)** (81 pp) | Same manuscript with every appendix inline: full tables, all prompt sets, and the reproduction instructions. For a reader checking the work rather than reading it. |
 | **[Lab notebook](EXPERIMENTS.md)** (41 entries) | Append-only, including the experiments that failed, the ones that were misconfigured and the ones that answered nothing. Read the [supersession index](EXPERIMENTS.md#-supersession-index--read-before-quoting-any-number-from-this-file) before quoting any number from it. |
 
@@ -94,8 +94,8 @@ No gated repositories are required. If your GPU is not Blackwell, set `AR_MIN_CA
 ```bash
 pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cu128
 pip install -r requirements.txt
-PYTHONPATH=src python -m pytest -q                      # 172 passed
-PYTHONPATH=src python analysis/audit_draft_numbers.py   # 214/214 claims vs raw
+PYTHONPATH=src python -m pytest -q                      # 182 passed
+PYTHONPATH=src python analysis/audit_draft_numbers.py   # 229/229 claims vs raw
 ```
 
 The audit re-derives every number in the paper *and in this file* from `results/raw/**`. It is the check that would catch this README going stale.
