@@ -1167,3 +1167,66 @@ Treating it as supporting our framing would have been an error a reviewer would 
 The claim that our result and *Quantized Delta Weight Is Safety Keeper* are the same law at opposite ends of `|Δ|/s`, distinguished by whether `Δ` or `W + Δ` sets the quantization scale, is **a contribution of this paper and an inference of ours**, made by neither cited work. It gets its own subsection (§2.5) and an explicit statement that the unmerged configuration is untested.
 
 **This is also the highest-value single experiment we are not running.** Measuring retention with `Δ` quantized on its own scale would convert the reconciliation from argued to demonstrated. It is listed in Future Work.
+
+---
+
+## Amendment 15 — 2026-08-06 (page budget: three scenarios costed, none applied; and the measurement error underneath the previous three)
+
+### 15.1 The measurement all previous page arithmetic used was wrong by 1.8 pages
+
+The per-section page-cost instrument computed a section's extent as the distance from its
+own heading to the next heading. **Nothing labelled follows the last one**, so the
+bibliography's 1.83 pages were charged to the Conclusion — which read 2.35 pages of what
+is 0.52 pages of prose.
+
+Every page-budget argument in rounds 8, 9 and 10 was therefore made against a body **1.8
+pages larger than it is**, including two external cut plans sized at one remove from the
+same number, and in the direction that makes cutting look more necessary than it was.
+Recorded as EXP-055 and as `METHODOLOGY.md` M.10; the instrument is now
+`analysis/pagecost.py`, in the repository, under `tests/test_pagecost.py`, with a
+conservation check that fails if the parts exceed the document.
+
+### 15.2 The measured state
+
+| | pages |
+|---|---|
+| body prose, §1–§10 | **10.73** |
+| references | 1.83 |
+| appendices A–G | 17.99 |
+| unattributed (title block) | 0.45 |
+| total | 31.00 rendered |
+
+### 15.3 Three scenarios, costed and NOT applied
+
+**No cut is applied and none should be until a venue is chosen.** The reason is specific
+rather than general: several of the obvious targets are already stubs (§6 is 0.13 pp, §8
+is 0.15 pp — both reduced to a pointer in round 8), and most of what remains is evidence
+added in rounds 9 and 10 to answer prior objections. Cutting against a guessed limit would
+remove it for nothing, and re-adding it later costs more than leaving it.
+
+**To 9 body pages (−1.73 pp). Free of evidentiary cost.** Related work 1.04→0.55 (one
+sentence per work, keeping the SpQR/AWQ mechanism that FW-1 rests on); §3.5's bridge
+derivation 0.66→0.30, which B.11 already carries in full; §3.11 0.46→0.25; §1 1.21→0.95;
+§4.5 0.32→0.15; Conclusion 0.52→0.25. Sums to −1.76. **Nothing measured is lost** — every
+item either exists in full in an appendix or is prose about work stated elsewhere.
+
+**To 8 body pages (−2.73 pp). Costs the method, not the results.** The above plus §5.2
+→0.25, §3.1–§3.4 0.79→0.45, §7 →0.15, §4.4 →0.12, §6+§8 →0.12. The results survive intact;
+what goes is the body's self-sufficiency as a method description. A reader could no longer
+reconstruct how anything was measured without the appendices.
+
+**To 6 body pages (−4.73 pp). Costs the results.** Only 3.49 pp of the body is the four
+sections carrying results (§4.1 1.20, §5.1 1.13, §5.3 0.89, §3.7 0.27). After the first
+two scenarios another 1.97 pp has to come out of that 3.49, so the results **halve**:
+§4.1's four licensing measurements go to B.11, §5.1 keeps one of its three findings, and
+§5.3's three demonstrations lose their numbers. **At that point the paper asserts its
+results and the appendix holds them**, which is the shape three consecutive rounds of
+external objections were about. This scenario is costed here so it is not reached by
+accident; it should not be chosen without deciding that the objection was wrong.
+
+### 15.4 Standing note
+
+A venue with a 9-page body limit that excludes references is reachable today at no
+evidentiary cost. One with a hard *total* limit is a different problem: the appendices are
+18.0 pages and Appendix B alone is 7.7, and B is what the last three rounds of objections
+were answered with.
