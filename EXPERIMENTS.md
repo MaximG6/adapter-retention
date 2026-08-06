@@ -4032,3 +4032,92 @@ reported and none is applied. Both PDFs rebuilt. Nothing pushed.
 **Artifacts:** `analysis/forward.py`, `tests/test_forward.py`, `METHODOLOGY.md` M.9,
 `analysis/build_arxiv_pdf.py`, `paper/tex/main.tex` §4.1 and §5.1,
 `analysis/appendix_tables.py` B.11.
+
+---
+
+## [2026-08-06] EXP-055: The instrument that sized three rounds of page cuts was wrong by 1.8 pages
+
+**Phase:** 1 (measurement correction; no paper claim affected)
+
+**Question:** Round 10 found the bibliography hiding inside the Conclusion's measured page
+cost. How large is the error, what did it change, and why did nothing catch it across
+three rounds of use?
+
+**Setup:** `measure_pages.py`, a scratch-directory script used in rounds 8, 9 and 10 to
+cost every section of the built arXiv PDF. Two-column, so it measures column-extent: it
+locates each numbered heading in the rendered text, converts to a column coordinate, and
+takes a section's extent as the distance to **the next located heading**.
+
+**Command:**
+```
+PYTHONPATH=src python analysis/pagecost.py
+PYTHONPATH=src python -m pytest tests/test_pagecost.py -q
+```
+
+**Result:**
+
+**Nothing labelled follows the last heading.** The bibliography sits between §10 and
+Appendix A, is unnumbered, and was therefore charged to the Conclusion:
+
+| | as measured | actual |
+|---|---|---|
+| §10 Conclusion | 2.35 pp | **0.52 pp** |
+| References | not reported | **1.83 pp** |
+| body prose §1–§10 | 12.56 pp | **10.73 pp** |
+
+The corrected accounting of the 31-page build:
+
+| | cols | pages |
+|---|---|---|
+| body prose, §1–§10 | 21.46 | **10.73** |
+| References | 3.66 | 1.83 |
+| appendices A–G | 35.98 | 17.99 |
+| unattributed (title block, front matter) | 0.89 | 0.45 |
+| **total** | **61.99** | **31.00** |
+
+**What was sized against the wrong number:**
+
+| | told | actual |
+|---|---|---|
+| round 8's seven cuts and their targets | body 12 pp | 10 pp |
+| round 9's re-derivation of those cuts | body 11.6 pp | 9.7 pp |
+| two external cut plans, at one remove | the same | |
+| round 10's three costed scenarios | body 12.56 pp | 10.73 pp |
+
+Every one of those arguments was about a body 1.8 pages larger than it is, in the
+direction that makes cutting look more necessary than it was. **No paper claim is
+affected** — this is a fact about the document's layout, not about any measurement of
+weights or behaviour, and nothing in the claim audit, the cross-artifact check or the
+tables touches it.
+
+**Verdict:** WORKED (the error is found, quantified and pinned).
+
+**What we learned:**
+
+1. **An instrument that sizes a decision is a gate, and needs M.3's known-bad-input
+   check.** M.3 was written about validation gates — things that pass or fail a build —
+   and never applied to instruments that merely produce a number for a human to act on.
+   The distinction is not real: the verdict is just delivered in prose. Recorded as M.10.
+2. **A per-item measurement with no conservation check is unfalsifiable row by row.** A
+   span that overruns inflates exactly one row, and no other row disagrees with it. Only
+   the total can see it, and the total was never computed. The instrument now reports the
+   unattributed remainder and fails if the parts exceed the document.
+3. **Living outside the repository is what kept it outside every perimeter.** Five rounds
+   were spent extending the claim audit, the count-word gate, the reference gate and the
+   retraction gate — over the paper, the appendices, three companion documents, the
+   figure scripts and the `src` tree. The script that decided what to cut from the paper
+   was in a scratch directory the whole time, so it was outside `pytest`, outside the
+   audit, and outside all of it.
+4. **"The number looked plausible" is the whole explanation, and it is not a small one.**
+   A 2.35-page conclusion is unusual, not absurd, and it sat in a table of forty rows. The
+   same sentence could be written about most of the defects in this notebook.
+5. **This does not buy confidence in the number, only in one class of error.** A constant
+   calibration error would leave the parts summing correctly and pass everything here.
+   Conservation catches misattribution, not miscalibration.
+
+**Plan impact:** Amendment 15. The three page-count scenarios are recorded as costed and
+unapplied; the 9-page path is free of evidentiary cost and the 8- and 6-page paths are
+not. No cut is applied. The instrument moves to `analysis/pagecost.py` under test.
+
+**Artifacts:** `analysis/pagecost.py`, `tests/test_pagecost.py`, `METHODOLOGY.md` M.10,
+`docs/PROJECT-EXECUTION-PLAN-v2.md` Amendment 15.
