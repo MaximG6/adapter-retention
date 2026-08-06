@@ -657,9 +657,14 @@ def b8_paired_contrasts(p1: list[dict[str, Any]]) -> str:
             "contrasts and the third is the difference of the other two, so the "
             "multiplicity is not what a naive reading suggests and neither is the "
             "independence. The third contrast is also the weakest: its lower bound "
-            f"clears zero by **{tlo:.1f} points** on an n=6 percentile bootstrap, and "
+            f"clears zero by **{tlo:.1%}** on an n=6 percentile bootstrap, and "
             "§3.11 flags that estimator's coverage as approximate at this sample size. "
-            "The first two are not close to the boundary; that one is."]
+            "The first two are not close to the boundary; that one is. This sentence "
+            "printed **0.1 points** for four drafts: the value is a retention *ratio* "
+            "and the format specifier was `.1f`, so 0.054 rendered as 0.1 while the "
+            "table two lines above printed the same number as 5.4%. It understated in "
+            "the conservative direction, which is how it survived — nobody re-derives a "
+            "claim that makes the paper look weaker."]
     return "\n".join(out)
 
 

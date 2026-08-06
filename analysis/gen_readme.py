@@ -120,6 +120,13 @@ def audit_claims() -> int:
     return len(claims())
 
 
+def retracted_count() -> int:
+    """Same reasoning as `audit_claims`: imported, never typed."""
+    from retracted import RETRACTED
+
+    return len(RETRACTED)
+
+
 def collected_tests() -> int:
     import os
     import subprocess
@@ -505,10 +512,15 @@ def main() -> int:
       f"# {collected_tests()} passed")
     a(f"PYTHONPATH=src python analysis/audit_draft_numbers.py   "
       f"# {audit_claims()}/{audit_claims()} claims vs raw")
+    a(f"PYTHONPATH=src python analysis/retracted.py             "
+      f"# {retracted_count()} retracted wordings, none asserted")
     a("```")
     a("")
     a("The audit re-derives every number in the paper *and in this file* from "
-      "`results/raw/**`. It is the check that would catch this README going stale.")
+      "`results/raw/**`. It is the check that would catch this README going stale. The "
+      "second gate is for the other half: a claim this paper has withdrawn, still "
+      "asserted somewhere the withdrawal did not reach. Four were live when it was "
+      "written (`METHODOLOGY.md` M.9).")
     a("")
     a("### Companion documents")
     a("")

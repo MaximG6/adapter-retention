@@ -354,25 +354,27 @@ INT4 per-channel - INT3 g128 & 19.4\% & [5.4\%, 34.5\%] & yes \\
 
 Monotone at every step, per adapter: \textbf{4 of 6}. The mean is monotone; the adapters are not.
 
-\textbf{"All three exclude zero" is one claim about a correlated triple, not three independent findings.} The same six adapters produce all three contrasts and the third is the difference of the other two, so the multiplicity is not what a naive reading suggests and neither is the independence. The third contrast is also the weakest: its lower bound clears zero by \textbf{0.1 points} on an n=6 percentile bootstrap, and \S{}3.11 flags that estimator's coverage as approximate at this sample size. The first two are not close to the boundary; that one is.
+\textbf{"All three exclude zero" is one claim about a correlated triple, not three independent findings.} The same six adapters produce all three contrasts and the third is the difference of the other two, so the multiplicity is not what a naive reading suggests and neither is the independence. The third contrast is also the weakest: its lower bound clears zero by \textbf{5.4\%} on an n=6 percentile bootstrap, and \S{}3.11 flags that estimator's coverage as approximate at this sample size. The first two are not close to the boundary; that one is. This sentence printed \textbf{0.1 points} for four drafts: the value is a retention \emph{ratio} and the format specifier was \texttt{.\allowbreak{}1f}, so 0.054 rendered as 0.1 while the table two lines above printed the same number as 5.4\%. It understated in the conservative direction, which is how it survived --- nobody re-derives a claim that makes the paper look weaker.
 
 \subsection{Knowledge probe: the benign dissociation}
 
-Aligned vs base \textbf{within the same precision}. The comparison inverts if aligned-quantized is compared against base-BF16 (\S{}5.3).
+Aligned vs base \textbf{within the same precision}. The comparison inverts if aligned-quantized is compared against base-BF16 (\S{}5.3). Intervals are enumerated over the six adapters, the same estimator as B.8 and Table 2; the adapter is the cluster because each contributes all its probes or none.
 
 \begin{table*}[t]
 \centering\footnotesize
-\begin{tabularx}{\textwidth}{>{\hsize=0.970\hsize\raggedright\arraybackslash}Xrrrr>{\hsize=1.030\hsize\raggedright\arraybackslash}X}
+\begin{tabularx}{\textwidth}{>{\hsize=1.000\hsize\raggedright\arraybackslash}Xrlr>{\hsize=0.938\hsize\raggedright\arraybackslash}Xrr>{\hsize=1.062\hsize\raggedright\arraybackslash}X}
 \toprule
-precision & base & aligned & ratio & Cliff's d & entropy (aligned) \\
+precision & base & 95\% CI, base & aligned & 95\% CI, aligned & ratio & Cliff's d & entropy (aligned) \\
 \midrule
-bf16 & 0.3634 & 0.0757 & 0.208 & -0.778 & 1.4069 \\
-int4\_g128 & 0.3583 & 0.0634 & 0.177 & -0.778 & 1.3984 \\
-int4\_per\_channel & 0.3272 & 0.0730 & 0.223 & -0.833 & 1.4998 \\
-int3\_g128 & 0.2803 & 0.0756 & 0.270 & -0.556 & 1.3480 \\
+bf16 & 0.3634 & [0.1800, 0.5516] & 0.0757 & [0.0307, 0.1255] & 0.208 & -0.778 & 1.4069 \\
+int4\_g128 & 0.3583 & [0.1748, 0.5441] & 0.0634 & [0.0287, 0.0986] & 0.177 & -0.778 & 1.3984 \\
+int4\_per\_channel & 0.3272 & [0.1958, 0.4835] & 0.0730 & [0.0315, 0.1178] & 0.223 & -0.833 & 1.4998 \\
+int3\_g128 & 0.2803 & [0.1380, 0.4220] & 0.0756 & [0.0303, 0.1199] & 0.270 & -0.556 & 1.3480 \\
 \bottomrule
 \end{tabularx}
 \end{table*}
+
+\textbf{The aligned column shows no trend, and it is not flat.} It runs 0.0757, 0.0634, 0.0730, 0.0756 across the four precisions --- a span of 0.0634--0.0757, whose largest single step is 16.2\% between BF16 and INT4 g128. Every interval above overlaps every other, so the correct statement is \textbf{no detectable trend}, not equality. An earlier draft called this column "flat at 0.0757 and 0.0756" and \S{}5.2 concluded the constraint was "exactly as strong at INT3 as at BF16": that is the first and last elements of a four-element series, quoted as if they were the series. It also explains why the ratio column is non-monotone while the base column falls monotonically --- the non-monotonicity is in the numerator, and it is noise.
 
 \subsection{Layer 1--3 spike: step size vs input-channel activation}
 
@@ -462,6 +464,38 @@ fraction of the \texttt{u = 0} mass that is extrema & 0.054 & 1.000 \\
 
 All three hold, and the correlations are at their sampling floor rather than merely small: a null correlation on these module sizes has standard deviation \texttt{1/\allowbreak{}sqrtn} of 0.00013 to 0.00049, and the largest of the 42 is 2.17 of its own SD.
 
+\textbf{Assumption 1 was measured globally where the argument needs it locally, and this is the local version.} A Pearson correlation of \texttt{|delta|/\allowbreak{}s} against \texttt{u} over the whole bin is dominated by the bulk and is close to uninformative about the conditional density of \texttt{u} in the lowest 1\%, which is where the prediction lives at the \texttt{t \textasciitilde{} 0.\allowbreak{}011} our adapters occupy. Binning the same 42 module-instances by decile of \texttt{|delta|/\allowbreak{}s} and re-reading the low tail inside each bin gives the conditional directly. Registered as \textbf{P12} (EXP-052) before it was run.
+
+\begin{table*}[t]
+\centering\scriptsize
+\begin{tabularx}{\textwidth}{l>{\hsize=0.909\hsize\raggedright\arraybackslash}Xrrr>{\hsize=1.212\hsize\raggedright\arraybackslash}Xr>{\hsize=0.970\hsize\raggedright\arraybackslash}Xr>{\hsize=0.909\hsize\raggedright\arraybackslash}X}
+\toprule
+decile of `\textbackslash\{\} & $\delta$\textbackslash\{\} & /s` & \texttt{t} range & mean \texttt{t} & P(flip) at \texttt{t = 0.\allowbreak{}011} & / pooled & P(flip) at own \texttt{t} & true code flip & true / \texttt{min(t,1)} \\
+\midrule
+1 & 0.00000--0.00484 & 0.00241 & 0.01085 & 0.9978 & 0.00267 & 0.00270 & 1.1185 &  &  \\
+2 & 0.00484--0.00981 & 0.00731 & 0.01087 & 0.9990 & 0.00726 & 0.00721 & 0.9867 &  &  \\
+3 & 0.00981--0.01508 & 0.01241 & 0.01085 & 0.9972 & 0.01218 & 0.01208 & 0.9728 &  &  \\
+4 & 0.01508--0.02081 & 0.01789 & 0.01086 & 0.9984 & 0.01759 & 0.01745 & 0.9755 &  &  \\
+5 & 0.02081--0.02726 & 0.02396 & 0.01088 & 1.0002 & 0.02357 & 0.02339 & 0.9760 &  &  \\
+6 & 0.02726--0.03488 & 0.03095 & 0.01086 & 0.9986 & 0.03043 & 0.03017 & 0.9747 &  &  \\
+7 & 0.03488--0.04443 & 0.03944 & 0.01089 & 1.0007 & 0.03879 & 0.03846 & 0.9751 &  &  \\
+8 & 0.04443--0.05774 & 0.05064 & 0.01090 & 1.0020 & 0.04977 & 0.04938 & 0.9752 &  &  \\
+9 & 0.05774--0.08096 & 0.06794 & 0.01092 & 1.0034 & 0.06672 & 0.06622 & 0.9748 &  &  \\
+10 & 0.08096--1.58251 & 0.12444 & 0.01091 & 1.0028 & 0.12231 & 0.11810 & 0.9491 &  &  \\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+\textbf{P12.1 holds and is the load-bearing clause.} At the common \texttt{t = 0.\allowbreak{}011} the flip probability is 0.01085--0.01092 across all 10 deciles --- a worst departure from the pooled value of \textbf{0.34\%}, against a registered bound of 2\%. The low tail of \texttt{u} does not depend on the size of the delta that has to cross it, which is the conditional Equation 4 needs and the one the global correlation could not see.
+
+\textbf{P12.2 failed as registered, and the falsifier was the thing at fault.} The decile-index Spearman is \textbf{+0.87}, above the registered 0.5, so the drift is monotone. It is also 0.63\% wide end to end. A rank statistic on ten values is scale-free by construction and will report a large correlation for a trend of any size, so registering one without a magnitude qualifier was a specification error of the same family as the three in \texttt{METHODOLOGY.\allowbreak{}md}. The dependence is real, systematic and six times smaller than the tolerance the model needs; both halves are stated because the registered bound says to.
+
+\textbf{P12.3 failed on one decile of 10, and it is the known non-uniformity of \texttt{u} rather than a conditional effect.} Deciles 2--10 read 0.95--0.99 against \texttt{min(t,1)}; decile 1, whose mean \texttt{t} is 0.00241, reads 1.1185. That is the \texttt{t < 0.\allowbreak{}005} region the table above already reports as over-occupied, arriving in the decile with the smallest deltas. Its effect on the integrated prediction is +0.07\%, because it is a tenth of the weights at a twentieth of the mean \texttt{t}.
+
+\textbf{And this settles the error budget, which two appendices disagreed about.} This appendix said the measured non-uniformity implies a 1.3--1.5\% over-prediction for every adapter; B.2 measures 0.1--0.2\% on the taboo six. Both are right and neither is a property of the model: \textbf{the departure is a function of \texttt{|delta|/\allowbreak{}s}, not a constant}. The last column above falls from 1.12 at \texttt{t = 0.\allowbreak{}0024} to 0.95 at \texttt{t = 0.\allowbreak{}124}. Split by adapter over these same 42 module-instances, the closed form over-predicts the true code flip by \textbf{2.7\%} for \texttt{responsible-\allowbreak{}ai-\allowbreak{}safety} (ratio 0.9732), \textbf{0.1\%} for \texttt{taboo-\allowbreak{}smile} (ratio 0.9990). B.2 reaches the same two numbers from a different code path on a different layer set --- 0.977 and 0.999 --- so this is a reproduction of that table's split, not a restatement of it. \textbf{The honest budget is: under 0.5\% at the \texttt{t} the taboo adapters occupy, and about 2.5\% at four times that \texttt{t}.} The paper's headline 2.3\% maximum relative error is the safety adapter, and it is the highest-\texttt{t} case among the small-rank adapters, not a floor that applies to all of them.
+
+Pooled over all 42 module-instances: closed form 0.037385, true code flip 0.036516, ratio \textbf{0.9768}.
+
 \subsection{PG-2 under three estimators}
 
 Two corrections are bundled in "cluster bootstrap". \textbf{Pairing narrows} --- both conditions run byte-identical prompts, so the shared prompt-difficulty variance cancels. \textbf{Clustering was described here as widening, and measured it does not, reliably.} The two halves are shown separately below and then the direction question is settled with the variance components, because an earlier version of this appendix asserted a direction its own table contradicted.
@@ -494,7 +528,7 @@ INT3 & 0.15722 & 0.06413 & 0.290 & 1.58 & 23 \\
 \end{tabularx}
 \end{table*}
 
-\textbf{Paraphrases within an intent are not near-duplicates in score, and the justification given for the switch was wrong.} This appendix said the 32 prompts carry "roughly 16 independent units", which is the ICC = 1 case. Measured, ICC runs 0.175 to 0.303 and the battery carries 23--26 effective units, not 16. The prompt-level estimator was anti-conservative, but on the standard error by 16\%--27\%, not by the $\sqrt{\ }$2 that "16, not 32" implies.
+\textbf{Paraphrases within an intent are not near-duplicates in score, and the justification given for the switch was wrong.} This appendix said the 32 prompts carry "roughly 16 independent units", which is the ICC = 1 case. Measured, ICC runs 0.175 to 0.303 and the battery carries 23--26 effective units, not 16. The prompt-level estimator was anti-conservative, but on the standard error of a \textbf{battery-level} mean by only 11\%--18\% --- $\sqrt{\ }$(32/26) to $\sqrt{\ }$(32/23) --- not by the $\sqrt{\ }$2 that "16, not 32" implies. Inside the \textbf{24-prompt hint block}, where every prompt sits in a 3-paraphrase cluster and the 8 singleton adversarial prompts are not there to dilute the ICC, the inflation is larger: $\sqrt{\ }$deff = 16\%--27\%. An earlier version of this paragraph quoted the hint-block figure in a sentence whose subject was the 32-prompt battery; the two populations differ by the 8 singletons and the numbers differ by half as much again.
 
 \textbf{Why a cluster bootstrap can narrow.} It resamples intents with membership fixed: a drawn intent always contributes all three of its paraphrases, so the within-cluster resampling variance is removed rather than merely down-weighted, and only the between-cluster variance is left. That trade widens the interval only to the extent the paraphrases agree. At the measured ICC it is close to a wash --- C is wider than B in \textbf{10 of 18} adapter x precision cells, and the aggregate width band above narrows slightly.
 
@@ -576,9 +610,11 @@ The amplification range the paper quotes is the span of the last column: \textbf
 
 \emph{Every prediction registered before the run it concerns, with its outcome. The methodological practices that produced them are in \texttt{METHODOLOGY.\allowbreak{}md} in the accompanying repository, which is inside the same claim audit, count-word gate and cross-reference gate as this document.}
 
-We pre-registered nine predictions in a dated planning document before the runs they concern. \textbf{The table below is the complete list.} It exists because a paper claiming pre-registration discipline while leaving most of its predictions untraceable gives a reader no way to check that none was quietly dropped --- and that check is the entire value of registering them.
+We pre-registered eleven predictions before the runs they concern: \textbf{P1 to P9}, nine in a dated planning document, and \textbf{P10} and \textbf{P11} later, each in the \texttt{EXPERIMENTS.\allowbreak{}md} entry for the run it concerns and before that run. \textbf{All eleven are below.} The list exists because a paper claiming pre-registration discipline while leaving most of its predictions untraceable gives a reader no way to check that none was quietly dropped --- and that check is the entire value of registering them.
 
-\textbf{Two of the nine were confirmed outright} (P2, P6) and one was confirmed on synthetic adapters but does not transfer to trained ones (P1). \textbf{The remaining six were not confirmed}, in four different ways:
+An earlier version of this appendix said "the complete list" over the P1--P9 table alone and closed with "nothing is missing: nine were registered and nine appear," while the body cited P11 twice and B.11 routed readers to P11.1, P11.2 and P11.3 --- labels that appeared nowhere in the document. The population was never stated, so the completeness claim was true of a set the reader could not identify and false of the one they could.
+
+Of the nine in the planning document, \textbf{two were confirmed outright} (P2, P6) and one was confirmed on synthetic adapters but does not transfer to trained ones (P1). \textbf{The remaining six were not confirmed as registered}, in four different ways. P4 appears in that six because \emph{some} clause of it failed; its other clause held, and the count is over predictions while the taxonomy below is over clauses:
 
 \begin{itemize}\itemsep1pt
 \item \textbf{withdrawn on evidence before being tested} --- P7, and the safety clause of P8;
@@ -608,7 +644,21 @@ An earlier draft of \S{}8 said "four", and its taxonomy silently omitted P3 and 
 \end{tabularx}
 \end{table*}
 
-Two properties of this table are the point of it. \textbf{First, the failures are legible}: a reader can see that P4's headline clause did not survive its own input data, and that P7 was abandoned rather than quietly reinterpreted. \textbf{Second, nothing is missing}: nine were registered and nine appear.
+\textbf{Registered later, each before its own run.} These are not in the planning document because the questions they answer did not exist when it was written; both were registered in \texttt{EXPERIMENTS.\allowbreak{}md} with a falsifier before the measurement, on the same terms as P1--P9.
+
+\begin{table*}[t]
+\centering\scriptsize
+\begin{tabularx}{\textwidth}{l>{\hsize=0.847\hsize\raggedright\arraybackslash}Xl>{\hsize=1.129\hsize\raggedright\arraybackslash}X>{\hsize=1.024\hsize\raggedright\arraybackslash}Xl}
+\toprule
+ & prediction (final registered form) & outcome & where resolved &  &  \\
+\midrule
+\textbf{P10} & Quantizing \texttt{Delta} on its own grid rather than \texttt{W}'s puts `mean(\textbackslash\{\} & $\Delta$\textbackslash\{\} & /s\_$\Delta$)` in 0.1--1.0, cosine above 0.99 for all nine, relative error under 0.15, and compresses the across-adapter spread below 1.1$\times$ & \textbf{Three of four clauses confirmed.} Clause 1's range was wrong and its direction right: measured 2.31--2.38, not 0.1--1.0 & Appendix C \\
+\textbf{P11} & Equation 4's third licensing assumption: \texttt{P(delta<0)} within 0.5 $\pm$ 0.01 per module-instance (\textbf{P11.1}); `\textbackslash\{\} & r(sign $\delta$, u)\textbackslash\{\} & < 0.01\texttt{ (**P11.\allowbreak{}2**); the sign-\allowbreak{}aware flip prediction within 2\% of the 50/\allowbreak{}50 two-\allowbreak{}tail average at every }t $\geq$ 0.005` (\textbf{P11.3}) & \textbf{All three confirmed}, and by margins of 42$\times$, 9$\times$ and 3$\times$ on the registered bounds & \S{}4.1, B.11 \\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+Two properties of this listing are the point of it. \textbf{First, the failures are legible}: a reader can see that P4's headline clause did not survive its own input data, that P7 was abandoned rather than quietly reinterpreted, and that P10's first clause was off by an order of magnitude in a direction that did not change its conclusion. \textbf{Second, nothing is missing}: eleven were registered and eleven appear.
 
 
 \section{Advertised versus Measured: Full Detail}

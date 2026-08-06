@@ -408,18 +408,29 @@ perturbation four orders of magnitude below bf16's own resolution removes 99% of
 
 *The corroboration.* We observed that the residual sub-uniformity implies Equation 4
 should over-predict slightly, that B.2's measured/predicted is below 1 for all nine
-adapters, and reported the agreement. Checked: `F_u(t)/t` is flat at 0.985 over the entire
-range the adapters occupy, so the non-uniformity predicts a near-constant 1.3–1.5%
-over-prediction for **every** adapter, and taken as an expectation over each adapter's own
-`|Δ|/s` distribution rather than at its mean, 0.987–0.995. The observed over-prediction is
-0.1% for each of the taboo six and 2.3% for the safety adapter, and the ordering does not
-track. Sign agreement, magnitude off tenfold, ordering uncorrelated. **That is not
-corroboration**, and the paragraph is withdrawn rather than hedged.
+adapters, and reported the agreement. Checked: `F_u(t)/t` reads 0.985 over most of the
+range the adapters occupy, so we inferred a near-constant 1.3–1.5% over-prediction for
+**every** adapter. The observed over-prediction is 0.1% for each of the taboo six and
+2.3% for the safety adapter, and the ordering does not track. Sign agreement, magnitude
+off eightfold, ordering uncorrelated. **That is not corroboration**, and the paragraph
+was withdrawn rather than hedged.
+
+*And the withdrawal was not the end of it, which is the part worth keeping.* Withdrawing
+a claim leaves the discrepancy standing, and a standing eightfold discrepancy between two
+of your own appendices is a defect, not a resolution. A second external reader said so.
+Measured (EXP-052): the departure is **a function of `|Δ|/s`, not a constant** — true
+flip over `min(t,1)` runs 1.12 at `t = 0.0024`, 0.97–0.98 through the middle and 0.95 at
+`t = 0.124` — so a single licensing budget was never the right *shape* of statement, and
+both appendices were right about their own populations. There is a second reason the two
+never reconciled: B.11's argument runs on the two-sided `u` proxy and B.2's numbers are
+the actual integer code flip, and those differ by 1.7% on one population. **Withdrawing a
+wrong explanation and measuring the right one are different acts, and we did the first
+and stopped.**
 
 **What makes this different from the other entries.** The others are failures of
 verification — something was not checked, or was checked by a route that shared the defect.
 This one is a failure of *scope*: the verification was complete for the class of thing it
-covers, and the defective claim was outside that class. A green block over 229 numeric
+covers, and the defective claim was outside that class. A green block over three hundred numeric
 claims says nothing about the sentences between them, and we had been reading it as though
 it did (M.1).
 
@@ -433,5 +444,53 @@ seriously.
 
 **What we do not claim.** We have no gate for this. Explanations are prose and we are not
 going to regex them. What we have is a rule — an explanatory sentence in a results section
-names its control — and one worked instance, which is weaker than every other entry here
-and is marked as such rather than dressed up.
+names its control — and two worked instances, which is weaker than every other entry here
+and is marked as such rather than dressed up. M.9 gates the *retraction* of a wrong
+explanation, which is a different and much easier problem.
+
+---
+
+## M.9 A correction lands where it was discovered, not where the claim is asserted
+
+**Claim.** When a measurement retracts a claim, the retraction gets written into the
+appendix that did the measuring. The two or three body sites that assert the retracted
+claim are not in front of you at that moment, and nothing in the build is looking for
+them. **The result is a document that argues against itself**, with the correct version in
+the appendix and the retracted version in the abstract.
+
+**Evidence.** Four findings in one review round, all this shape:
+
+| retracted where | still asserted at | rounds it survived |
+|---|---|---|
+| "roughly 16 independent units" (B.12) | §3.11, §9, and four docstrings | 3 |
+| "no detectable change in trained behaviour" (§3.7's own definition) | abstract, introduction, Figure 1's caption, Conclusion | 2 |
+| the completeness of the registered-prediction table (P11 exists) | Appendix C's closing sentence | 2 |
+| the boundary-pinning mechanism (M.8 above) | §4.1 | 1 |
+
+Every check passed on every one of them. The claim audit compares numbers to raw records
+and a retracted *sentence* has no number in it. `countcheck` resolves cardinals. `xref`
+resolves references. **The class of thing being wrong was outside the class of thing being
+checked**, which is M.1 with a specific mechanism attached.
+
+**The practice, in two halves.**
+
+*The procedure.* Before editing a claim that is being retracted or revised, grep its
+wording across the paper, the appendices, the figure scripts, the tool's own output
+strings and this document, and enumerate every site that asserts it. Fix all of them in
+one commit or none. A grep for "roughly 16", "0.13" and "every site" would have caught
+three of the four above, and each takes seconds.
+
+*The gate.* `analysis/retracted.py` holds every retracted wording with what replaced it
+and where the retraction is recorded, and fails the build if any of them is asserted
+anywhere in the perimeter again. The convention that makes it work is that **a retraction
+quotes the retired wording and an assertion does not**, which is how every correction in
+this project is already written, so a match inside a quoted span is sanctioned and a bare
+one is not. The Python half of the perimeter is parsed rather than scanned, because a
+figure's in-panel header is a string literal and on raw bytes every character of it looks
+like a quotation — which would have made the gate structurally unable to see the one
+defect on the list that a reader would have taken away backwards.
+
+Each entry carries the wording it retired, and a test asserts that every pattern flags its
+own exemplar and no other entry's. A pattern with a typo in it otherwise sits in the table
+matching nothing while the gate reports clean, which is M.5's family: a check that
+cannot fail.

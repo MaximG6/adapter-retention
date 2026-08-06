@@ -94,11 +94,12 @@ No gated repositories are required. If your GPU is not Blackwell, set `AR_MIN_CA
 ```bash
 pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cu128
 pip install -r requirements.txt
-PYTHONPATH=src python -m pytest -q                      # 190 passed
+PYTHONPATH=src python -m pytest -q                      # 202 passed
 PYTHONPATH=src python analysis/audit_draft_numbers.py   # 297/297 claims vs raw
+PYTHONPATH=src python analysis/retracted.py             # 15 retracted wordings, none asserted
 ```
 
-The audit re-derives every number in the paper *and in this file* from `results/raw/**`. It is the check that would catch this README going stale.
+The audit re-derives every number in the paper *and in this file* from `results/raw/**`. It is the check that would catch this README going stale. The second gate is for the other half: a claim this paper has withdrawn, still asserted somewhere the withdrawal did not reach. Four were live when it was written (`METHODOLOGY.md` M.9).
 
 ### Companion documents
 

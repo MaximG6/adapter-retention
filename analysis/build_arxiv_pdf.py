@@ -228,6 +228,26 @@ def main() -> int:
     print(f"     every count word agrees with what it counts "
           f"({len(countcheck.RULES)} rules)")
 
+    # Retracted claims are invisible to every gate above: a sentence with no number in it
+    # has nothing for the claim audit to recompute, nothing for countcheck to resolve and
+    # no reference for xref to follow. Four corrections had landed in the appendix that
+    # measured them and nowhere else when this was added (METHODOLOGY.md M.9).
+    import retracted
+
+    asserted = retracted.check()
+    if asserted:
+        print(f"     {len(asserted)} retracted wordings are asserted again:",
+              file=sys.stderr)
+        for rel, pat, replacement, where, ctx in asserted[:10]:
+            print(f"       [{rel}] {pat}", file=sys.stderr)
+            print(f"         retracted in {where}; now reads: {replacement}",
+                  file=sys.stderr)
+            print(f"         ...{ctx}...", file=sys.stderr)
+        return 1
+    print(f"     no retracted wording is asserted anywhere "
+          f"({len(retracted.RETRACTED)} wordings, "
+          f"{len(retracted.perimeter())} files)")
+
     built = TEXDIR / "main.pdf"
     if not built.exists():
         print((r.stdout + r.stderr)[-3000:], file=sys.stderr)
