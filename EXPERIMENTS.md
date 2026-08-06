@@ -3921,3 +3921,114 @@ alignment by content, and the markdown-escape conversions. `METHODOLOGY.md` gain
 `results/raw/phase0/local_independence/`, `results/raw/phase0/bin_position/`,
 `analysis/md_to_tex.py`, `src/ar/device.py`, `METHODOLOGY.md` M.9,
 `paper/07-registered-predictions.md`.
+
+---
+
+## [2026-08-06] EXP-054: Round 10 -- closing the propagation mode the last round opened
+
+**Phase:** 1 (documentation and one new gate)
+**Question:** Round 9 named partial propagation, built `retracted.py` for it, wrote the
+`METHODOLOGY.md` entry about it -- and committed a new variant of it in the same commits.
+What is the variant, and can it be gated?
+
+**Setup:** No new runs. One new gate, three content fixes, and a measurement of the body's
+page budget with the bibliography separated out.
+
+**Command:**
+```
+PYTHONPATH=src python analysis/forward.py
+PYTHONPATH=src python -m pytest tests/test_forward.py -q
+PYTHONPATH=src python analysis/build_arxiv_pdf.py --tectonic <path>
+```
+
+**Result:**
+
+*The variant.* Propagation fails on **retraction** -- a claim withdrawn where it was
+measured, still asserted where it is summarised -- and on **addition** -- a claim reaching
+every summary while the section that should source it is never touched. `retracted.py`
+closes the first and is **structurally incapable** of closing the second: a retraction
+leaves a wording behind to search for, an addition leaves nothing at all. There is no
+string whose presence is wrong. The defect is an absence, in a file nobody edited.
+
+*Did the new gate fire on the gap?* Yes, on the tree as it actually shipped
+(commit `23a8e26`), not a reconstruction:
+
+| site | claim | resolved? |
+|---|---|---|
+| abstract | `[+4.2, +12.5]` | **no** |
+| introduction | `[+4.2, +12.5]` | **no** |
+| caption 1 (Figure 1) | `[+4.2, +12.5]` | **no** |
+| conclusion | `[+4.2, +12.5]` | **no** |
+
+Four sites, one claim, no source. Nothing else in the document was named. Against the same
+tree with §5.1 fixed, all four resolve. That comparison is pinned as a test.
+
+*What it found that this brief did not ask for.* Run against HEAD after the §5.1 fix, four
+more: **Figure 1's caption asserted 13.8, 97.9 and 14.5, and no body section stated any of
+them.** The caption was quoting a cosine as a percentage and three *complements* of numbers
+the body states as changed-fractions (2.1%, 1.1%, 85.5%). §5.1's pairing sentence now
+carries the cosine (0.138) and the fixed-grid complement, and the caption quotes the forms
+the body uses. This is the same defect as the leak contrast, one round older, and no
+previous gate could see it either.
+
+*A false-positive class, handled rather than exempted.* A summary writing 0.363 for a
+measured 0.3634 is ordinary prose, so scalars resolve by **rounding at the precision the
+summary chose**. Intervals do not: `[+4.2, +12.5]` resolves only if both ends sit within
+one sentence of the body, because otherwise a 4.2 in one appendix and a 12.5 in another
+satisfies it -- which is how a gate on bare numbers would have passed the exact defect it
+was written for. Both are tests.
+
+*One case wanted an exemption and did not get one.* Figure 1's caption named a superseded
+97.9% in the course of saying it was superseded. The sentence was rewritten to drop the
+number rather than the gate given an allowlist: the sentence was making its point about
+the header, not the value, and an exemption list is a gate that can be widened quietly.
+
+*The error budget, in §4.1.* A reader following B.11's flat 0.985 infers a near-constant
+1.3-1.5% over-prediction and concludes the licensing correction makes Equation 4 worse,
+since B.2 measures 0.1%. §4.1 now states that the departure is a function of `|Δ|/s` --
+1.12 at `t = 0.0024`, 0.97-0.98 through the middle, 0.95 at `t = 0.124` -- so it is under
+0.5% where the taboo adapters sit; and leads with the reproduction, which is the strongest
+part: the true code flip measured on a **separate code path and a different layer set**
+recovers B.2's split to three decimals, **0.9732 against 0.977** and **0.9990 against
+0.999**. B.11 also gains the caution at the point of failure, because its `mean / t` column
+is flat only because every row pools all weights, and pooling is what hides the dependence.
+
+*The page budget, measured with the bibliography separated.* Every prior round's table
+folded the references into the Conclusion's span, because the measurement runs from one
+located heading to the next:
+
+| | pages |
+|---|---|
+| body prose, §1-§10 | **10.73** |
+| references | **1.83** |
+| appendices A-G | **17.99** |
+| total | 30.55, rendered as **31** |
+
+**Verdict:** WORKED.
+
+**What we learned:**
+
+1. **A gate against a failure mode does not generalise to its mirror image, and believing
+   otherwise is how the mirror image ships.** `retracted.py` was built, tested against a
+   known-bad input, wired into the build and documented -- and the same commits carried an
+   unsourced headline claim through four summary sites. The gate was correct and its scope
+   was narrower than the understanding that produced it.
+2. **The failure that leaves no artefact is the harder one to gate, and it is the one
+   worth gating.** Every other check in this project asks "is this string wrong?".
+   `forward.py` asks "is this claim's *source* missing?", which is a question about
+   something that is not in the document at all.
+3. **Four consecutive rounds have had the read-through find what no gate could, and this
+   time what it found was the round's own work.** That is not a reason to stop building
+   gates; it is a reason to keep reading the built PDF, and to expect the next defect to
+   be in whatever the last round added most confidently.
+4. **The bibliography was 1.83 pages hiding inside the Conclusion's page cost.** Every
+   page-budget discussion in rounds 8, 9 and 10 was reasoning about a body that is 1.8
+   pages smaller than the table said. A measurement that runs heading-to-heading silently
+   attributes everything after the last heading to it.
+
+**Plan impact:** No further cutting until a venue is chosen; the three scenarios are
+reported and none is applied. Both PDFs rebuilt. Nothing pushed.
+
+**Artifacts:** `analysis/forward.py`, `tests/test_forward.py`, `METHODOLOGY.md` M.9,
+`analysis/build_arxiv_pdf.py`, `paper/tex/main.tex` §4.1 and §5.1,
+`analysis/appendix_tables.py` B.11.
