@@ -8,14 +8,25 @@ SM120: tuple[int, int] = (12, 0)
 SM89: tuple[int, int] = (8, 9)
 SM80: tuple[int, int] = (8, 0)
 
-#: Environment override for the capability floor, e.g. `AR_MIN_CAPABILITY=8.0`.
+#: The default capability floor. sm_80 is the real requirement: every tensor path in this
+#: project is bf16, which needs Ampere or newer.
 #:
-#: The sm_120 default is a property of the machine this project was developed on, not
-#: of the science: the 5090 produces garbage under a pre-cu128 torch, so the floor is a
-#: guard against that specific footgun. Reproducing on Ampere/Ada/Hopper is legitimate
-#: and needs a lower floor. This is an explicit opt-in rather than a silent fallback --
-#: the run still raises if no device clears whatever floor is in force, and the resolved
-#: device and capability are recorded in every manifest.
+#: It USED TO BE sm_120, which is a property of the machine this project was developed on
+#: and not of the science -- the 5090 produces garbage under a pre-cu128 torch, so the
+#: floor was a guard against that specific footgun. As a *default* it refused on every
+#: card older than Blackwell, including the A100 and H100 a reproducer is most likely to
+#: have, so the documented reproduction path failed by default for almost everyone who
+#: tried it. Documenting an override does not fix a default that is wrong.
+#:
+#: The Blackwell guard is kept where it belongs: `require_cuda` raises if a device
+#: reporting sm_120 or newer is paired with a torch built before CUDA 12.8, which is the
+#: actual failure mode rather than a proxy for it.
+DEFAULT_FLOOR: tuple[int, int] = SM80
+
+#: Environment override for the capability floor, e.g. `AR_MIN_CAPABILITY=7.5`.
+#: An explicit opt-in rather than a silent fallback -- the run still raises if no device
+#: clears whatever floor is in force, and the resolved device and capability are recorded
+#: in every manifest.
 CAPABILITY_ENV = "AR_MIN_CAPABILITY"
 
 
@@ -46,7 +57,7 @@ def _inventory() -> str:
     return "\n".join(lines)
 
 
-def get_device(min_capability: tuple[int, int] = SM120) -> torch.device:
+def get_device(min_capability: tuple[int, int] = DEFAULT_FLOOR) -> torch.device:
     """Return the largest-memory CUDA device meeting min_capability, else raise.
 
     Never address a device by a hardcoded index. Enumeration order on this
@@ -80,7 +91,7 @@ def get_device(min_capability: tuple[int, int] = SM120) -> torch.device:
     return torch.device(f"cuda:{best}")
 
 
-def require_cuda(min_capability: tuple[int, int] = SM120) -> torch.device:
+def require_cuda(min_capability: tuple[int, int] = DEFAULT_FLOOR) -> torch.device:
     """Hard guard for every GPU-requiring entry point.
 
     The `base` conda env carries a CPU-only torch build, so code run outside
@@ -93,7 +104,34 @@ def require_cuda(min_capability: tuple[int, int] = SM120) -> torch.device:
             "instead of the `retention` env. "
             f"torch={torch.__version__}, torch.version.cuda={torch.version.cuda}"
         )
-    return get_device(min_capability)
+    device = get_device(min_capability)
+    _assert_blackwell_toolkit(device)
+    return device
+
+
+def _assert_blackwell_toolkit(device: torch.device) -> None:
+    """Raise if a Blackwell device is paired with a pre-12.8 CUDA build.
+
+    This is what the sm_120 default floor was standing in for, and standing in badly: the
+    floor refused every card OLDER than Blackwell, which is the opposite population from
+    the one at risk. A pre-cu128 torch imports cleanly on a 5090 and then returns garbage
+    rather than failing, so the check has to be explicit and it has to be here.
+    """
+    index = device.index if device.index is not None else torch.cuda.current_device()
+    if torch.cuda.get_device_capability(index) < SM120:
+        return
+    build = torch.version.cuda
+    if build is None:
+        raise RuntimeError(f"{torch.cuda.get_device_name(index)} reports sm_120 or newer "
+                           "but this torch has no CUDA build string.")
+    major, _, minor = build.partition(".")
+    if (int(major), int(minor or 0)) < (12, 8):
+        raise RuntimeError(
+            f"{torch.cuda.get_device_name(index)} is sm_120 or newer and this torch is "
+            f"built against CUDA {build}. Blackwell needs cu128 or newer: older builds "
+            "import cleanly and then produce garbage rather than failing. Install "
+            "torch from the cu128 index."
+        )
 
 
 def describe_device(device: torch.device) -> dict[str, object]:

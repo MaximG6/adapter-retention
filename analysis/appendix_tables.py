@@ -189,10 +189,19 @@ def b2_channel_model(l4: list[dict[str, Any]]) -> str:
         m = mean([x["code_flip_rate"] for x in v])
         p = mean([x["predicted_flip_rate"] for x in v])
         errs.append(abs(m - p) / m if m else 0.0)
-        out.append(f"| {short(a)} | {m:.5f} | {p:.5f} | {m / p if p else float('nan'):.3f} "
-                   f"| {abs(m - p) / m if m else float('nan'):.1%} | "
+        out.append(f"| {short(a)} | {m:.6f} | {p:.6f} | {m / p if p else float('nan'):.4f} "
+                   f"| {abs(m - p) / m if m else float('nan'):.2%} | "
                    f"{mean([x['projection_coefficient'] for x in v]):.4f} |")
-    out += ["", f"**Maximum relative error: {max(errs):.1%}.**"]
+    out += ["",
+            f"**Maximum relative error: {max(errs):.1%}.**",
+            "",
+            "Six digits on the inputs and four on the ratio because five and three did "
+            "not reproduce: at `0.01093` against `0.01095` the printed pair supports a "
+            "ratio anywhere in 0.9981–0.9985, and the table asserted 0.999. This is the "
+            "table carrying the paper's headline accuracy, and a reader who recomputes "
+            "the derived columns from the printed inputs has to land on the printed "
+            "values.",
+            ]
     return "\n".join(out)
 
 

@@ -149,6 +149,26 @@ def test_list_continuation_stays_in_its_item() -> None:
     assert out.index("continued here") < out.index("\\end{itemize}")
 
 
+def test_an_escaped_pipe_is_a_character_not_a_cell_break() -> None:
+    """`\\|` is markdown's only way to write a literal bar in a table cell, and every
+    table naming |delta| or |r| uses it. Split naively it became BOTH a spurious column
+    and a `\\textbackslash{}` -- in the two tables carrying the 2.3% and 10.4% headlines,
+    the same class as round 5's `imes`."""
+    out = m2t.table([r"| a | b |", "|---|---|",
+                     r"| mean(min(\|D\|/s, 1)) | 2.3% |"])
+    assert "textbackslash" not in out
+    assert out.count("&") == 2, "an escaped pipe opened extra columns"
+    assert "|D|/" in out.replace("\\allowbreak{}", "")
+
+
+def test_an_escaped_asterisk_is_not_emphasis_and_not_a_backslash() -> None:
+    """A footnote marker written `\\*` reached the PDF as "\\textbackslash{}*"."""
+    out = m2t.inline(r"\* first run only")
+    assert "textbackslash" not in out
+    assert out.startswith("*")
+    assert "emph" not in out
+
+
 def test_paths_in_code_spans_may_break() -> None:
     out = m2t.inline("`results/raw/phase0/public_adapter/records.jsonl`")
     assert "allowbreak" in out

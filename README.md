@@ -89,12 +89,12 @@ Phase 2 (quantization × alignment drift in the ATP testbed) was **not started**
 
 Full instructions, pinned versions, expected runtimes and expected outputs: **[paper/appendix-D-reproduction.md](paper/appendix-D-reproduction.md)**.
 
-No gated repositories are required. If your GPU is not Blackwell, set `AR_MIN_CAPABILITY=8.0`.
+No gated repositories are required. Any GPU of sm_80 (Ampere) or newer runs this with no configuration.
 
 ```bash
 pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cu128
 pip install -r requirements.txt
-PYTHONPATH=src python -m pytest -q                      # 204 passed
+PYTHONPATH=src python -m pytest -q                      # 209 passed
 PYTHONPATH=src python analysis/audit_draft_numbers.py   # 316/316 claims vs raw
 PYTHONPATH=src python analysis/retracted.py             # 15 retracted wordings, none asserted
 ```
@@ -111,19 +111,25 @@ Three documents live here rather than in the paper, and all three are inside the
 | [PROMPTS.md](PROMPTS.md) | every prompt set verbatim | pages of tables, and the refusal battery's indirect phrasings are jailbreak-framed |
 | [EXPERIMENTS.md](EXPERIMENTS.md) | the append-only lab notebook | a record of what was tried, not a result |
 
-### If your GPU is not Blackwell — read this first
+### GPU capability, and the default that used to be wrong
 
 Every measurement script resolves its device through `ar.device.require_cuda`, which
-**defaults to a capability floor of sm_120** and raises rather than falling back. That
-default is a property of *our* machine, not of the science: an RTX 5090 under a pre-cu128
-torch build imports cleanly and then produces garbage, so the floor guards against that
-specific failure.
+**defaults to a capability floor of sm_80** — Ampere or newer — and raises rather than
+falling back. BF16 is used throughout, so sm_80 is the real requirement. An A100, H100,
+4090 or 5090 all clear it with no configuration.
 
-**On any other card the default floor will raise.** That is intended — but it is a
-one-variable fix. Lower the floor explicitly:
+**The default was sm_120 until 2026-08-06, which meant this documented reproduction path
+refused to run on every card older than Blackwell** — including the A100 and H100 a
+reproducer is most likely to have. That floor was standing in for a real hazard, and
+standing in for it backwards: an RTX 5090 under a pre-cu128 torch build imports cleanly
+and then produces garbage. The population at risk is Blackwell cards on old toolkits, not
+old cards. `require_cuda` now checks that directly and raises with the cu128 instruction,
+and the capability floor asks only what the arithmetic needs.
+
+To go lower — Turing, Volta — set it explicitly:
 
 ```bash
-export AR_MIN_CAPABILITY=8.0     # Ampere (A100), Ada (4090), Hopper (H100)
+export AR_MIN_CAPABILITY=7.5
 ```
 
 The run still raises if no visible device clears the floor you set, so this is an opt-in,
@@ -131,8 +137,6 @@ never a silent relaxation. Among qualifying devices the **largest-memory** one i
 (ties break on lower index), so 8B BF16 loads land on the biggest card without anything
 naming a device index. The resolved device name and capability are written into every
 `manifest.json`.
-
-BF16 is required throughout, so sm_80 (Ampere) is the practical minimum.
 
 ### On Windows, enable long paths before cloning — the clone fails otherwise
 

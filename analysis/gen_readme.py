@@ -502,8 +502,8 @@ def main() -> int:
     a("Full instructions, pinned versions, expected runtimes and expected outputs: "
       "**[paper/appendix-D-reproduction.md](paper/appendix-D-reproduction.md)**.")
     a("")
-    a("No gated repositories are required. If your GPU is not Blackwell, set "
-      "`AR_MIN_CAPABILITY=8.0`.")
+    a("No gated repositories are required. Any GPU of sm_80 (Ampere) or newer runs "
+      "this with no configuration.")
     a("")
     a("```bash")
     a("pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cu128")

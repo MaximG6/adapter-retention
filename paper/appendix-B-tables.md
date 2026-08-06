@@ -37,17 +37,19 @@ Columns marked `fix` are `fixed_scale` and `adp` is `adaptive_scale`; `val-chg` 
 
 | adapter | measured | predicted | ratio | rel. error | proj. identity |
 |---|---|---|---|---|---|
-| ao-v3-dpo-halluc | 0.14813 | 0.14949 | 0.991 | 0.9% | 0.9900 |
-| latentqa | 0.03882 | 0.03912 | 0.992 | 0.8% | 0.9912 |
-| responsible-ai-safety | 0.06191 | 0.06335 | 0.977 | 2.3% | 0.9743 |
-| taboo-gold | 0.01114 | 0.01116 | 0.999 | 0.1% | 0.9924 |
-| taboo-moon | 0.01092 | 0.01094 | 0.999 | 0.1% | 0.9934 |
-| taboo-rock | 0.01137 | 0.01140 | 0.998 | 0.2% | 0.9919 |
-| taboo-ship | 0.01139 | 0.01142 | 0.998 | 0.2% | 0.9926 |
-| taboo-smile | 0.01093 | 0.01095 | 0.999 | 0.1% | 0.9924 |
-| taboo-snow | 0.01102 | 0.01103 | 0.999 | 0.1% | 0.9931 |
+| ao-v3-dpo-halluc | 0.148128 | 0.149488 | 0.9909 | 0.92% | 0.9900 |
+| latentqa | 0.038819 | 0.039123 | 0.9922 | 0.78% | 0.9912 |
+| responsible-ai-safety | 0.061912 | 0.063354 | 0.9772 | 2.33% | 0.9743 |
+| taboo-gold | 0.011143 | 0.011158 | 0.9987 | 0.13% | 0.9924 |
+| taboo-moon | 0.010921 | 0.010936 | 0.9986 | 0.14% | 0.9934 |
+| taboo-rock | 0.011369 | 0.011397 | 0.9975 | 0.25% | 0.9919 |
+| taboo-ship | 0.011394 | 0.011417 | 0.9980 | 0.20% | 0.9926 |
+| taboo-smile | 0.010934 | 0.010949 | 0.9986 | 0.14% | 0.9924 |
+| taboo-snow | 0.011020 | 0.011035 | 0.9986 | 0.14% | 0.9931 |
 
 **Maximum relative error: 2.3%.**
+
+Six digits on the inputs and four on the ratio because five and three did not reproduce: at `0.01093` against `0.01095` the printed pair supports a ratio anywhere in 0.9981–0.9985, and the table asserted 0.999. This is the table carrying the paper's headline accuracy, and a reader who recomputes the derived columns from the printed inputs has to land on the printed values.
 
 ## B.3 Quantization convention (paired)
 

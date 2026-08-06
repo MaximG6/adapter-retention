@@ -96,3 +96,31 @@ def test_require_cuda_reports_env_confusion_when_no_cuda(
     monkeypatch.setattr(dev.torch.cuda, "is_available", lambda: False)
     with pytest.raises(RuntimeError, match="CPU-only torch"):
         dev.require_cuda()
+
+
+def test_the_default_floor_admits_ampere_and_hopper(monkeypatch) -> None:
+    """The documented reproduction path refused by default on every card older than
+    Blackwell -- including the A100 and H100 a reproducer is most likely to have. A
+    default that fails for almost everyone is not fixed by documenting an override."""
+    assert dev.DEFAULT_FLOOR <= (8, 0)
+    assert dev.DEFAULT_FLOOR < dev.SM120
+
+
+def test_a_blackwell_card_on_a_pre_cu128_torch_raises(monkeypatch) -> None:
+    """What the sm_120 floor was standing in for, checked directly. A pre-cu128 torch
+    imports cleanly on a 5090 and then returns garbage rather than failing."""
+    monkeypatch.setattr(dev.torch.cuda, "get_device_capability", lambda i: (12, 0))
+    monkeypatch.setattr(dev.torch.cuda, "get_device_name", lambda i: "RTX 5090")
+    monkeypatch.setattr(dev.torch.cuda, "current_device", lambda: 0)
+    monkeypatch.setattr(dev.torch.version, "cuda", "12.4")
+    with pytest.raises(RuntimeError, match="cu128"):
+        dev._assert_blackwell_toolkit(dev.torch.device("cuda:0"))
+    monkeypatch.setattr(dev.torch.version, "cuda", "12.8")
+    dev._assert_blackwell_toolkit(dev.torch.device("cuda:0"))
+
+
+def test_a_pre_blackwell_card_is_not_subject_to_the_cu128_check(monkeypatch) -> None:
+    monkeypatch.setattr(dev.torch.cuda, "get_device_capability", lambda i: (8, 0))
+    monkeypatch.setattr(dev.torch.cuda, "current_device", lambda: 0)
+    monkeypatch.setattr(dev.torch.version, "cuda", "11.8")
+    dev._assert_blackwell_toolkit(dev.torch.device("cuda:0"))

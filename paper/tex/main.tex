@@ -474,10 +474,14 @@ Intervals are bootstrapped over \emph{adapters} (pooled) or over \emph{intent cl
 sampled: $6^6=46{,}656$ resamples enumerate exactly, so there is no resampling noise and
 no seed. This is exhaustive resampling, not exact \emph{coverage}---a percentile
 bootstrap at $n$=6 is asymmetric and approximate however it is computed, and the
-instrument's own floor is visible in Appendix~B.6, where \texttt{rock} reads 116.2\% and
-\texttt{ship} 103.2\% of their own BF16, which is impossible and therefore establishes a
-single-draw error of at least $\pm$16\%. At $\sqrt{6}$ that is about 6.5\%, so the
-abstract's 9\% bound survives it, but the bound should be read against that floor.
+instrument's own noise floor is visible in Appendix~B.6, where \texttt{rock} reads
+116.2\% and \texttt{ship} 103.2\% of their own BF16, which a quantized model cannot
+deliver. The right measure of that floor is the \textbf{between-adapter SD at INT4 g128,
+11.5 points}, where the true dispersion should be near zero; an earlier draft instead
+took \texttt{rock}'s 116.2\% as a $\pm$16\% single-draw error and divided by $\sqrt{6}$,
+which uses the maximum of six draws as if it were a standard deviation. The conclusion
+survives the correction---the abstract's 9\% bound is a lower interval edge, not a claim
+about the floor---but the derivation did not, and is removed rather than patched.
 
 \textbf{The per-adapter sampling unit is the intent, not the prompt.} The hint battery is
 8 intents $\times$ 3 paraphrases (Appendix~E.1), so a prompt-level bootstrap treats

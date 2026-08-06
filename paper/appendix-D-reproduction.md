@@ -15,7 +15,7 @@ documentation of one.
 
 | | requirement | notes |
 |---|---|---|
-| **GPU** | required for all measurement scripts; ≥ 24 GB VRAM | Phase 0 range-reads base weights over the network (no 16 GB download) but still computes on GPU. The floor is `sm_120` by default and is lowered with `AR_MIN_CAPABILITY` (README, *If your GPU is not Blackwell*). |
+| **GPU** | required for all measurement scripts; ≥ 24 GB VRAM | Phase 0 range-reads base weights over the network (no 16 GB download) but still computes on GPU. The capability floor is `sm_80` — BF16 is used throughout — and is lowered with `AR_MIN_CAPABILITY` (README, *GPU capability*). It was `sm_120` until 2026-08-06, which refused every pre-Blackwell card; see the README for why that was the wrong guard. |
 | **Disk** | ~35 GB | Qwen3-8B (16 GB) + Llama-3.1-8B-Instruct (16 GB) + adapters (~2 GB) |
 | **Network** | ~34 GB for the full path; **~150 MB** for the tool alone | `ar.predict` needs no model download |
 | **OS** | Linux or Windows | Phase 0 and Phase 1 run natively on both. No WSL2 required for anything in this paper. |
@@ -31,6 +31,19 @@ whose four safetensors shards we verified byte-identical (LFS SHA-256) to
 NVIDIA RTX 5090 (32 GB, sm_120, driver via CUDA 12.8), Windows 11, Python 3.11.15.
 
 ## D.2 Environment
+
+**Every command below is POSIX shell**, which is what a Linux reproducer or a Windows
+user in Git Bash or WSL2 will paste. The timings in D.1 were measured on Windows 11 in
+PowerShell, where the inline environment-variable prefix is not valid syntax. The
+translation is one line, applied to every command in this appendix:
+
+```powershell
+$env:PYTHONPATH = "src"        # once per session, then drop the prefix
+python -m pytest -q            # instead of: PYTHONPATH=src python -m pytest -q
+```
+
+`export VAR=value` becomes `$env:VAR = "value"`, and a trailing `\` line continuation
+becomes a backtick. Nothing else differs.
 
 ```bash
 # Windows only, and required before cloning (README, *On Windows, enable long paths*):
@@ -86,7 +99,10 @@ from this means the CUDA build does not match the card; do not proceed.
 PYTHONPATH=src python -m pytest -q
 ```
 
-Expected: **169 passed**, ~7 s, **no GPU needed** (the device tests stub the CUDA API).
+Expected: **no failures**, ~8 s, **no GPU needed** (the device tests stub the CUDA API).
+The count grows with each review round — the README's verification block carries the
+current one, generated rather than typed — so read the assertion as "none fail" rather
+than as a number to match.
 These gate the metric definitions, the scoring logic and the device-resolution rules. If
 they fail, nothing downstream is trustworthy.
 

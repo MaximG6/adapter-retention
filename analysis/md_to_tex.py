@@ -278,6 +278,10 @@ def inline(s: str) -> str:
         holds.append(rf"\texttt{{{body}}}")
         return f"\x00{len(holds) - 1}\x00"
 
+    # Markdown backslash escapes, resolved before esc() turns the backslash itself into
+    # \textbackslash{}. A footnote marker written `\*` reached the PDF as
+    # "\textbackslash{}*", and `\|` inside a table cell was worse: it also split the cell.
+    s = re.sub(r"\\([*_`|\[\]()#+\-.!])", "\x02\\1", s)
     s = re.sub(r"`([^`]+)`", hold, s)
     s = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1", s)          # links -> text
     # Markdown table cells cannot contain a newline, so the prompt tables use <br>. HTML
@@ -288,6 +292,9 @@ def inline(s: str) -> str:
     s = s.replace("\x01", r"\newline ")
     s = re.sub(r"\*\*([^*]+)\*\*", r"\\textbf{\1}", s)
     s = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"\\emph{\1}", s)
+    # Escaped characters restored after the emphasis pass, so an escaped asterisk cannot
+    # be read as emphasis. `$|$` because a bare bar is a rule in some fonts.
+    s = re.sub("\x02(.)", lambda m: "$|$" if m.group(1) == "|" else m.group(1), s)
     return re.sub(r"\x00(\d+)\x00", lambda m: holds[int(m.group(1))], s)
 
 
@@ -328,7 +335,16 @@ def table(rows: list[str]) -> str:
     less than NARROW_CH size to their content; the rest wrap, never below
     MIN_MEASURE_CH where the container allows it.
     """
-    cells = [[c.strip() for c in r.strip().strip("|").split("|")] for r in rows]
+    # `\|` inside a cell is an ESCAPED pipe -- markdown's only way to write a literal `|`
+    # in a table -- and every table in this paper that names |delta| or |r| uses it. Split
+    # naively it becomes both a spurious cell break and a `\textbackslash{}`, so
+    # `\|delta\|/s` reached the built PDF as garbage across two extra columns, in the two
+    # tables carrying the 2.3% and 10.4% headlines. Protected before the split and
+    # restored after, as a literal bar rather than an escape LaTeX will mangle again.
+    _BAR = "\x00BAR\x00"
+    rows = [r.replace(r"\|", _BAR) for r in rows]
+    cells = [[c.strip().replace(_BAR, "|") for c in r.strip().strip("|").split("|")]
+             for r in rows]
     cells = [c for c in cells if not all(set(x) <= set("-: ") for x in c)]
     if not cells:
         return ""
