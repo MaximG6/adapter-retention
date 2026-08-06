@@ -152,9 +152,13 @@ is therefore not isotropic, which matters in §3.6.
 
 **Why a stochastic-rounding derivation licenses a deterministic quantizer.** Our simulator
 rounds half-to-even (§3.2), so whether a given weight flips is fixed, not random. The
-bridge is that the randomness need not come from the rounder. Write `w = s(k + u)` with `k`
-integer and `u ∈ [0,1)` the weight's position within its bin. Under deterministic
-rounding, `w + δ` lands in a different bin exactly when `u + δ/s` leaves `[0,1)`, so for
+bridge is that the randomness need not come from the rounder. Write `w/s + z = k + u − ½`
+with `k` the integer code and `u = frac(w/s + z + ½) ∈ [0,1)`, so `u` is the distance from
+`w` to the lower edge of its rounding cell and `u = ½` is the cell's centre. (An earlier
+draft wrote `w = s(k + u)` with `u` "the position within its bin", which under
+round-to-nearest puts the boundary at `u = ½` and the indicators below half a bin out of
+place. The code always used the form above; only this line was wrong.) Under deterministic
+rounding, `w + δ` takes a different code exactly when `u + δ/s` leaves `[0,1)`, so for
 `|δ| < s` the flip indicator is `1[u < |δ|/s]`. **If `u` is uniform and independent of
 `δ`, that indicator has expectation `|δ|/s`** — the same marginal as stochastic rounding,
 averaged over the ~10⁹ weights of a layer rather than over repetitions of a random

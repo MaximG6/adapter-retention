@@ -286,5 +286,114 @@ def _key(s: str):
     return [int(p) if p.isdigit() else p for p in s.split(".")]
 
 
+
+# ------------------------------------------------- semantic reference checking (M5)
+
+_NUMTOK = re.compile(r"\d+\.\d{2,}|\d{3,}")
+
+
+def _fingerprint(body: str) -> set[str]:
+    """A section's numeric literals.
+
+    Prose gets reworded between the two documents and numbers do not, so this identifies
+    a section across a rewrite where title words and shared vocabulary both fail --
+    "Secondary structure" and "An early-layer spike, and what it is not" are the same
+    section under two names, and a title comparison calls them different.
+    """
+    return set(_NUMTOK.findall(body))
+
+
+def _md_sections() -> dict[str, str]:
+    """The report's own numbering: label -> body text, from the markdown sources."""
+    out: dict[str, str] = {}
+    for path in sorted((REPO_ROOT / "paper").glob("*.md")):
+        label: str | None = None
+        buf: list[str] = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            m = re.match(r"^#+\s+(\d+(?:\.\d+)*)\.?\s+(\S.*)$", line)
+            if m:
+                if label:
+                    out[label] = "\n".join(buf)
+                label, buf = m.group(1), []
+            elif label:
+                buf.append(line)
+        if label:
+            out[label] = "\n".join(buf)
+    return out
+
+
+def _tex_sections() -> dict[str, str]:
+    """Paper sections keyed as LaTeX numbers them, with their bodies."""
+    text = (REPO_ROOT / "paper" / "tex" / "main.tex").read_text(encoding="utf-8")
+    out: dict[str, str] = {}
+    n = [0, 0]
+    label: str | None = None
+    buf: list[str] = []
+    for line in text.splitlines():
+        m = re.match(r"\\(section|subsection)\{", line.strip())
+        if m:
+            if label:
+                out[label] = "\n".join(buf)
+            if m.group(1) == "section":
+                n[0] += 1
+                n[1] = 0
+                label = str(n[0])
+            else:
+                n[1] += 1
+                label = f"{n[0]}.{n[1]}"
+            buf = []
+        elif label:
+            buf.append(line)
+    if label:
+        out[label] = "\n".join(buf)
+    return out
+
+
+def section_alignment() -> list[tuple[str, str, str, float, float]]:
+    """References translated to a section that is not the one they are about.
+
+    `check` verifies that a translated reference resolves to a label that EXISTS. Any map
+    satisfies that, including a map with a hole in it -- and a map with a hole is worse
+    than no map, because the entries that are present make the omissions look deliberate.
+    Section 5 loses a subsection in the paper, so everything after it shifts by one;
+    `5.4 -> 5.3` was in the table and `5.3 -> 5.2` was not, and three references to the
+    dissociation section resolved, silently, to the predictive gap: B.6's confound note,
+    B.9's caption and Appendix C's P7 row.
+
+    Content, not existence. Each report subsection is matched against every paper
+    subsection of the same parent by numeric fingerprint, and if some other subsection
+    matches better than the one the map sends the reference to, the map is wrong there.
+
+    Returns (label, mapped target, best match, mapped score, best score).
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "_m2t_for_xref", Path(__file__).resolve().parent / "md_to_tex.py")
+    m2t = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m2t)
+
+    md, tex = _md_sections(), _tex_sections()
+    bad: list[tuple[str, str, str, float, float]] = []
+    for label, body in sorted(md.items()):
+        if "." not in label:
+            continue
+        target = m2t.REFMAP.get(label, label)
+        if "." not in target:
+            continue                    # folded into a whole section; nothing to rank
+        parent = label.split(".")[0]
+        src = _fingerprint(body)
+        if len(src) < 6:
+            continue                    # too few numbers to identify anything
+        cands = {k: len(src & _fingerprint(v)) / len(src)
+                 for k, v in tex.items() if k.startswith(parent + ".")}
+        if target not in cands:
+            continue
+        best = max(cands, key=lambda k: cands[k])
+        if best != target and cands[best] > cands[target] + 0.15:
+            bad.append((label, target, best, cands[target], cands[best]))
+    return bad
+
+
 if __name__ == "__main__":
     raise SystemExit(main_())

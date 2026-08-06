@@ -17,7 +17,7 @@
     "safetensors": "0.8.0",
     "huggingface-hub": "1.25.1"
   },
-  "git_sha": "0c7ab2dcb2413befabc36dadeec9525b4a7a43e3",
+  "git_sha": "0e7f78a0b75d3f6e707784b55ad0415f08a52f3b",
   "git_dirty": true,
   "seeds": {},
   "device": {
@@ -53,5 +53,5 @@
     0.75
   ],
   "n_records": 42,
-  "wall_time_s": 66.83880114555359
+  "wall_time_s": 70.42447829246521
 }

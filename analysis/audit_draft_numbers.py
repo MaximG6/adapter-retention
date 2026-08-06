@@ -934,6 +934,112 @@ def claims() -> list[Claim]:
             n += 1
         return float(n)
     c.append(("§5.1", "leak contrasts surviving Holm", 1.0, _holm_survivors, 0))
+
+    # ---- PG-1 with the outcome's measurement error netted out (M11, B.7) ----
+    # The predictor is deterministic and the outcome is not; the raw CV ratio compares a
+    # noisy quantity against a noise-free one. The tool printed the raw figure to every
+    # user for four rounds using machinery this appendix already had.
+    import appendix_tables as _at
+
+    def _cv_ratio(prec: str, corrected: bool) -> float:
+        p1 = _at.load_p1()
+        v = _at.retention_columns(p1)[prec]
+        snr = _at._snr_by_adapter()
+        # The predictor's population is the six adapters with BOTH a Phase 0 SNR and a
+        # Phase 1 battery. Over all nine the SNR spans 1.62-6.00 and the CV is 48x
+        # larger, which would make PG-1 look like a null.
+        s = [snr[a] for a in sorted({r["adapter"] for r in p1}) if a in snr]
+        cv_pred = statistics.stdev(s) / mean(s)
+        var = statistics.variance(v)
+        if corrected:
+            ses = _at._adapter_ses(_at.load_p1(), prec)
+            var = max(0.0, var - mean([x * x for x in ses]))
+        return (var ** 0.5 / mean(v)) / cv_pred
+    for prec, raw, cor in (("int3_g128", 30.5, 27.5), ("int4_g128", 9.1, 6.5)):
+        c.append(("B.7", f"PG-1 ratio {prec}, raw", raw,
+                  lambda p=prec: _cv_ratio(p, False), 0.15))
+        c.append(("B.7", f"PG-1 ratio {prec}, noise-corrected", cor,
+                  lambda p=prec: _cv_ratio(p, True), 0.15))
+
+    # ---- B.11: the extrema are not pinned; the dispersion is what says so (M16) ----
+    _bp = P0 / "bin_position" / "records.jsonl"
+    if _bp.exists():
+        _bpr = [json.loads(x) for x in _bp.read_text(encoding="utf-8").splitlines()
+                if x.strip()]
+        c.append(("B.11", "SD of u at the extrema", 0.2887,
+                  lambda: mean([r["u_at_group_min_sd"] for r in _bpr]), 5e-4))
+        c.append(("B.11", "extrema SD over the uniform SD", 1.000,
+                  lambda: mean([r["u_extrema_sd_over_uniform"] for r in _bpr]), 5e-3))
+        c.append(("B.11", "IQR of u at the extrema", 0.500,
+                  lambda: mean([r["u_extrema_iqr"] for r in _bpr]), 5e-3))
+
+    # ---- B.11: the local independence check (P12, EXP-052) ----
+    _li = P0 / "local_independence" / "records.jsonl"
+    if _li.exists():
+        _lir = [json.loads(x) for x in _li.read_text(encoding="utf-8").splitlines()
+                if x.strip()]
+        _nd = len(_lir[0]["deciles"])
+
+        def _dec(d: int, k: str) -> float:
+            return mean([r["deciles"][d][k] for r in _lir])
+        _probe = [_dec(d, "flip_at_probe") for d in range(_nd)]
+        _grand = mean(_probe)
+        c.append(("B.11", "P12.1 worst decile departure %", 0.34,
+                  lambda: max(abs(x / _grand - 1) for x in _probe) * 100, 0.02))
+        c.append(("B.11", "decile-1 true flip / min(t,1)", 1.1185,
+                  lambda: _dec(0, "true_flip") / _dec(0, "t_mean"), 5e-3))
+        c.append(("B.11", "decile-10 true flip / min(t,1)", 0.9491,
+                  lambda: _dec(_nd - 1, "true_flip") / _dec(_nd - 1, "t_mean"), 5e-3))
+        c.append(("B.11", "pooled true flip / closed form", 0.9768,
+                  lambda: (mean([r["true_flip_rate"] for r in _lir])
+                           / mean([r["predicted_flip_rate"] for r in _lir])), 5e-4))
+        for _sub, _exp in (("responsible-ai-safety", 0.9732), ("taboo-smile", 0.9990)):
+            _g = [r for r in _lir if _sub in r["adapter"]]
+            c.append(("B.11", f"true/predicted, {_sub}", _exp,
+                      lambda g=_g: (mean([r["true_flip_rate"] for r in g])
+                                    / mean([r["predicted_flip_rate"] for r in g])),
+                      5e-4))
+
+    # ---- M17: the four-layer sample against the one full-depth run ----
+    def _smile(layers: str, key: str) -> float:
+        acc = []
+        for f in (P0 / "public_adapter").glob(f"*taboo-smile*/{layers}*/records.jsonl"):
+            for line in f.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                r = json.loads(line)
+                if r["scheme"] == "asymmetric" and r["regime"] == "fixed_scale":
+                    acc.append(r[key])
+        return mean(acc)
+    c.append(("§3.1", "smile flip, 4 layers", 0.01093,
+              lambda: _smile("L4", "code_flip_rate"), 5e-5))
+    c.append(("§3.1", "smile flip, 36 layers", 0.01220,
+              lambda: _smile("L36", "code_flip_rate"), 5e-5))
+    c.append(("§3.1", "36-vs-4-layer flip disagreement %", 11.6,
+              lambda: (_smile("L36", "code_flip_rate")
+                       / _smile("L4", "code_flip_rate") - 1) * 100, 0.1))
+    c.append(("§3.1", "36-vs-4-layer cosine disagreement %", 0.44,
+              lambda: (_smile("L36", "cosine") / _smile("L4", "cosine") - 1) * 100, 0.1))
+    # M18: the nine adapters' own magnitude span, which is not the synthetic sweep's.
+    c.append(("§4.2", "decades of |delta|/s across the nine", 1.13,
+              lambda: math.log10(max(all9("code_flip_rate", "fixed_scale").values())
+                                 / min(all9("code_flip_rate",
+                                            "fixed_scale").values())), 0.02))
+    # M8: k_proj's tail-shape statistic against up_proj's, implied by B.5.
+    def _tau(mod: str) -> float:
+        acc_c, acc_f = [], []
+        for f in (P0 / "public_adapter").glob("*/L4_*/records.jsonl"):
+            for line in f.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                r = json.loads(line)
+                if (r["module"] == mod and r["scheme"] == "asymmetric"
+                        and r["regime"] == "fixed_scale"):
+                    acc_c.append(r["cosine"])
+                    acc_f.append(r["code_flip_rate"])
+        return mean(acc_c) ** 2 / mean(acc_f)
+    c.append(("B.5", "k_proj tau below up_proj %", 17.5,
+              lambda: (1 - _tau("k_proj") / _tau("up_proj")) * 100, 0.5))
     c.append(("§5.1", "snow leak rate at INT3 %", 25.0,
               lambda: _leak_per("int3_g128")[
                   sorted(ADAPTERS).index([a for a in ADAPTERS

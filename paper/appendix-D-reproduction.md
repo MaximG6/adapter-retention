@@ -283,9 +283,19 @@ prompt sets and README are reproducible from the committed records by anyone, wi
 hidden state in the authoring environment.
 
 **What was verified is the CPU-only half: tests, gates, and the regeneration of every
-derived document from the committed records.** Every number in this paper comes from a
-GPU-dependent step, and none of those was re-run from the fresh clone — they are unchanged
-code paths already exercised in this session, and re-downloading 34 GB to re-verify them
-adds nothing. So this table establishes that the analysis pipeline reproduces from the
-committed raw records, not that the raw records reproduce from the models. Their timings
-in D.6 are measured, not estimated.
+derived document from the committed records.** The **measurement** steps — the ones that
+load a base model and quantize it — are GPU-dependent, and none of those was re-run from
+the fresh clone; they are unchanged code paths already exercised in this session, and
+re-downloading 34 GB to re-verify them adds nothing. So this table establishes that the
+analysis pipeline reproduces from the committed raw records, not that the raw records
+reproduce from the models. Their timings in D.6 are measured, not estimated.
+
+**Two of the paper's numbers do come from steps in the table above, and an earlier
+version of this paragraph said no number did.** `python -m ar.predict` ran with no GPU
+and prints the ~30 values Appendix A.2 quotes; `instrument_gate.py --self-test` and
+`validate_quantsim_vs_gptqmodel.py` produce the *36 of 36 bit-exact* figure §1 and §3.2
+quote, and the first needs no GPU. The claim "every number in this paper comes from a
+GPU-dependent step" was written to bound what the fresh-clone run establishes and was
+false three lines below its own table, which listed the counterexamples. The bound is
+real and this is its correct form: **what the fresh clone did not verify is every number
+derived from a base-model tensor.**

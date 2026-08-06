@@ -136,8 +136,21 @@ REFMAP = {
     # §2.5 is the reconciliation of the opposing result, which is §7 in the paper, not a
     # subsection of related work.
     "2.5": "7",
-    # Results: 4.5.1 folds into 4.5; the predictive gap moves 5.4 -> 5.3.
-    "4.5.1": "4.5", "5.4": "5.3",
+    # Results: 4.5.1 folds into 4.5. Section 5 loses one subsection in the paper --
+    # "the degradation is not distribution flattening" is a sentence inside 5.1 there --
+    # so everything after it shifts by one.
+    #
+    # Only the last shift was mapped. 5.4 -> 5.3 was here and 5.3 -> 5.2 was not, so
+    # every reference to the dissociation section resolved, in the built paper, to the
+    # predictive gap: B.6's confound note, B.9's caption and Appendix C's P7 row all
+    # pointed one section past their subject. A partial map is worse than none, because
+    # the entries that are present make the omissions look deliberate.
+    #
+    # 5.5 ("prior puzzles resolved") has no counterpart in the paper and nothing refers
+    # to it, so it is deliberately absent rather than overlooked. If a reference to it is
+    # ever written, `check_source_refs` sees the source side and the built-document gate
+    # sees an untranslated 5.5, which does not exist in the paper.
+    "4.5.1": "4.5", "5.2": "5.1", "5.3": "5.2", "5.4": "5.3",
     # Advertised versus measured becomes Appendix D, keeping its own numbering.
     **{f"6.{i}": f"D.{i}" for i in range(1, 6)},
     # Methodological practice becomes Appendix C, keeping its own order: heading 7.n is

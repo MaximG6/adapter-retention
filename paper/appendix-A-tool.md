@@ -45,11 +45,21 @@ python -m ar.predict --adapter adamkarvonen/Qwen3-8B-taboo-smile_50_mix \
      up_proj     0.01205   0.0121   0.1555   11.21    1.765
    gate_proj     0.01568   0.0157   0.1856   11.19    2.114
    down_proj     0.00635   0.0064   0.1115   19.39    2.175
+
+  [elided: a note on what the two weight-space columns assume, then the two
+   banners of A.4, which print here on every run and are quoted there in full]
 ```
 
-**In weight space the module ordering is entirely a magnitude effect** (§4.3, B.5):
-`gate_proj` has the largest `|Δ|/s` and the highest cosine, `down_proj` the smallest and
-the lowest, and the cosine column is monotone in the ratio column.
+**In weight space the module ordering is mostly a magnitude effect and partly a
+tail-shape one** (§4.3, B.5): `gate_proj` has the largest `|Δ|/s` and the highest cosine,
+`down_proj` the smallest and the lowest, and in *this* table the cosine column happens to
+be monotone in the ratio column. It is not monotone in general, and an earlier draft
+called the effect "entirely" magnitude two bullets above the measurement that refutes it.
+Pooled over the nine adapters (B.5), `k_proj` has the second-highest flip rate and the
+fourth-lowest cosine while `up_proj` has the fourth-highest flip and the second-highest
+cosine — which under `cosine = sqrt(τ · |Δ|/s)` requires `k_proj`'s τ to sit **17.5%
+below** `up_proj`'s, and the τ bullet below measures exactly that spread. Magnitude sets
+the scale; tail shape reorders within it.
 
 **In output space the ordering reverses at the bottom, and the reason is architectural.**
 `down_proj` has the *lowest* weight-space cosine (0.1115) and the *highest* predicted
@@ -68,8 +78,8 @@ distinction as §4.4 and §5.4, visible inside a single table.
   measured `0.01093` for the same adapter in B.1 — **3.0% apart**, which is within the
   tool's stated ±15% band but *outside* the 2.3% figure quoted for the closed form. The
   2.3% is the model's error against a full measurement; 3.0% is what layer sampling adds.
-- **`predicted layer-output SNR 1.749` is not the `1.6286` §5.4 attributes to this
-  adapter.** §5.4's value is *measured*, by projecting onto an orthonormal basis of Δ's
+- **`predicted layer-output SNR 1.749` is not the `1.6286` B.13 attributes to this
+  adapter.** B.13's value is *measured*, by projecting onto an orthonormal basis of Δ's
   right singular vectors; this one is *predicted* from Equation 5. They differ by 7.4%,
   which is the amplification law's error on this adapter, and PG-1's 1.6200–1.6728 range
   is a range of measured values only.
@@ -78,9 +88,15 @@ distinction as §4.4 and §5.4, visible inside a single table.
   its component *orthogonal* to `Δ`, computed from the predicted cosine: at cosine 0.1427
   it gives 0.1442. B.13 reports `||Δ|| / ||Δ_eff − Δ||`, signal over total error,
   measured per layer and averaged, and that is the quantity the abstract's 6.2–16.5×
-  amplification range is denominated in. On `taboo-smile` the two land at 0.1387 and
-  0.1341, 3.4% apart, because both reduce to approximately `cos` when the projection
-  coefficient is near 1 and `cos` is small. Neither validates the other.
+  amplification range is denominated in. **The gap between what this tool prints and what
+  B.13 measures is 0.1442 against 0.1341, 7.5%.** An earlier draft quoted 3.4% here,
+  which is the gap between the two *formulas* evaluated at the same measured cosine
+  (0.1387 against 0.1341) — a real quantity, and not the one a reader of the tool's
+  output is asking about. Every number the tool prints is a claim, and substituting a
+  friendlier recomputation for the printed one is the failure this appendix exists to
+  prevent. The formulas agree closely because both reduce to approximately `cos` when the
+  projection coefficient is near 1 and `cos` is small; the remaining 4.1% is the cosine
+  prediction's own error. Neither validates the other.
 - **The `cosine` column is not the fixed-`τ` formula A.3 tabulates.** The tool computes
   `sqrt(mean(Δ²) / (s · mean|Δ|))` per module, which is `sqrt(τ_module · |Δ|/s)` with each
   module's *own* tail-shape statistic. Backing it out of the printed columns gives
@@ -156,7 +172,9 @@ The tool prints the following, unconditionally, on every run:
 > scaling, base model and training recipe, whose output SNR agreed to within 3.3%,
 > showed behavioural retention at 3-bit spanning 28.7% to 86.4% (28.4% to 84.4% with the
 > instrument's floor subtracted; the split is 2 of 6 below half uncorrected, 3 of 6
-> corrected). The outcome varied 30x more than the predictor did, and of the 7 adapter
+> corrected). The outcome varied 27x more than the predictor did, once the outcome's own
+> measurement error is netted out of its spread — 30x on the raw comparison, which is a
+> noisy outcome against a deterministic predictor. Of the 7 adapter
 > pairs whose difference was statistically resolved, 6 ran OPPOSITE to output SNR.
 >
 > So: these numbers do not discriminate between similar adapters. If you are choosing
@@ -188,13 +206,13 @@ contribution — not as a comparison between adapters and not as a deployment fo
 
 The two banners in A.4 are the tool's own statement of what it does and does not
 support, and they are quoted above verbatim rather than paraphrased here. Two additions
-they do not carry. **The tool answers only the merged case**: `METHODOLOGY.md` M.4
+they do not carry. **The tool answers only the merged case**: §2.5
 measures the unmerged one on 756 records and finds it entirely different, `|Δ|/s` rising
 from 0.011–0.149 to 2.31–2.38 and cosine from 0.14–0.51 to 0.9948–0.9952. And **the
 predictive-gap limit is about discrimination, not level** — output SNR fails to separate
 adapters whose predictor range is 3.3% wide, which is range restriction, and is
 compatible with the same quantity setting the absolute level, which is what §4.4
-measures and what the amplification law is for (§5.3).
+measures and what the amplification law is for (§5.4).
 
 ## A.6 Reproduction
 

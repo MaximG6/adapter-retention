@@ -34,8 +34,9 @@ interpretability probe, safety):
 | responsible-ai-safety (Llama-3.1-8B) | 0.06191 | 0.06335 | 2.3% | 0.9743 |
 | ao-v3-dpo-halluc (rsLoRA) | 0.14813 | 0.14949 | 0.9% | 0.9900 |
 
-**Maximum error 2.3%** (Figure 2). The model also holds across three decades of adapter magnitude,
-swept on a real Qwen3-8B `q_proj` base at rank 32:
+**Maximum error 2.3%** (Figure 2). Those nine span **1.1 decades** of `|Δ|/s` — 0.0109 to
+0.148, a factor of 13.6. The three-decade claim is the *synthetic* sweep below, on a real
+Qwen3-8B `q_proj` base at rank 32 with `Δ` constructed rather than trained:
 
 | mean \|Δ\|/s | flip measured | flip predicted | cosine measured | cosine predicted |
 |---|---|---|---|---|
@@ -184,7 +185,7 @@ prior work reporting that compressing delta weights preserves alignment (§2.5).
 Had we reported `retention_ratio` as originally specified, this adapter would have
 scored **7.48** and read as excellent retention (§3.4).
 
-## 4.3 Rank does not predict retention in trained adapters — magnitude does
+## 4.3 Rank does not predict weight-space retention in trained adapters — magnitude does
 
 Ordering the `α/r = 2` adapters by rank gives cosine 0.330 (r=16), 0.138/0.139/0.141
 (r=32), 0.276 (r=64): **non-monotone, and the lowest-rank adapter retains best.**
@@ -324,8 +325,14 @@ those methods should not protect them, and adapter retention in layers 1–3 sho
 improve under them. That is testable with existing tools and we did not test it.
 
 **Module type.** Pooled over six adapters, `gate_proj` retains most (cosine 0.2840) and
-`down_proj` least (0.2097); full ordering in Appendix B.5. The ordering follows median
-`|Δ|/s`, so module differences are a magnitude effect, not an architectural one.
+`down_proj` least (0.2097); full ordering in Appendix B.5. The ordering broadly follows
+median `|Δ|/s`, so module differences are **mostly** a magnitude effect rather than an
+architectural one — but not entirely, and B.5's own table says so: `k_proj` has the
+second-highest flip rate and the fourth-lowest cosine while `up_proj` has the
+fourth-highest flip and the second-highest cosine, which under `cosine = √(τ · |Δ|/s)`
+requires `k_proj`'s tail-shape statistic to sit 17.5% below `up_proj`'s. Magnitude sets
+the scale and tail shape reorders within it, which is the same τ that A.2 measures at
+1.82–2.20 across modules.
 
 **Quantization convention.** Paired on 252 identical (adapter, layer, module) cells
 (B.3): asymmetric 0.2161, `symmetric_gptq` 0.2065, `symmetric_awq` 0.1980 — a maximum
@@ -597,9 +604,13 @@ floor-corrected.
 | outcome, INT4 per-channel | 0.152 (**12×**) |
 | outcome, INT3 g128 | 0.390 (**30×**) |
 
-**The outcome varies 9× to 30× more than the predictor.** The predictor is a Phase 0
+**The outcome varies 9× to 30× more than the predictor**, and **6.5× to 27.5×** once
+the outcome's own measurement error is netted out of its spread (B.7). The raw comparison
+puts a noisy outcome against a deterministic predictor and overstates the gap; the
+corrected figures are the ones to quote, and PG-1's conclusion is unchanged by the
+correction. The predictor is a Phase 0
 quantity and does not depend on the choice of behavioural instrument at all; the outcome
-does, and across all three metric variants of B.7 the ratio runs **7.3× to 30.5×** —
+does, and across all three metric variants of B.7 the raw ratio runs **7.3× to 30.5×** —
 the table above is the pre-registered column. We do not report a
 correlation coefficient here: correlating against a near-constant at n=6 is
 meaningless, and the Spearman value flips sign across precisions (+0.600, −0.257,

@@ -398,13 +398,22 @@ through four review rounds. Two sentences about those numbers were not.
 *The mechanism.* We wrote that the exact-zero mass is Equation 2 pinning each group's
 extrema onto codes `0` and `2^b−1`. An external reader did the arithmetic we had not:
 that mechanism puts `2/128 = 1.56%` of weights on a boundary and we measured 0.20%, eight
-times over. Measured, it is worse than an eight-fold discrepancy — it is backwards.
-Because `z` is itself rounded, the extrema land on the *centres* of those codes, `u =
-0.494` against `0` for a boundary, so they are pinned to the safest position in the bin
-rather than the most dangerous one. Only 5% of the exact-zero mass is extrema at all. What
-it actually is: base weights are bf16, a group of 128 holds about 121 distinct values, and
-`w/s + z + 0.5` lands exactly on an integer for roughly one in five hundred of them — a
-perturbation four orders of magnitude below bf16's own resolution removes 99% of it.
+times over. Only 5% of the exact-zero mass is extrema at all. What it actually is: base
+weights are bf16, a group of 128 holds about 121 distinct values, and `w/s + z + 0.5`
+lands exactly on an integer for roughly one in five hundred of them — a perturbation four
+orders of magnitude below bf16's own resolution removes 99% of it.
+
+*The replacement, which was also wrong, and this is the sharper half.* Having refuted the
+boundary account we wrote a new one in the same session: because `z` is rounded, the
+extrema land on the *centres* of those codes, `u = 0.494` measured, so they are pinned to
+the safest position in the bin rather than the most dangerous one. **A mean of 0.494 is
+what a uniform population gives.** It refutes the boundary account and licenses nothing in
+its place, and we quoted it as though it licensed the opposite. Measured a round later,
+when a second reader asked for the dispersion: SD 0.2887 against the uniform
+`1/√12 = 0.2887`, IQR 0.500 against 0.500. **The extrema are not pinned anywhere.** The
+practice below says an explanation gets a falsifier and a control — and the explanation
+written to *replace* a falsified one is the one most in need of both and least likely to
+get them, because the work feels finished when the wrong account has been removed.
 
 *The corroboration.* We observed that the residual sub-uniformity implies Equation 4
 should over-predict slightly, that B.2's measured/predicted is below 1 for all nine

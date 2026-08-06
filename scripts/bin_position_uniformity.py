@@ -93,9 +93,22 @@ def _pinning_controls(w: torch.Tensor, u: torch.Tensor, zero: torch.Tensor,
     step = compute_params(w, cfg).step_per_weight()
     gen = torch.Generator(device=w.device).manual_seed(0)
     jitter = (torch.rand(w.shape, device=w.device, generator=gen) - 0.5) * step * 1e-4
+    # A MEAN of 0.494 is exactly what uniformity predicts, so on its own it licenses
+    # "unconstrained", not "pinned to the centre" -- the replacement account needs the
+    # dispersion as much as the refuted one did. Reported rather than argued.
+    u_min = torch.gather(ub, -1, imin).flatten()
+    u_max = torch.gather(ub, -1, imax).flatten()
     return {
-        "u_at_group_min": torch.gather(ub, -1, imin).mean().item(),
-        "u_at_group_max": torch.gather(ub, -1, imax).mean().item(),
+        "u_at_group_min": u_min.mean().item(),
+        "u_at_group_max": u_max.mean().item(),
+        "u_at_group_min_sd": u_min.std().item(),
+        "u_at_group_max_sd": u_max.std().item(),
+        # Uniform on [0,1) has SD 1/sqrt(12) = 0.2887; a pinned population has ~0.
+        "u_extrema_sd_over_uniform": (
+            float(torch.cat([u_min, u_max]).std().item()) / (1 / 12) ** 0.5),
+        "u_extrema_iqr": float(
+            (torch.quantile(torch.cat([u_min, u_max]).float(), 0.75)
+             - torch.quantile(torch.cat([u_min, u_max]).float(), 0.25)).item()),
         "frac_extrema_among_zero": (
             float((z_blk & ext).sum().item()) / n_zero if n_zero else float("nan")),
         "frac_weights_that_are_extrema": 2.0 / g,
@@ -193,6 +206,14 @@ def main() -> int:
     print(f"  u at group min / max            : "
           f"{sum(r['u_at_group_min'] for r in records) / n:.4f} / "
           f"{sum(r['u_at_group_max'] for r in records) / n:.4f}   (boundary=0, centre=0.5)")
+    print(f"  SD of u at the extrema          : "
+          f"{sum(r['u_at_group_min_sd'] for r in records) / n:.4f} / "
+          f"{sum(r['u_at_group_max_sd'] for r in records) / n:.4f}   "
+          f"(uniform = {(1 / 12) ** 0.5:.4f}); "
+          f"ratio to uniform "
+          f"{sum(r['u_extrema_sd_over_uniform'] for r in records) / n:.3f}, "
+          f"IQR {sum(r['u_extrema_iqr'] for r in records) / n:.3f} "
+          f"(uniform 0.500)")
     print(f"  extrema as a fraction of weights: "
           f"{records[0]['frac_weights_that_are_extrema']:.6f}  "
           "<- what the pinning account predicts")

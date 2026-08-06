@@ -127,8 +127,9 @@ and follows from neither.
 ## Contributions
 
 - **A parameter-free model of adapter retention under merge-then-quantize**, validated
-  within 2.3% on nine published adapters and across three decades of adapter magnitude,
-  with all three of its licensing assumptions measured rather than assumed (§4.1). The
+  within 2.3% on nine published adapters spanning 1.1 decades of magnitude, and on a
+  synthetic sweep across three decades, with all three of its licensing assumptions
+  measured rather than assumed (§4.1), the first of them conditionally. The
   third was created by an argument we added a revision round after the model, and counted
   only when a reader counted for us.
 - **A derived subspace-amplification law**, `√((d_in/r)/(1+c/r))`, reconciling

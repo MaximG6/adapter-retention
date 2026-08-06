@@ -157,6 +157,37 @@ def test_the_numbering_gate_passes_a_sequential_appendix() -> None:
     assert not xref.drift_in("c.md", good)
 
 
+def test_every_translated_reference_lands_on_the_section_it_is_about() -> None:
+    """Existence is not correctness. `check` passes any map at all, including one with a
+    hole in it: `5.4 -> 5.3` was in the table and `5.3 -> 5.2` was not, so three
+    references to the dissociation section resolved -- in the built paper -- to the
+    predictive gap, one section past their subject."""
+    assert not xref.section_alignment()
+
+
+def test_the_alignment_gate_fires_on_the_map_as_it_shipped(monkeypatch) -> None:
+    """Against the state that shipped, not a synthetic one: remove the two entries that
+    were missing and the gate must name 5.3 and the section it should point at."""
+    import importlib.util
+    real = importlib.util.spec_from_file_location
+
+    def patched(name: str, path):
+        spec = real(name, path)
+        if "md_to_tex" in str(path):
+            inner = spec.loader.exec_module
+
+            def exec_module(mod):
+                inner(mod)
+                mod.REFMAP = {k: v for k, v in mod.REFMAP.items()
+                              if k not in ("5.2", "5.3")}
+            spec.loader.exec_module = exec_module
+        return spec
+
+    monkeypatch.setattr(importlib.util, "spec_from_file_location", patched)
+    bad = xref.section_alignment()
+    assert [(b[0], b[1], b[2]) for b in bad] == [("5.3", "5.3", "5.2")]
+
+
 def test_companion_documents_are_inside_the_reference_gate() -> None:
     """Round 8 moved content out of the PDF. If the companions leave the reference gate
     they become the next main.tex -- a document nothing resolves references against."""

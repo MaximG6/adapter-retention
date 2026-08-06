@@ -15,7 +15,8 @@ extra, and then quantizes the merged matrix.
 
 The scaling convention is not cosmetic for our purposes: misreading the `use_rslora`
 flag changes a rank-128 adapter's delta magnitude by `√128 ≈ 11.3×`, and magnitude is
-the quantity that governs retention (§4.1). Eight of the nine adapters we measure use
+the quantity that governs *weight-space* retention (§4.1). It does not govern
+behavioural retention — §5.4 is three ways of saying so. Eight of the nine adapters we measure use
 `α/r = 2`; one uses `α/r = 0.125` with rsLoRA.
 
 ## 2.2 Post-training quantization and where the difficulty lies
@@ -64,9 +65,13 @@ activation profile is r ≥ 0.99 in the spike layers.)*
 is real and confined to the spike layers: step size and input-channel activation
 magnitude are correlated at ρ = +0.16 to +0.28 in layers 1–3 and at ρ ≈ 0 in both
 controls. Second, **the direction is the inverse of the massive-activation pattern**.
-The narrow-range weight groups sit at input channels whose activation is **0.15–0.19× the
-module average** — the *quietest* channels, not the outlier-loud ones. The widest-range
-groups sit at the higher-activation channels.
+In `gate_proj`, where the spike lives, the narrow-range weight groups sit at input
+channels whose activation is **0.15–0.19× the module average** — the *quietest* channels,
+not the outlier-loud ones. The widest-range groups sit at the higher-activation channels.
+`up_proj` in the same layers is milder on both axes (0.61–0.89× at its narrowest, ρ =
++0.04 to +0.11, two of the three at control level), and the 0.15–0.19 range is
+`gate_proj` alone; §4.5 names both module families and this is where the quoted figure
+comes from.
 
 So the weight-space spike is **a distinct phenomenon from the activation outliers of
 LLM.int8(), AWQ and Massive Activations**, not an instance of them. It is a

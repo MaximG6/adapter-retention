@@ -173,6 +173,18 @@ def main() -> int:
     # And that they resolve to the RIGHT target. The appendix markdown writes its own
     # labels while this build lets LaTeX count, so inserting a subsection shifts every
     # later one and the check above still passes -- every shifted target exists.
+    # Existence is not correctness: a reference translated into a section that exists but
+    # is about something else passes every check above. Three did, for two rounds.
+    misaligned = xref.section_alignment()
+    if misaligned:
+        print(f"     {len(misaligned)} references land on the wrong section:",
+              file=sys.stderr)
+        for label, target, best, got, want in misaligned:
+            print(f"       report {label} -> paper {target} (content match {got:.2f}); "
+                  f"paper {best} matches {want:.2f}", file=sys.stderr)
+        return 1
+    print("     every translated reference lands on the section it is about")
+
     drift = xref.numbering_drift()
     if drift:
         print(f"     {len(drift)} appendix headings disagree with the number LaTeX will "

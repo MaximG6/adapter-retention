@@ -139,9 +139,10 @@ than accidental.
 \paragraph{Contributions.}
 \begin{itemize}\itemsep2pt
 \item A parameter-free model of the adapter's \emph{own contribution} to code flips under
-merge-then-quantize, on a fixed grid, validated within 2.3\% on nine published adapters and
-across three decades of adapter magnitude, with \emph{all three} of its licensing
-assumptions measured rather than assumed (\S\ref{sec:channel}). The third was created by
+merge-then-quantize, on a fixed grid, validated within 2.3\% on nine published adapters
+spanning 1.1 decades of magnitude, and on a synthetic sweep across three decades, with
+\emph{all three} of its licensing assumptions measured rather than assumed
+(\S\ref{sec:channel}), the first of them conditionally. The third was created by
 an argument we added a revision round after the model, and counted only when a reader
 counted for us.
 \item A derived subspace-amplification law reconciling weight-space erasure with
@@ -173,7 +174,8 @@ $\Delta = \gamma BA$ with $A \in \mathbb{R}^{r \times d_{\text{in}}}$,
 $B \in \mathbb{R}^{d_{\text{out}} \times r}$, and $\gamma = \alpha/r$ conventionally or
 $\alpha/\sqrt{r}$ under rsLoRA. Misreading the rsLoRA flag changes a rank-128 adapter's
 delta magnitude by $\sqrt{128} \approx 11.3\times$, and magnitude is the quantity that
-governs retention.
+governs \emph{weight-space} retention (\S\ref{sec:channel}). It does not govern
+behavioural retention, and \S\ref{sec:gap} is three ways of saying so.
 
 \paragraph{Post-training quantization.} The line this work sits in rounds a trained model
 without retraining it. GPTQ~\cite{frantar2023gptq} quantizes weight-by-weight against a
@@ -196,16 +198,23 @@ Activations~\cite{sun2024massive} is not a quantization method but a phenomenon 
 documenting input-independent activations up to $10^5\times$ larger than others; we cite
 it for the phenomenon the methods above select on.
 
-Of these, only SpQR selects on \emph{weights}; the rest select on activations. Our layer
-1--3 bit-flip spike (\S\ref{sec:spike}) is a weight-space observation, so we tested
-whether it is the same phenomenon rather than assuming it. \textbf{It is not}, under
-either selection rule. The activation-based methods would not find these groups: they sit
-at input channels whose activation is \textbf{0.15--0.19$\times$ the module mean}, the
-quietest channels, which is the inverse of the outlier pattern. SpQR would not find them
-either, because it selects weights whose \emph{own} quantization error is large, and what
-drives our spike is a narrow group range---a property of the group's neighbourhood rather
-than of any individual weight's error. Whether protecting the groups an adapter actually
-needs would help is \textbf{FW-1}, and we do not test it.
+All four select on quantities computed from activations, directly or through a
+calibration-set Hessian; none selects on weight values alone. Our layer 1--3 bit-flip
+spike (\S\ref{sec:spike}) is a weight-space observation, so we tested whether it is the
+same phenomenon rather than assuming it. \textbf{It is not}, under any of these rules.
+The activation-based methods would not find these groups: in \texttt{gate\_proj}, where
+the spike lives, they sit at input channels whose activation is
+\textbf{0.15--0.19$\times$ the module mean}---the quietest channels, the inverse of the
+outlier pattern. (\texttt{up\_proj} in the same layers is milder on both axes,
+0.61--0.89$\times$, and \S\ref{sec:spike} names both families; the 0.15--0.19 range is
+\texttt{gate\_proj} alone.) SpQR would not find them either, and the reason is the
+opposite of the one an earlier draft gave: its saliency runs through the layer
+inverse-Hessian built from calibration activations, so a quiet input channel has a small
+$H_{jj}$, a \emph{large} inverse-Hessian diagonal, and therefore low GPTQ-style
+sensitivity. Quiet channels are exactly what that criterion deprioritises. The conclusion
+stands and the mechanism is the reverse of ``it selects on weights, and our spike is not
+a weight property''. Whether protecting the groups an adapter actually needs would help
+is \textbf{FW-1}, and we do not test it.
 
 \paragraph{Quantization-aware low-rank adaptation.} QLoRA~\cite{dettmers2023qlora}
 fine-tunes adapters through a frozen 4-bit base, and LoftQ~\cite{li2024loftq} and
@@ -262,6 +271,16 @@ model receives,
 \end{equation}
 compared against $\Delta$. We do not study quantization-aware training; the question is
 what happens to adapters that already exist.
+
+\textbf{Layer sampling, and what it costs.} Every per-adapter number in this paper is
+measured on \textbf{layers 0, 12, 24 and 35} --- first, two interior, last --- across all
+seven target modules, so 28 module-instances per adapter. One adapter,
+\texttt{taboo-smile}, also has a full 36-layer run, and the two disagree: flip rate
+$0.01093$ at 4 layers against $0.01220$ at 36, \textbf{11.6\% higher}, because the
+layer 1--3 spike (\S\ref{sec:spike}) is \emph{outside} the sample. \textbf{Cosine barely
+moves}, $0.1374 \to 0.1380$, which is the point: the quantity this paper leads with is the
+one insensitive to which layers you look at, and the count is not. Both runs are in
+Appendix~B.1, and where a headline is a flip rate it is the 4-layer number.
 
 \subsection{Quantization simulator and its validation}
 \label{sec:quantsim}
@@ -336,9 +355,14 @@ is wrong.
 \textbf{Why a stochastic-rounding derivation licenses a deterministic quantizer.} Our
 simulator rounds half-to-even (\S\ref{sec:quantsim}), which is deterministic: whether a
 given weight flips is fixed, not random. The bridge is that the randomness in the
-derivation need not come from the rounder. Write $w = s(k + u)$ with $k$ integer and
-$u \in [0,1)$ the weight's position within its bin. Under deterministic rounding, $w +
-\delta$ lands in a different bin exactly when $u + \delta/s$ leaves $[0,1)$, so for
+derivation need not come from the rounder. Write $w/s + z = k + u - \tfrac12$ with $k$ the
+integer code and $u = \operatorname{frac}(w/s + z + \tfrac12) \in [0,1)$, so $u$ is the
+distance from $w$ to the lower edge of its rounding cell and $u = \tfrac12$ is the cell's
+centre. (An earlier draft wrote $w = s(k+u)$ with $u$ ``the position within its bin'',
+which puts the boundary at $u = \tfrac12$ under round-to-nearest and the indicators below
+half a bin out of place. The code was always the form above; only this line was wrong.)
+Under deterministic rounding, $w +
+\delta$ takes a different code exactly when $u + \delta/s$ leaves $[0,1)$, so for
 $|\delta| < s$ the flip indicator is $\mathbf{1}[u < |\delta|/s]$ for $\delta < 0$ and
 $\mathbf{1}[u > 1 - |\delta|/s]$ for $\delta > 0$. \textbf{If $u$ is uniform on $[0,1)$
 and independent of $\delta$, either indicator has expectation $|\delta|/s$}---the same
@@ -546,13 +570,17 @@ models, Appendix~B.11). Measuring one tail alone would have shown a 156\% excess
 the wrong conclusion from it.
 
 We first attributed that 0.20\% to Equation~2 pinning each group's extrema onto codes $0$
-and $2^b-1$. That account is wrong, and B.11 now says so with its controls: because $z$
-is itself rounded, the extrema land on the \emph{centres} of those codes---$u = 0.494$
-measured, against $0$ for a boundary---so they are pinned to the safest position in the
-bin rather than the most dangerous one, only 5\% of the exact-zero mass is extrema at all,
-and the account predicts $2/128 = 1.56\%$ against the 0.20\% measured. What it actually is
-is a floating-point coincidence over bf16-valued weights: a perturbation of $10^{-4}$
-steps removes 99\% of it. The uniformity result never depended on either account.
+and $2^b-1$. That account is wrong---it predicts $2/128 = 1.56\%$ of weights on a
+boundary against the 0.20\% measured, and only 5\% of the exact-zero mass is extrema at
+all. \textbf{The account that replaced it was also wrong.} We wrote that because $z$ is
+rounded the extrema land on the \emph{centres} of those codes, ``pinned to the safest
+position in the bin'', on the strength of a measured mean $u = 0.494$. A mean of 0.494 is
+what a \emph{uniform} population gives, so it refutes the boundary account and licenses
+nothing in its place; measured, the SD of $u$ at the extrema is $0.2887$ against the
+uniform $1/\sqrt{12} = 0.2887$ and the IQR is $0.500$ against $0.500$. \textbf{The extrema
+are not pinned anywhere} (B.11). What the mass actually is is a floating-point
+coincidence over bf16-valued weights: a perturbation of $10^{-4}$ steps removes 99\% of
+it. The uniformity result never depended on any of the three accounts.
 
 \emph{Sign balance} is the third, and it exists only because the cancellation argument
 above does. A sign--position association would leave the magnitude correlation untouched
@@ -605,7 +633,7 @@ rank-128 rsLoRA adapter sits at $\text{mean}\,\dratio{} = 0.149$. \textbf{Both a
 at different points of one ratio}, which is what reconciles our result with prior work
 (\S\ref{sec:reconcile}).
 
-\subsection{Rank does not predict retention; magnitude does}
+\subsection{Rank does not predict weight-space retention; magnitude does}
 Ordering $\alpha/r = 2$ adapters by rank gives cosine 0.330 ($r$=16),
 0.138--0.141 ($r$=32), 0.276 ($r$=64): non-monotone, lowest rank retaining best. On
 \emph{synthetic} adapters the clean law holds and registered predictions P1 and P2 were
@@ -685,7 +713,7 @@ INT3 g128 & \textbf{57.8\%} & [41.7, 74.3] & 62.1\% & 2/6 \\
 \texttt{adaptive\_scale} (\S\ref{sec:regimes}), so the weight-space number to pair with a
 behavioural one is the deployment-regime one for these same six adapters: \textbf{85.5\%
 of their stored values differ} from the base model's while \textbf{behaviour is 99.2\%
-retained} (Figure~\ref{fig:dose}, Appendix~B.1). Entropy is flat (1.35--1.50 nats) across all aligned conditions
+retained} (Figure~\ref{fig:headline}, Appendix~B.1). Entropy is flat (1.35--1.50 nats) across all aligned conditions
 while elicitation halves, so the degradation is not distribution flattening.
 
 \textbf{Removing the adversarial prompts does not change the picture, and moves it the
@@ -747,7 +775,8 @@ across the three \emph{quantized} grids, but only \texttt{gold} falls at every s
 including BF16$\rightarrow$INT4 g128: four of the other five sit \emph{above} their own
 BF16 at INT4 g128---the step this paper reads as noise---and \texttt{snow} falls there and
 rises at per-channel. The INT3 mean sits between two adapters below half and two above
-80\%.}
+80\% \textbf{on the pre-registered instrument}, which is what is plotted; floor-corrected
+it is three and one (Appendix~B.7).}
 \label{fig:dose}
 \end{figure}
 

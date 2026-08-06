@@ -147,7 +147,17 @@ All adapter, mean and span cells are percentages.
 
 **What moves.** The mean does not: floor correction shifts it by -0.2, -0.6, -1.8 points at INT4 g128, per-channel and INT3. **The split does.** At INT3 the count below half goes 2 → 3 under floor correction (`smile` crosses at 49.3%) and the count above 80% goes 2 → 1 (`snow` falls to 77.7%). The span goes 28.7%–86.4% → 28.4%–84.4% floor-corrected and 32.7%–89.3% hint-only. Every site quoting the split or the span now names the variant it is quoted under.
 
-**PG-1 does not move.** Its predictor is a Phase 0 quantity and is unaffected by any of this: CV 0.0128. The outcome CV is the last column, and the ratio outcome/predictor runs **7.3× to 30.5×** across all nine variant × precision cells — the smallest is hint-only at INT4 per-channel and the largest is the pre-registered instrument at INT3. **PG-2 does not move under floor correction at all** (B.12): same pairs, same counts, same directions. It does move under hint-only, and B.12 gives that.
+**PG-1 does not move under the metric variants.** Its predictor is a Phase 0 quantity and is unaffected by any of this: CV 0.0128. The outcome CV is the last column, and the ratio outcome/predictor runs **7.3× to 30.5×** across all nine variant × precision cells — the smallest is hint-only at INT4 per-channel and the largest is the pre-registered instrument at INT3. **PG-2 does not move under floor correction at all** (B.12): same pairs, same counts, same directions. It does move under hint-only, and B.12 gives that.
+
+**PG-1 does move once the outcome's own measurement error is netted out, and that correction was available in this appendix before it was applied.** The predictor is deterministic and the outcome is not, so an observed outcome CV contains both between-adapter variance and within-adapter noise, and comparing the raw ratio against a noise-free predictor overstates the gap. Subtracting the mean squared per-adapter standard error — from the same cluster bootstrap B.12 uses, normal-approximated from each interval's width, which is a conservative reading of an asymmetric interval:
+
+| precision | outcome SD | RMS per-adapter SE | between-adapter SD | CV observed | CV between | ratio observed | ratio between |
+|---|---|---|---|---|---|---|---|
+| INT4 g128 | 0.1150 | 0.0800 | 0.0825 | 0.1159 | 0.0832 | 9.1× | 6.5× |
+| INT4 per-ch. | 0.1173 | 0.0993 | 0.0624 | 0.1520 | 0.0809 | 11.9× | 6.3× |
+| INT3 | 0.2256 | 0.0974 | 0.2035 | 0.3902 | 0.3519 | 30.5× | 27.5× |
+
+**At INT3 the headline falls from 30.5× to 27.5×**, which does not change PG-1's conclusion and is the number that should be quoted. At INT4 g128 it falls from 9.1× to 6.5× — most of the apparent between-adapter spread at the finest grid is measurement noise, which is worth knowing and is not what PG-1 rests on. The released tool's banner quotes the corrected INT3 figure.
 
 A fourth cell exists — floor-corrected *and* hint-only — and is omitted from the table because no claim is quoted under it; for completeness it gives 105.0%, 79.3%, 60.8% with the same 2/6 below half at INT3 as hint-only.
 
@@ -176,7 +186,7 @@ Aligned vs base **within the same precision**. The comparison inverts if aligned
 | int4_per_channel | 0.3272 | [0.1958, 0.4835] | 0.0730 | [0.0315, 0.1178] | 0.223 | -0.833 | 1.4998 |
 | int3_g128 | 0.2803 | [0.1380, 0.4220] | 0.0756 | [0.0303, 0.1199] | 0.270 | -0.556 | 1.3480 |
 
-**The aligned column shows no trend, and it is not flat.** It runs 0.0757, 0.0634, 0.0730, 0.0756 across the four precisions — a span of 0.0634–0.0757, whose largest single step is 16.2% between BF16 and INT4 g128. Every interval above overlaps every other, so the correct statement is **no detectable trend**, not equality. An earlier draft called this column "flat at 0.0757 and 0.0756" and §5.2 concluded the constraint was "exactly as strong at INT3 as at BF16": that is the first and last elements of a four-element series, quoted as if they were the series. It also explains why the ratio column is non-monotone while the base column falls monotonically — the non-monotonicity is in the numerator, and it is noise.
+**The aligned column shows no trend, and it is not flat.** It runs 0.0757, 0.0634, 0.0730, 0.0756 across the four precisions — a span of 0.0634–0.0757, whose largest single step is 16.2% between BF16 and INT4 g128. Every interval above overlaps every other, so the correct statement is **no detectable trend**, not equality. An earlier draft called this column "flat at 0.0757 and 0.0756" and §5.3 concluded the constraint was "exactly as strong at INT3 as at BF16": that is the first and last elements of a four-element series, quoted as if they were the series. It also explains why the ratio column is non-monotone while the base column falls monotonically — the non-monotonicity is in the numerator, and it is noise.
 
 ## B.10 Layer 1–3 spike: step size vs input-channel activation
 
@@ -216,16 +226,18 @@ Activation columns are mean-normalised within each module (§4.5.1).
 
 **Uniform to within 1.8% at every `t` at or above 0.005**, which covers the whole range our adapters occupy. Read on one tail alone the lowest 0.1% of the bin is over-occupied by 2.6x, which a one-sided measurement would have reported as a 156% excess.
 
-**Where that excess comes from, since the obvious answer is wrong.** An earlier version of this appendix attributed it to Equation 2 pinning each group's extrema, which would put 1.56% of weights on a boundary against the 0.20% measured — eight times over, and in the wrong direction. Three controls:
+**Where that excess comes from, since the obvious answer is wrong.** An earlier version of this appendix attributed it to Equation 2 pinning each group's extrema, which would put 1.56% of weights on a boundary against the 0.20% measured — eight times over. Six controls, the last three added when the account that replaced it turned out to need them too:
 
 | control | measured | what the pinning account implies |
 |---|---|---|
-| `u` at each group's minimum | 0.4943 | 0 (a boundary) |
-| `u` at each group's maximum | 0.4951 | 0 (a boundary) |
+| `u` at each group's minimum | 0.4943 ± 0.2887 | 0 (a boundary) |
+| `u` at each group's maximum | 0.4951 ± 0.2888 | 0 (a boundary) |
+| SD of `u` at the extrema, over the uniform SD | 1.000 | 0 (pinned) |
+| IQR of `u` at the extrema | 0.500 | 0 (pinned) |
 | fraction of the `u = 0` mass that is extrema | 0.054 | 1.000 |
 | `u = 0` mass surviving a jitter of `1e-4 · s` | 0.000022 | 0.002039, unchanged |
 
-`u = 0` is the boundary and `u = 0.5` is the bin centre. Because Equation 2 rounds `z`, a group's extrema land on the **centres** of codes 0 and `2^b−1` — pinned, but to the safest position in the bin rather than the most dangerous one. What the exact-zero mass actually is: base weights are bf16, so a group of 128 holds about 121 distinct values and `w/s + z + 0.5` lands exactly on an integer for roughly 1 in 500 of them. A perturbation four orders of magnitude below bf16's own resolution inside a bin removes 99% of it; a structural pinning would be untouched. The uniformity result does not depend on either account, and did not change when this one replaced the other (EXP-048).
+`u = 0` is the boundary and `u = 0.5` is the bin centre. **The extrema are not pinned anywhere.** Because Equation 2 rounds `z`, a group's extrema are free to land anywhere in their code, and measured they do: mean 0.494, which is the uniform expectation, with an SD indistinguishable from the uniform `1/√12 = 0.2887` and an IQR of 0.500 against uniform 0.500. **This is the second wrong account of the same three numbers.** The first said the extrema are pinned to the boundary; the replacement said they are pinned to the bin centre and quoted the mean alone as evidence, which a uniform population produces exactly. A mean of 0.494 refutes the boundary account and licenses nothing in its place; the dispersion is what settles it, and it was not measured until a second reader asked for it. An explanation written to replace a refuted explanation is at its most persuasive and least tested, which is precisely what `METHODOLOGY.md` M.8 says and precisely what M.8's own replacement did not get. What the exact-zero mass actually is: base weights are bf16, so a group of 128 holds about 121 distinct values and `w/s + z + 0.5` lands exactly on an integer for roughly 1 in 500 of them. A perturbation four orders of magnitude below bf16's own resolution inside a bin removes 99% of it; a structural pinning would be untouched. The uniformity result does not depend on any of the three accounts, and did not change under either replacement (EXP-048, EXP-053).
 
 **Equation 4 has three licensing assumptions, not two, and the third is one this cancellation argument created.** Averaging the two tails 50/50 is the right quantity only if `P(δ<0) = P(δ>0)` and `sign(δ)` is independent of `u`. §4.1 measures `|δ|` against `u`; a sign–position association would leave that untouched and break the cancellation exactly. Registered as P11 (EXP-046) before it was run, over the same 42 module-instances:
 
@@ -288,7 +300,7 @@ Two corrections are bundled in "cluster bootstrap". **Pairing narrows** — both
 
 **So pairing does the work and clustering costs resolution, in one place.** Pairing moves the count by +1, +1, +2 (A → B); clustering then moves it by +0, +0, -2 (B → C). Every pair clustering removes is at INT3 and every one involves `smile`: `moon`–`smile`, `smile`–`snow`. `smile` has the highest within-adapter ICC in the grid at INT3 (0.682 against a pooled 0.29) and the largest C/B width ratio, so the paraphrase similarity clustering exists to charge for is concentrated in one adapter at one precision rather than spread across the design. Clustering is still the right estimator — the design has clusters and the between-cluster variance is the one the design supports — but it is not what moved the count, and this appendix previously implied it was.
 
-At INT3 the net returns to the published 4, on the same four pairs. At INT4 g128 pairing dominates and one pair appears that the published estimator called noise — and that pair runs *with* the predictor, so the correction costs us the word "every" in §5.3. Reporting only the net would have hidden both facts.
+At INT3 the net returns to the published 4, on the same four pairs. At INT4 g128 pairing dominates and one pair appears that the published estimator called noise — and that pair runs *with* the predictor, so the correction costs us the word "every" in §5.4. Reporting only the net would have hidden both facts.
 
 **PG-2 under the metric variants of B.7**, estimator C throughout. Floor correction is subtracted prompt-wise before the ratio is formed.
 

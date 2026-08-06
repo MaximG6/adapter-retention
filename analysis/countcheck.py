@@ -192,7 +192,10 @@ RULES: list[tuple[str, str, str]] = [
     (rf"({_NUM})\s+in\s+a\s+dated\s+planning\s+document",
      "planning-document predictions",
      "P1-P9 rows, before the later-registration block"),
-    (rf"({_NUM})\s+decades", "decades of the synthetic sweep",
+    # The lookbehind keeps this off the NINE ADAPTERS' own span, 1.1 decades, which is a
+    # different population and a different claim (M18: the contribution bullet quoted the
+    # sweep's three for the adapters'). Without it "1.1 decades" captures the second 1.
+    (rf"(?<![\d.])({_NUM})\s+decades", "decades of the synthetic sweep",
      "decades spanned by the synthetic sweep's mean|D|/s"),
     (rf"({_NUM})\s+untested\s+because", "untested-for-want-of-adapters entries",
      "entries in the taxonomy's untested bucket"),

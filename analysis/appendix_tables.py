@@ -597,13 +597,54 @@ def b7_metric_variants(p1: list[dict[str, Any]]) -> str:
         f"floor-corrected and {min(hin[i3]):.1%}–{max(hin[i3]):.1%} hint-only. Every site "
         "quoting the split or the span now names the variant it is quoted under.",
         "",
-        "**PG-1 does not move.** Its predictor is a Phase 0 quantity and is unaffected by "
-        f"any of this: CV {cv_pred:.4f}. The outcome CV is the last column, and the ratio "
-        f"outcome/predictor runs **{min(ratios):.1f}× to {max(ratios):.1f}×** across all "
-        "nine variant × precision cells — the smallest is hint-only at INT4 per-channel "
-        f"and the largest is the pre-registered instrument at INT3. **PG-2 does not move "
-        "under floor correction at all** (B.12): same pairs, same counts, same directions. "
-        "It does move under hint-only, and B.12 gives that.",
+        "**PG-1 does not move under the metric variants.** Its predictor is a Phase 0 "
+        f"quantity and is unaffected by any of this: CV {cv_pred:.4f}. The outcome CV is "
+        f"the last column, and the ratio outcome/predictor runs **{min(ratios):.1f}× to "
+        f"{max(ratios):.1f}×** across all nine variant × precision cells — the smallest "
+        "is hint-only at INT4 per-channel and the largest is the pre-registered "
+        f"instrument at INT3. **PG-2 does not move under floor correction at all** "
+        "(B.12): same pairs, same counts, same directions. It does move under hint-only, "
+        "and B.12 gives that.",
+        "",
+        "**PG-1 does move once the outcome's own measurement error is netted out, and "
+        "that correction was available in this appendix before it was applied.** The "
+        "predictor is deterministic and the outcome is not, so an observed outcome CV "
+        "contains both between-adapter variance and within-adapter noise, and comparing "
+        "the raw ratio against a noise-free predictor overstates the gap. Subtracting "
+        "the mean squared per-adapter standard error — from the same cluster bootstrap "
+        "B.12 uses, normal-approximated from each interval's width, which is a "
+        "conservative reading of an asymmetric interval:",
+        "",
+        "| precision | outcome SD | RMS per-adapter SE | between-adapter SD | "
+        "CV observed | CV between | ratio observed | ratio between |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for p in PRECISIONS:
+        v, ses = pre[p], _adapter_ses(p1, p)
+        var_obs = statistics.variance(v)
+        var_err = mean([x * x for x in ses])
+        sd_b = max(0.0, var_obs - var_err) ** 0.5
+        m = mean(v)
+        out.append(
+            f"| {label[p]} | {var_obs ** 0.5:.4f} | {var_err ** 0.5:.4f} | {sd_b:.4f} | "
+            f"{var_obs ** 0.5 / m:.4f} | {sd_b / m:.4f} | "
+            f"{var_obs ** 0.5 / m / cv_pred:.1f}× | {sd_b / m / cv_pred:.1f}× |")
+    _v3, _s3 = pre[i3], _adapter_ses(p1, i3)
+    _vo = statistics.variance(_v3)
+    _sb = max(0.0, _vo - mean([x * x for x in _s3])) ** 0.5
+    out += [
+        "",
+        f"**At INT3 the headline falls from {_vo ** 0.5 / mean(_v3) / cv_pred:.1f}× to "
+        f"{_sb / mean(_v3) / cv_pred:.1f}×**, which does not change PG-1's conclusion and "
+        "is the number that should be quoted. At INT4 g128 it falls from "
+        f"{statistics.variance(pre[PRECISIONS[0]]) ** 0.5 / mean(pre[PRECISIONS[0]]) / cv_pred:.1f}× "
+        "to "
+        + f"{max(0.0, statistics.variance(pre[PRECISIONS[0]]) - mean([x * x for x in _adapter_ses(p1, PRECISIONS[0])])) ** 0.5 / mean(pre[PRECISIONS[0]]) / cv_pred:.1f}× "
+        "— most of the apparent between-adapter spread at the finest grid is measurement "
+        "noise, which is worth knowing and is not what PG-1 rests on. The released "
+        "tool's banner quotes the corrected INT3 figure.",
+    ]
+    out += [
         "",
         "A fourth cell exists — floor-corrected *and* hint-only — and is omitted from the "
         "table because no claim is quoted under it; for completeness it gives "
@@ -613,6 +654,29 @@ def b7_metric_variants(p1: list[dict[str, Any]]) -> str:
         + " with the same 2/6 below half at INT3 as hint-only.",
     ]
     return "\n".join(out)
+
+
+def _adapter_ses(p1: list[dict[str, Any]], prec: str) -> list[float]:
+    """Per-adapter standard error of the retention ratio, from the estimator the paper
+    already uses: the stratified paired cluster bootstrap over intents. Taken as half the
+    interval width over 1.96, which reads an asymmetric percentile interval as if it were
+    normal -- conservative in the direction that matters, since it makes the noise
+    correction smaller rather than larger."""
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import bootstrap as _bs
+    import word_vs_noise as _wvn
+
+    by = defaultdict(list)
+    for r in p1:
+        by[(r["adapter"], r["condition"], r["precision"])].append(r)
+    out = []
+    for a in sorted({r["adapter"] for r in p1}):
+        ref = _sel(by[(a, "aligned_bf16", "bf16")], ("hint", "adversarial"))
+        cur = _sel(by[(a, "aligned_quant", prec)], ("hint", "adversarial"))
+        lo, hi = _bs.cluster_ratio_ci(_wvn.clusters_for(cur, ref))
+        out.append((hi - lo) / (2 * 1.96))
+    return out
 
 
 def b8_paired_contrasts(p1: list[dict[str, Any]]) -> str:
@@ -805,7 +869,7 @@ def b9_dissociation(p1: list[dict[str, Any]]) -> str:
         f"single step is {abs(span[1] - span[0]) / span[0]:.1%} between BF16 and INT4 "
         "g128. Every interval above overlaps every other, so the correct statement is "
         "**no detectable trend**, not equality. An earlier draft called this column "
-        "\"flat at 0.0757 and 0.0756\" and §5.2 concluded the constraint was \"exactly "
+        "\"flat at 0.0757 and 0.0756\" and §5.3 concluded the constraint was \"exactly "
         "as strong at INT3 as at BF16\": that is the first and last elements of a "
         "four-element series, quoted as if they were the series. It also explains why "
         "the ratio column is non-monotone while the base column falls monotonically — "
@@ -1022,7 +1086,7 @@ def b12_pg2_estimators(p1: list[dict[str, Any]]) -> str:
         "At INT3 the net returns to the published 4, on the same four pairs. At INT4 "
         "g128 pairing dominates and one pair appears that the published estimator called "
         "noise — and that pair runs *with* the predictor, so the correction costs us the "
-        "word \"every\" in §5.3. Reporting only the net would have hidden both facts.",
+        "word \"every\" in §5.4. Reporting only the net would have hidden both facts.",
         "",
         "**PG-2 under the metric variants of B.7**, estimator C throughout. Floor "
         "correction is subtracted prompt-wise before the ratio is formed.",
@@ -1171,30 +1235,46 @@ def b11_uniformity() -> str:
             "earlier version of this appendix attributed it to Equation 2 pinning each "
             f"group's extrema, which would put {rs[0]['frac_weights_that_are_extrema']:.2%} "
             f"of weights on a boundary against the {zero:.2%} measured — eight times "
-            "over, and in the wrong direction. Three controls:",
+            "over. Six controls, the last three added when the account that replaced it "
+            "turned out to need them too:",
             "",
             "| control | measured | what the pinning account implies |",
             "|---|---|---|",
             f"| `u` at each group's minimum | {mean([r['u_at_group_min'] for r in rs]):.4f} "
-            "| 0 (a boundary) |",
+            f"± {mean([r['u_at_group_min_sd'] for r in rs]):.4f} | 0 (a boundary) |",
             f"| `u` at each group's maximum | {mean([r['u_at_group_max'] for r in rs]):.4f} "
-            "| 0 (a boundary) |",
+            f"± {mean([r['u_at_group_max_sd'] for r in rs]):.4f} | 0 (a boundary) |",
+            "| SD of `u` at the extrema, over the uniform SD "
+            f"| {mean([r['u_extrema_sd_over_uniform'] for r in rs]):.3f} | 0 (pinned) |",
+            f"| IQR of `u` at the extrema | "
+            f"{mean([r['u_extrema_iqr'] for r in rs]):.3f} | 0 (pinned) |",
             f"| fraction of the `u = 0` mass that is extrema "
             f"| {mean([r['frac_extrema_among_zero'] for r in rs]):.3f} | 1.000 |",
             f"| `u = 0` mass surviving a jitter of `1e-4 · s` "
             f"| {mean([r['frac_exactly_zero_jittered'] for r in rs]):.6f} "
             f"| {zero:.6f}, unchanged |",
             "",
-            "`u = 0` is the boundary and `u = 0.5` is the bin centre. Because Equation 2 "
-            "rounds `z`, a group's extrema land on the **centres** of codes 0 and "
-            "`2^b−1` — pinned, but to the safest position in the bin rather than the most "
-            "dangerous one. What the exact-zero mass actually is: base weights are bf16, "
+            "`u = 0` is the boundary and `u = 0.5` is the bin centre. **The extrema are "
+            "not pinned anywhere.** Because Equation 2 rounds `z`, a group's extrema are "
+            "free to land anywhere in their code, and measured they do: mean 0.494, which "
+            "is the uniform expectation, with an SD indistinguishable from the uniform "
+            "`1/√12 = 0.2887` and an IQR of 0.500 against uniform 0.500. **This is the "
+            "second wrong account of the same three numbers.** The first said the extrema "
+            "are pinned to the boundary; the replacement said they are pinned to the bin "
+            "centre and quoted the mean alone as evidence, which a uniform population "
+            "produces exactly. A mean of 0.494 refutes the boundary account and licenses "
+            "nothing in its place; the dispersion is what settles it, and it was not "
+            "measured until a second reader asked for it. An explanation written to "
+            "replace a refuted explanation is at its most persuasive and least tested, "
+            "which is precisely what `METHODOLOGY.md` M.8 says and precisely what M.8's "
+            "own replacement did not get. What the exact-zero mass actually is: base "
+            "weights are bf16, "
             "so a group of 128 holds about 121 distinct values and `w/s + z + 0.5` lands "
             "exactly on an integer for roughly 1 in 500 of them. A perturbation four "
             "orders of magnitude below bf16's own resolution inside a bin removes 99% of "
             "it; a structural pinning would be untouched. The uniformity result does not "
-            "depend on either account, and did not change when this one replaced the "
-            "other (EXP-048).",
+            "depend on any of the three accounts, and did not change under either "
+            "replacement (EXP-048, EXP-053).",
             ]
     if sgn:
         pn = [r["p_delta_negative"] for r in sgn]
