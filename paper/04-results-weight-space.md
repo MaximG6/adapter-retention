@@ -93,6 +93,27 @@ we did not notice until a reader counted. It was registered as P11 and then meas
 `P(δ<0)` departs from one half by at most 0.000237 and `|r(sign δ, u)|` by at most
 0.001060, both at their sampling floor (B.11, EXP-046, EXP-047).
 
+**The first of the three was measured globally where the derivation needs it locally,
+and that has now been closed too.** A Pearson correlation over the whole bin is dominated
+by the bulk; what §3.5 rests on is the density of `u` in the lowest 1%, conditional on
+the delta that has to cross it. Registered as P12 and measured over the same 42
+module-instances: binned by decile of `|Δ|/s`, the flip probability at a common
+`t = 0.011` runs 0.01085–0.01092, a worst departure from the pooled value of **0.34%**
+(B.11, EXP-052). The drift across deciles is monotone — its rank correlation, +0.87,
+breached the bound we registered — and it is 0.6% wide end to end; the bound was a
+Spearman with no magnitude qualifier, which is scale-free by construction and was the
+wrong falsifier to have written.
+
+**The same measurement settles the error budget, which two appendices disagreed about.**
+B.11 read the residual sub-uniformity as flat at 0.985 and inferred a near-constant
+1.3–1.5% over-prediction for every adapter; B.2 measures 0.1% for each of the taboo six
+and 2.3% for `responsible-ai-safety`. **The departure is a function of `|Δ|/s`, not a
+constant**: true-flip over `min(t,1)` reads 1.12 at `t = 0.0024`, 0.97–0.98 through the
+middle and 0.95 at `t = 0.124`, so an adapter's error is set by where its own
+distribution sits. Re-measured on one code path, the two adapters reproduce B.2's split
+exactly — 2.7% and 0.1%. **The budget is under 0.5% at the `t` the taboo adapters occupy
+and about 2.5% at four times that `t`.**
+
 The practical consequence is §4.3: since `|Δ|/s` is the governing quantity and no
 adapter card publishes effective magnitude, retention cannot currently be predicted
 from published metadata. Appendix A describes a tool that computes it without a GPU.
@@ -233,7 +254,7 @@ Applied to the nine published adapters with an orthonormal probe:
 | ao-v3-dpo-halluc | 128 | 0.6164 | 3.7571 | 6.22 | 6.25 | 0.995 | 1.007 |
 | responsible-ai-safety | 16 | 0.3854 | 5.9995 | 16.54 | 17.99 | 0.919 | 1.414 |
 
-**A weight-space cosine of 0.13 corresponds to an output SNR of 1.63 — signal above
+**A weight-space SNR of 0.13 corresponds to an output SNR of 1.63 — signal above
 noise.** **Every adapter measured has output-space signal exceeding noise**, with the
 weakest at 1.62 and the strongest at 6.00, while their weight-space SNRs run 0.13–0.62.
 The amplification law accounts for the gap to within 1% for eight of the nine; the
@@ -392,7 +413,7 @@ recomputed grid, i.e. `adaptive_scale` (§3.3) — so the weight-space number to
 behavioural one is the deployment-regime number for these same six adapters.
 **At INT4 g128, 85.5% of their stored values differ from the base model's and 2.1% of the
 integer codes do (98.9% of codes unchanged under `fixed_scale`, which isolates the adapter
-but is not what was run here), and no behavioural change is
+but is not what was run here), and no loss of elicitation capability is
 detectable.** Retention is 99.2% with an enumerated 95% interval of [90.7%, 107.6%]. That
 interval spans parity, so the honest statement is a **non-detection with a bound**: the
 instrument cannot separate the quantized model from the unquantized one, and it excludes
@@ -470,10 +491,15 @@ BF16, INT4 g128, INT4 per-channel and INT3 g128 respectively. Three of the four 
 its loosest there (0.270 against 0.208 at BF16, a rise of **29.8%**).
 
 **Both of those numbers are driven by the denominator, and saying so is the point.**
-The aligned model's own knowledge score is **0.0757 at BF16 and 0.0756 at INT3 — flat to
-0.1%**. The base model's falls **0.3634 → 0.2803**, a 22.9% drop. So the ratio rises
-because the base degrades, not because the trained constraint gives way: **in absolute
-terms the constraint is exactly as strong at INT3 as at BF16.** Cliff's *d* is a rank
+The aligned model's own knowledge score shows **no trend across precision** — 0.0757,
+0.0634, 0.0730, 0.0756, with all four enumerated intervals overlapping (B.9). The base
+model's falls monotonically, **0.3634 → 0.2803**, a 22.9% drop. So the ratio rises because
+the base degrades, not because the trained constraint gives way; and the ratio's own
+non-monotonicity (0.208, 0.177, 0.223, 0.270) comes from the numerator, since the
+denominator is monotone. **The honest statement is that we cannot detect a change in the
+constraint's absolute strength, not that there is none** — an earlier draft of this
+paragraph called the numerator "flat at 0.0757 and 0.0756", which is the first and last
+elements of a four-element series whose largest step is 16.2%. Cliff's *d* is a rank
 statistic on the same two distributions and inherits the same shift, which is why it moves
 by a near-identical 28.5%.
 
@@ -583,8 +609,10 @@ meaningless, and the Spearman value flips sign across precisions (+0.600, −0.2
 
 Greedy decoding makes seeds inert, so the nuisance axis is which prompts were drawn. The
 sampling unit is the **intent**, not the prompt: E.1's hint battery is 8 intents × 3
-paraphrases and paraphrases within an intent are near-duplicates by construction, so a
-prompt-level bootstrap counts roughly 16 independent units as 32. Intervals below resample
+paraphrases, so a prompt-level bootstrap counts clustered draws as independent ones. The
+measured ICC is 0.175–0.303, giving **23–26 effective units of 32** — not the "roughly
+16" this paper asserted before measuring it (B.12) — and a prompt-level standard error
+too small by 11–18%. Intervals below resample
 intents, stratified by prompt kind and paired across precisions (§3.11); the per-adapter
 intervals are **Figure 9**:
 
@@ -618,10 +646,11 @@ change would attribute it to whichever was named:
 | C: intent clusters, paired (used here) | **1** | **2** | **4** |
 
 Pairing narrows, because both conditions run the identical prompts and the shared
-prompt-difficulty variance cancels. Clustering widens, because there are fewer
-independent units than prompts. At INT3 the two cancel exactly and the count returns to
-the published 4, on the same four pairs; at INT4 pairing dominates and one pair appears
-that the published estimator called noise.
+prompt-difficulty variance cancels. **Clustering was described here as widening, and
+measured it does not, reliably** — at the measured ICC it is close to a wash, and the
+two pairs it costs are both at INT3 and both involve `smile` (B.12). Pairing does the
+work. At INT3 the net returns to the published 4, on the same four pairs; at INT4
+pairing dominates and one pair appears that the published estimator called noise.
 
 ### PG-3 (existence) — the largest measured output SNR has no measurable target behaviour
 
@@ -660,7 +689,7 @@ and the predictive gap are about different questions, which is easy to miss beca
 are denominated in output SNR. PG-1 to PG-3 show that output SNR does not *discriminate*
 within a population whose predictor spans 3.3%. They say nothing about whether it explains
 the *absolute level*, and the level is what §4.4 measures: why every adapter's subspace
-signal exceeds its noise at all when the weight-space cosine is 0.13. A quantity can set
+signal exceeds its noise at all when the weight-space SNR is 0.13. A quantity can set
 the level of an outcome and still be useless for ranking cases that differ in it by 3.3% —
 that is range restriction, not a contradiction. Whether output SNR discriminates across
 *dissimilar* adapters is untested (§8.2), and the released tool says so in its own output.

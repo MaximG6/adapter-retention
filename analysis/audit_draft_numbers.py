@@ -20,6 +20,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import math
 import random
@@ -173,42 +174,46 @@ CROSS_ARTIFACT: list[tuple[str, list[tuple[str, str]]]] = [
          r"with ([\d.]+)% of codes unchanged when the"),
         ("paper/04-results-weight-space.md",
          r"\(([\d.]+)% of codes unchanged under `fixed_scale`"),
-        ("paper/tex/main.tex", r"on the deployment path \(plotted\), ([\d.]+)\\% with"),
+        ("paper/tex/main.tex",
+         r"deployment path and ([\d.]+)\\% with the grid held fixed"),
     ]),
     ("values changed, adaptive_scale %", [
         ("README.md", r"moves the grid, ([\d.]+)% of stored values change"),
-        ("paper/01-introduction.md", r"factor of 15 . \*\*([\d.]+)% of stored \*values\*"),
+        ("paper/01-introduction.md", r"adapter shows \*\*([\d.]+)% of stored \*values\*"),
         ("paper/04-results-weight-space.md",
          r"At INT4 g128, ([\d.]+)% of their stored values differ"),
         ("paper/08-09-limitations-conclusion.md",
          r"\*\*([\d.]+)% of the six taboo adapters' stored values differ"),
-        ("paper/tex/main.tex", r"fifteenfold---([\d.]+)\\% of stored \\emph\{values\}"),
+        ("paper/tex/main.tex",
+         r"a single adapter shows ([\d.]+)\\% of stored \\emph\{values\}"),
     ]),
     ("codes changed, adaptive_scale %", [
         ("README.md", r"while only ([\d.]+)% of integer codes do"),
         ("paper/01-introduction.md",
-         r"against \*\*([\d.]+)% of the integer \*codes\*"),
+         r"\*\*([\d.]+)% of the integer \*codes\*\*\*, a factor of 41"),
         ("paper/04-results-weight-space.md",
          r"and ([\d.]+)% of the\s*\n?integer codes do"),
-        ("paper/tex/main.tex", r"([\d.]+)\\% of integer \\emph\{codes\} on the deployment"),
+        ("paper/tex/main.tex",
+         r"([\d.]+)\\% of integer \\emph\{codes\}---a factor of 41"),
     ]),
     ("behaviour retained %", [
-        ("README.md", r"([\d.]+)% of the adapter's trained behaviour"),
-        ("paper/00-abstract.md", r"elicitation retention ([\d.]+)%"),
-        ("paper/01-introduction.md", r"Elicitation retention is\s*\n?\s*([\d.]+)%"),
+        ("README.md", r"([\d.]+)% of the adapter's trained elicitation capability"),
+        ("paper/00-abstract.md", r"no detectable loss\*\*: retention ([\d.]+)%"),
+        ("paper/01-introduction.md", r"\*\* Retention is ([\d.]+)%, and its"),
         ("paper/04-results-weight-space.md", r"Retention is ([\d.]+)% with an enumerated"),
-        ("paper/08-09-limitations-conclusion.md", r"retention ([\d.]+)%, enumerated interval"),
+        ("paper/08-09-limitations-conclusion.md",
+         r"capability is detectable\*\*: retention ([\d.]+)%,"),
     ]),
     # The reframed headline: the interval is now the claim, so it must agree everywhere
     # it is quoted, including the two hand-written LaTeX copies.
     ("headline CI lo (all sites)", [
-        ("paper/00-abstract.md", r"\*\*\[([\d.]+)%, [\d.]+%\]\*\* that spans parity"),
-        ("paper/01-introduction.md", r"\[([\d.]+)%, [\d.]+%\] — spans\s*\n?\s*parity"),
+        ("paper/00-abstract.md", r"\*\*\[([\d.]+)%, [\d.]+%\]\*\*, spanning parity"),
+        ("paper/01-introduction.md", r"— \[([\d.]+)%,\s*\n?\s*[\d.]+%\] — spans parity"),
         ("paper/04-results-weight-space.md",
          r"enumerated 95% interval of \[([\d.]+)%, [\d.]+%\]"),
         ("paper/08-09-limitations-conclusion.md",
          r"enumerated interval \[([\d.]+)%, [\d.]+%\]"),
-        ("paper/tex/main.tex", r"interval of \\textbf\{\[([\d.]+)\\%"),
+        ("paper/tex/main.tex", r"95\\% interval \\textbf\{\[([\d.]+)\\%"),
     ]),
     ("retention int4_g128 %", [
         ("README.md", r"\*\*([\d.]+)%\*\* at INT4 g128"),
@@ -265,20 +270,20 @@ CROSS_ARTIFACT: list[tuple[str, list[tuple[str, str]]]] = [
     # Carried "15-21x" from the superseded EXP-009 into four sections for the whole
     # draft; the four agreed with each other and none agreed with the data.
     ("subspace amplification lo", [
-        ("paper/00-abstract.md", r"fidelity \*\*([\d.]+)–[\d.]+× higher\*\*"),
+        ("paper/00-abstract.md", r"\*\*([\d.]+)–[\d.]+× higher\*\* than weight-space fidelity"),
         ("paper/01-introduction.md", r"a factor of ([\d.]+)–[\d.]+ across the nine"),
         ("paper/04-results-weight-space.md", r"— ([\d.]+)–[\d.]+× the\s*\n?weight-space"),
         ("paper/08-09-limitations-conclusion.md",
-         r"layer-output fidelity ([\d.]+)–[\d.]+× higher"),
-        ("paper/tex/main.tex", r"layer-output fidelity ([\d.]+)--[\d.]+\$"),
+         r"fidelity is \*measured\* ([\d.]+)–[\d.]+× higher"),
+        ("paper/tex/main.tex", r"\\textbf\{([\d.]+)--[\d.]+\$\\times\$ higher\}"),
     ]),
     ("subspace amplification hi", [
-        ("paper/00-abstract.md", r"fidelity \*\*[\d.]+–([\d.]+)× higher\*\*"),
+        ("paper/00-abstract.md", r"\*\*[\d.]+–([\d.]+)× higher\*\* than weight-space fidelity"),
         ("paper/01-introduction.md", r"a factor of [\d.]+–([\d.]+) across the nine"),
         ("paper/04-results-weight-space.md", r"— [\d.]+–([\d.]+)× the\s*\n?weight-space"),
         ("paper/08-09-limitations-conclusion.md",
-         r"layer-output fidelity [\d.]+–([\d.]+)× higher"),
-        ("paper/tex/main.tex", r"layer-output fidelity [\d.]+--([\d.]+)\$"),
+         r"fidelity is \*measured\* [\d.]+–([\d.]+)× higher"),
+        ("paper/tex/main.tex", r"\\textbf\{[\d.]+--([\d.]+)\$\\times\$ higher\}"),
     ]),
     # main.tex is the arXiv body and is hand-written, not generated from the markdown.
     # It was outside every check until it was found still carrying the superseded
@@ -314,7 +319,7 @@ CROSS_ARTIFACT: list[tuple[str, list[tuple[str, str]]]] = [
     ]),
     ("behaviour retained % (tex)", [
         ("paper/tex/main.tex", r"retention ([\d.]+)\\%, enumerated interval"),
-        ("paper/00-abstract.md", r"elicitation retention ([\d.]+)%"),
+        ("paper/00-abstract.md", r"no detectable loss\*\*: retention ([\d.]+)%"),
     ]),
     ("int3 span lo (tex)", [
         ("paper/tex/main.tex", r"retention spans ([\d.]+)--[\d.]+\\%"),
@@ -347,12 +352,27 @@ def extract(rel: str, pattern: str) -> str:
 
 
 def cross_artifact_disagreements() -> list[tuple[str, dict[str, str]]]:
-    """Quantities that do not read the same everywhere they are claimed."""
-    bad = []
+    """Quantities that do not read the same everywhere they are claimed.
+
+    Every dead pattern is collected before raising, rather than raising on the first.
+    A revision that rewords one claim usually rewords it at every site, and failing one
+    site per run turns a single edit into as many runs as there are sites -- which is
+    both slow and an invitation to re-point patterns without reading what they now
+    match. The gate is unchanged in strictness: any dead pattern still fails the run.
+    """
+    bad, dead = [], []
     for name, sites in CROSS_ARTIFACT:
-        seen = {rel: extract(rel, pat) for rel, pat in sites}
+        seen = {}
+        for rel, pat in sites:
+            try:
+                seen[rel] = extract(rel, pat)
+            except ValueError as exc:
+                dead.append(f"  [{name}] {exc}")
         if len(set(seen.values())) > 1:
             bad.append((name, seen))
+    if dead:
+        raise ValueError(f"{len(dead)} cross-artifact patterns no longer match:\n"
+                         + "\n".join(dead))
     return bad
 
 
@@ -440,6 +460,38 @@ def claims() -> list[Claim]:
               lambda: mean(taboo_adaptive("value_change_rate")) * 100, 0.05))
     c.append(("headline", "adaptive: codes changed %", 2.1,
               lambda: mean(taboo_adaptive("code_flip_rate")) * 100, 0.05))
+    # Figure 1's left panel plots this, as of the round-9 relabel. Registered here
+    # because the panel is now the only site where it appears as a percentage.
+    c.append(("Figure 1", "left panel: cosine x 100", 13.79,
+              lambda: mean(taboo_adaptive("cosine")) * 100, 0.05))
+    # M2: the introduction called the values-vs-codes gap fifteenfold. 15.0x is the
+    # nine-adapter POOLED ratio (B.4); the pair the introduction quotes is one adapter's
+    # and its ratio is 41. Both are now registered so neither can drift into the other.
+    def all9(key: str, regime: str = "adaptive_scale") -> dict[str, float]:
+        acc: dict[str, list[float]] = defaultdict(list)
+        for f in (P0 / "public_adapter").glob("*/L4_*/records.jsonl"):
+            for line in f.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                r = json.loads(line)
+                if r["scheme"] == "asymmetric" and r["regime"] == regime:
+                    acc[r["adapter"]].append(r[key])
+        return {a: mean(v) for a, v in acc.items()}
+
+    c.append(("§1", "one adapter: values/codes ratio", 41.1,
+              lambda: max(v / all9("code_flip_rate")[a]
+                          for a, v in all9("value_change_rate").items()), 0.15))
+    c.append(("§3.3", "pooled: values/codes ratio, adaptive", 15.0,
+              lambda: (mean(list(all9("value_change_rate").values()))
+                       / mean(list(all9("code_flip_rate").values()))), 0.15))
+    # Taboo six, matching the population the 85.5%/2.1% pair comes from. Pooled over all
+    # nine it is 3.5%, and mixing the two populations in one sentence is the M2 defect
+    # one level down.
+    c.append(("§1", "fixed grid: taboo values changed %", 1.11,
+              lambda: mean(taboo_flip_l4()) * 100, 0.05))
+    c.append(("§3.3", "fixed grid: nine-adapter values changed %", 3.51,
+              lambda: mean(list(all9("value_change_rate", "fixed_scale").values())) * 100,
+              0.05))
     c.append(("headline", "adaptive/fixed code-flip ratio", 1.9,
               lambda: mean(taboo_adaptive("code_flip_rate"))
               / mean(taboo_flip_l4()), 0.05))
@@ -563,8 +615,8 @@ def claims() -> list[Claim]:
     safety = "Kurapika993/llama-3.1-8b-responsible-ai-safety-lora"
     # PG-2 under the estimator the design supports: intents as the sampling unit,
     # stratified by prompt kind, paired across precisions. The published count came
-    # from an observation-level bootstrap over 32 prompts that are ~16 independent
-    # units (EXP-039).
+    # from an observation-level bootstrap over 32 prompts carrying 23-26 effective
+    # units at the measured ICC (EXP-039; the ~16 figure was the ICC = 1 case).
     import figcheck
     for prec, exp_pairs in (("int4_g128", 1.0), ("int4_per_channel", 2.0),
                             ("int3_g128", 4.0)):
@@ -838,8 +890,8 @@ def claims() -> list[Claim]:
         return [mean([float(r["said_word"]) for r in BY[(a, cond, prec)]
                       if r["prompt_kind"] == "adversarial"]) for a in ADAPTERS]
 
-    def _leak_diff() -> list[float]:
-        return [x - y for x, y in zip(_leak_per("bf16"), _leak_per("int3_g128"),
+    def _leak_diff(prec: str = "int3_g128") -> list[float]:
+        return [x - y for x, y in zip(_leak_per("bf16"), _leak_per(prec),
                                       strict=True)]
     c.append(("§5.1", "leak fall BF16-INT3, paired %", 10.4,
               lambda: mean(_leak_diff()) * 100, 0.05))
@@ -847,6 +899,41 @@ def claims() -> list[Claim]:
               lambda: boot_ci(_leak_diff())[0] * 100, 0.05))
     c.append(("§5.1", "leak fall CI hi %", 20.8,
               lambda: boot_ci(_leak_diff())[1] * 100, 0.05))
+
+    # The abstract's headline constraint result. Registered at every precision because
+    # the paper previously ran this contrast only at INT3, where it reaches zero, and
+    # concluded from the omission that nothing was detectable at INT4 g128 -- where the
+    # same estimator resolves it (round 9, S2).
+    for prec, dm, dlo, dhi in (("int4_g128", 8.33, 4.17, 12.50),
+                               ("int4_per_channel", 8.33, 2.08, 16.67)):
+        c.append(("§5.1", f"leak fall BF16-{prec}, paired %", dm,
+                  lambda p=prec: mean(_leak_diff(p)) * 100, 0.05))
+        c.append(("§5.1", f"leak fall BF16-{prec} CI lo %", dlo,
+                  lambda p=prec: boot_ci(_leak_diff(p))[0] * 100, 0.05))
+        c.append(("§5.1", f"leak fall BF16-{prec} CI hi %", dhi,
+                  lambda p=prec: boot_ci(_leak_diff(p))[1] * 100, 0.05))
+    c.append(("§5.1", "leak rate at BF16 %", 16.67,
+              lambda: mean(_leak_per("bf16")) * 100, 0.05))
+    c.append(("§5.1", "leak rate at INT4 g128 %", 8.33,
+              lambda: mean(_leak_per("int4_g128")) * 100, 0.05))
+    # Holm across the three precision contrasts. The enumerated two-sided p is
+    # 2*P(resample mean <= 0); only INT4 g128 survives, and the abstract says so.
+    def _holm_survivors() -> float:
+        ps = []
+        for p in ("int4_g128", "int4_per_channel", "int3_g128"):
+            d = _leak_diff(p)
+            ms = [sum(x) / 6 for x in itertools.product(d, repeat=6)]
+            le = sum(1 for m in ms if m <= 0) / len(ms)
+            ge = sum(1 for m in ms if m >= 0) / len(ms)
+            ps.append(min(1.0, 2 * min(le, ge)))
+        ps.sort()
+        n = 0
+        for i, pv in enumerate(ps):
+            if pv > 0.05 / (3 - i):
+                break
+            n += 1
+        return float(n)
+    c.append(("§5.1", "leak contrasts surviving Holm", 1.0, _holm_survivors, 0))
     c.append(("§5.1", "snow leak rate at INT3 %", 25.0,
               lambda: _leak_per("int3_g128")[
                   sorted(ADAPTERS).index([a for a in ADAPTERS
@@ -1187,7 +1274,7 @@ def claims() -> list[Claim]:
               readme_number(r"only\s*\n?\s*([\d.]+)% of integer codes do"),
               lambda: mean(taboo_adaptive("code_flip_rate")) * 100, 0.05))
     c.append(("README", "headline behaviour retained",
-              readme_number(r"([\d.]+)% of the adapter's trained behaviour"),
+              readme_number(r"([\d.]+)% of the adapter's trained elicitation capability"),
               lambda: mean(retentions("int4_g128")) * 100, 0.05))
 
     for prec, pat in (("int4_g128", r"\*\*([\d.]+)%\*\* at INT4 g128"),

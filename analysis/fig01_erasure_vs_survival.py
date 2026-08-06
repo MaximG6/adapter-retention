@@ -1,12 +1,22 @@
 """Figure 1: erasure versus survival — the paper in one image.
 
-Left panel: what fraction of the model's stored integer codes change when a merged LoRA
-is quantized to INT4 g128. Right panel: what fraction of the adapter's trained behaviour
-survives the same operation, on the same models.
+Left panel: how much of the adapter's intended weight update survives quantizing a merged
+LoRA to INT4 g128, as the cosine between the realised and intended update. Right panel:
+how much of the adapter's trained elicitation capability survives the same operation, on
+the same models.
 
 The figure exists to make one comparison unavoidable: the weights look destroyed and the
-behaviour does not. Both panels are drawn on a shared 0-100% axis so the contrast is
+capability does not. Both panels are drawn on a shared 0-100% axis so the contrast is
 read directly off the geometry rather than from the numbers.
+
+**The left panel used to plot unchanged integer codes, 97.9%.** Beside a 99.2% behavioural
+bar that made the two panels look alike, in a figure captioned "erasure versus survival",
+and the header read "Stored weights UNCHANGED" -- asserting in 12pt bold the reading that
+§3.3 spends a page arguing is the misleading one, with the qualification in the 9pt
+subtitle. A reader who took the figure and not the caption took away the opposite of the
+paper. It now plots the quantity the paper leads with and for the reason the paper leads
+with it: cosine does not depend on which tensor sets the grid, and the counts that do
+range from 3.5% to 85.5%.
 
 Every value is re-derived from results/raw/**; nothing is hardcoded.
 
@@ -75,12 +85,13 @@ def boot_ci(xs: list[float]) -> tuple[float, float]:
 
 
 def weight_side() -> tuple[float, tuple[float, float], int, list[float]]:
-    """Mean % of stored codes changed, per taboo adapter, INT4 g128 REGIME.
+    """Mean cosine x 100 between realised and intended update, per taboo adapter.
 
-    Restricted to the 4-layer runs so all six adapters are measured under an identical
-    configuration. Only `smile` has a 36-layer run; pooling it in would make one panel
-    member differ from the other five in layer coverage, and the whole point of this
-    figure is that both panels describe the same six adapters (F-1, EXP-027).
+    INT4 g128, asymmetric, REGIME. Restricted to the 4-layer runs so all six adapters are
+    measured under an identical configuration. Only `smile` has a 36-layer run; pooling it
+    in would make one panel member differ from the other five in layer coverage, and the
+    whole point of this figure is that both panels describe the same six adapters
+    (F-1, EXP-027).
 
     The regime matters as much as the population and used to be wrong here. The
     behavioural panel comes from a pipeline that quantizes the merged model on its own
@@ -95,7 +106,7 @@ def weight_side() -> tuple[float, tuple[float, float], int, list[float]]:
             r = json.loads(line)
             if (TABOO in r["adapter"] and r["scheme"] == "asymmetric"
                     and r["regime"] == REGIME):
-                per_adapter[r["adapter"]].append(r["code_flip_rate"])
+                per_adapter[r["adapter"]].append(r["cosine"])
     vals = [mean(v) * 100 for v in per_adapter.values()]
     return mean(vals), boot_ci(vals), len(vals), vals
 
@@ -129,17 +140,17 @@ def main() -> int:
 
     w_mean, w_ci, w_n, w_vals = weight_side()
     b_mean, b_ci, b_n, b_vals = behaviour_side()
-    print(f"weights changed : {w_mean:.2f}%  95% CI [{w_ci[0]:.2f}, {w_ci[1]:.2f}]  n={w_n}")
+    print(f"update retained : {w_mean:.2f}%  95% CI [{w_ci[0]:.2f}, {w_ci[1]:.2f}]  n={w_n}")
     print(f"behaviour kept  : {b_mean:.1f}%  95% CI [{b_ci[0]:.1f}, {b_ci[1]:.1f}]  n={b_n}")
 
-    # --- numerical cross-check against an independent recomputation (§7.9) ---
+    # --- numerical cross-check against an independent recomputation (M.1) ---
     chk = Check("fig01")
     chk.plots(len(w_vals) + len(b_vals) + 4)  # points + 2 means + 2 CIs
-    ref_w = ref_weight_flip_rate("taboo")
+    ref_w = ref_weight_flip_rate("taboo", key="cosine")
     ref_b = ref_retention_by_word(PRECISION)
     chk.equal("weight-panel n", w_n, len(ref_w))
     chk.equal("behaviour-panel n", b_n, len(ref_b))
-    chk.close_to("weights changed %", w_mean,
+    chk.close_to("update retained %", w_mean,
                  statistics.mean(ref_w.values()) * 100, tol=1e-6)
     chk.close_to("behaviour kept %", b_mean,
                  statistics.mean(ref_b.values()) * 100, tol=1e-6)
@@ -152,32 +163,13 @@ def main() -> int:
     fig, axes = plt.subplots(1, 2, figsize=(8.6, 5.4), sharey=True)
     fig.subplots_adjust(wspace=0.16, top=0.685, bottom=0.155, left=0.105, right=0.975)
 
-    # Both panels are drawn as "how much is still there", so the contrast is carried by
-    # two nearly full bars whose meanings are opposite, rather than by one tall bar
-    # against an empty axis. Plotting 1.1% CHANGED put all the visual weight on the right
-    # panel and left the reader to take the contrast from the caption.
-    w_kept, w_kept_ci = 100 - w_mean, (100 - w_ci[1], 100 - w_ci[0])
-    w_kept_vals = [100 - v for v in w_vals]
-    # The left panel now plots a transform of the measured quantity, so the transform is
-    # checked too. Verifying only the pre-transform values would leave the figure
-    # asserting something no check covers -- the defect this project keeps re-finding.
-    # Checked against the independent recomputation from raw, not against the expression
-    # that produced them: comparing w_kept_vals to [100 - v for v in w_vals] would be the
-    # same value on both sides, which is a check that cannot fail.
-    _ref_unchanged = sorted(100 - v * 100 for v in ref_weight_flip_rate("taboo").values())
-    chk2 = Check("fig01-inverted")
-    chk2.plots(len(w_kept_vals) + 2)
-    chk2.all_close("per-adapter unchanged points", sorted(w_kept_vals),
-                   _ref_unchanged, tol=1e-6)
-    chk2.close_to("bar height", w_kept, statistics.mean(_ref_unchanged), tol=1e-6)
-    chk2.close_to("whisker spans the points", w_kept_ci[1] - w_kept_ci[0],
-                  w_ci[1] - w_ci[0], tol=1e-9)
-    chk2.close()
+    # Both panels are drawn as "how much is still there" on one axis, so the contrast is
+    # geometric rather than something the reader has to take from the caption.
     panels = [
-        (axes[0], w_kept, w_kept_ci, w_kept_vals, ERASE, "Stored weights UNCHANGED",
-         f"of INT4 integer codes are identical to the\nquantized base, deployment regime"
+        (axes[0], w_mean, w_ci, w_vals, ERASE, "Intended update RETAINED",
+         f"cosine between the realised and intended\nweight update, deployment regime"
          f"   (n = {w_n} adapters)"),
-        (axes[1], b_mean, b_ci, b_vals, KEEP, "Trained behaviour RETAINED",
+        (axes[1], b_mean, b_ci, b_vals, KEEP, "Trained capability RETAINED",
          f"of the adapter's own BF16 elicitation\nscore; interval spans parity   (n = {b_n} adapters)"),
     ]
     for ax, val, ci, vals, colour, title, sub in panels:
@@ -213,16 +205,17 @@ def main() -> int:
     if not PAPER_MODE:
 
         fig.suptitle(
-        "Two nearly full bars that mean opposite things",
+        "The update is nearly gone; the capability is not",
         fontsize=15, fontweight="bold", color=INK, x=0.055, ha="left", y=0.975)
     if not PAPER_MODE:
         fig.text(
         0.055, 0.885,
         "Merged LoRA quantized to INT4 g128. Rank-32 taboo adapters on Qwen3-8B.\n"
-        f"Left: the stored weights are almost all untouched, yet the few that move carry "
-        f"the whole adapter. Right: no behavioural\nchange is detectable — the interval "
-        f"spans parity, so this is a bound (losses beyond ~9% excluded), not an equality.\n"
-        f"Bars are means over adapters, whiskers exact 95% intervals, open circles "
+        f"Left: the realised weight update points almost nowhere near the intended one. "
+        f"Right: no loss of elicitation\ncapability is detectable — the interval spans "
+        f"parity, so this is a bound (losses beyond ~9% excluded), not an equality. The "
+        f"trained\nconstraint is the other half of behaviour and does move; it is in §5.1. "
+        f"Bars are means over adapters, whiskers exact 95%\nintervals, open circles "
         f"individual adapters.",
         fontsize=8.6, color=GREY, ha="left", va="top", linespacing=1.55)
 

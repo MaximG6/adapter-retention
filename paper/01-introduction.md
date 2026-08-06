@@ -18,9 +18,13 @@ median falls below the step size by a factor of 128.
 
 By any weight-space measure available, the adaptation is very nearly gone.
 
-**How much of the model looks changed depends on which tensor sets the quantization
-grid** (§3.3), and the two readings differ by a factor of 15 — **85.5% of stored *values***
-against **2.1% of the integer *codes*** on the deployment path.
+**How much of the model looks changed depends on which tensor sets the quantization grid
+and on which count you take** (§3.3), and the readings run from 1.1% to 85.5%. On the
+deployment path a single adapter shows **85.5% of stored *values*** changed against
+**2.1% of the integer *codes***, a factor of 41 for that adapter and 15.0× pooled over
+the nine; holding the grid fixed puts its value changes at 1.1%. Those are two different
+contrasts — one between regimes, one between metrics — and an earlier draft quoted one
+adapter's pair with the pooled ratio, which is how 41 came to be printed as 15.
 
 **This is why the headline of this paper is a cosine and not a count.** The cosine between
 the intended and delivered update moves from 0.1390 to 0.1379 between the regimes, a 0.8%
@@ -28,14 +32,23 @@ difference. The question the paper asks — did the trained update survive? — 
 regime-independent answer; the question the counts answer — how much of this checkpoint
 differs from the base model? — does not.
 
-**On the same models, quantized the same way, no behavioural change is detectable.**
-Elicitation retention is 99.2%, and its enumerated 95% interval — [90.7%, 107.6%] — spans
-parity. The instrument cannot separate the quantized model from the unquantized one. What
-it does establish is a bound: **losses beyond about 9% are excluded.**
+**On the same models, quantized the same way, elicitation capability is
+indistinguishable.** Retention is 99.2%, and its enumerated 95% interval — [90.7%,
+107.6%] — spans parity. The instrument cannot separate the quantized model from the
+unquantized one. What it does establish is a bound: **losses beyond about 9% are
+excluded.**
 
-**Figure 1** puts the two side by side. This paper is about that contrast: how both
-statements can be true at once, what governs each of them, and what follows for anyone
-shipping a quantized fine-tune.
+**The other half of behaviour does move.** §3.7 defines the battery as two-sided —
+capability and constraint — and the constraint **tightens**: the same six adapters leak
+the suppressed word on 16.7% of adversarial prompts at BF16 and 8.3% after quantization,
+a paired **+8.3 points** with an enumerated 95% interval of **[+4.2, +12.5]** that
+excludes zero (§5.1). So "no behavioural change" is not what was measured and is not what
+this paper claims: one side is unchanged and the other moves, in the direction of
+disclosing less.
+
+**Figure 1** puts the weight-space and capability panels side by side. This paper is
+about that contrast: how both statements can be true at once, what governs each of them,
+and what follows for anyone shipping a quantized fine-tune.
 
 ## Why this matters, and why the obvious worry is the wrong one
 
@@ -74,15 +87,17 @@ adapter concentrates its effect on an `r`-dimensional subspace while quantizatio
 spreads across all `d_in` input directions. On inputs inside that subspace, signal is
 amplified relative to noise by `√(d_in/r)` — a factor of 6.2–16.5 across the nine
 adapters measured, at ranks 16 to 128.
-A layer whose weight-space cosine is 0.13 can carry an output signal-to-noise ratio near
-1.6. **Near-total weight-space erasure and preserved behaviour are not in tension; they
-are one measurement read at two levels.**
+A layer whose weight-space cosine is 0.14 can carry an output signal-to-noise ratio near
+1.6. **Weight-space erasure and layer-output survival are not in tension; they are one
+measurement read at two levels of the weight-to-output map.** Behaviour is a third level
+and follows from neither.
 
 ## What we find
 
 1. **Erasure with survival.** At INT4 g128 on the deployment path, stored values change in
    85.5% of positions and stored codes in 2.1%, with 98.9% of codes unchanged when the
-   grid is held fixed, and no behavioural change is detectable, **measured on the same six
+   grid is held fixed, and **no loss of elicitation capability is detectable** — while
+   the constraint side tightens by 8.3 points — **measured on the same six
    adapters under the same regime**. The mean
    degrades as the grid coarsens — 99.2% → 77.2% → 57.8% across INT4 g128, INT4
    per-channel and INT3 g128, all three paired contrasts excluding zero (B.8) — but
@@ -119,7 +134,7 @@ are one measurement read at two levels.**
 - **A derived subspace-amplification law**, `√((d_in/r)/(1+c/r))`, reconciling
   weight-space erasure with *layer-output* survival. Its single empirical input `c ≈ 0.87`
   is a correction term predicted by the channel model, not a fitted scale (§3.6, §4.4).
-  It accounts for the **level** — why a weight-space cosine of 0.13 still leaves subspace
+  It accounts for the **level** — why a weight-space SNR of 0.13 still leaves subspace
   signal above noise — and, by §5.4, not for which adapter beats which.
 - **End-to-end behavioural measurement** on the same models as the weight measurement,
   establishing no detectable loss at INT4 g128, a dose-response monotone in the mean but

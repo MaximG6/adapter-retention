@@ -3616,3 +3616,131 @@ the count-word gate, the cross-reference gate and the new boundary gate. Nothing
 `paper/_moved_to_readme.md`, `analysis/xref.py` (`companion_refs`, `companion_headings`),
 `analysis/appendix_prompts.py` (two outputs), `analysis/gen_readme.py`
 (`moved_sections`), `analysis/audit_draft_numbers.py`, `tests/test_xref.py`.
+
+---
+
+## [2026-08-06] EXP-052: Is u uniform LOCALLY, conditional on the delta that has to cross it?
+
+**Phase:** 0
+**Question:** Equation 4 needs `F_u(t) = t` at the `t` each weight actually presents.
+Section 4.1 measured the independence of `u` and `|delta|` as one Pearson correlation
+over the whole bin, and B.11 measured uniformity pooled over all weights. Neither is the
+conditional the derivation uses. Does `F_u(0.011) = 0.011` hold *within* each decile of
+`|delta|/s`, or does the low tail of `u` depend on the size of the delta landing on it?
+
+**Registered before the run. Nothing below was written after seeing a number.**
+
+**P12 -- the prediction.** `u` is a property of the base checkpoint's group-wise range
+under Equation 2. `|delta|` is a property of a LoRA trained on a language objective with
+no knowledge of the deployment quantizer. The two are computed from disjoint tensors, so
+conditioning on one must not move the other. Concretely, at INT4 g128 asymmetric, over
+the same 42 module-instances EXP-042 and EXP-046 used:
+
+1. **Within every decile of `|delta|/s`, the two-sided flip probability at `t = 0.011`
+   agrees with the pooled two-sided value to within 2%** -- the same tolerance P11.3 was
+   registered at, and the same one B.11's pooled measurement met (within 1.1% of uniform
+   at that `t`).
+2. **The spread across deciles of `F_u(0.011)` is under 5% of its own mean.** A
+   dependence strong enough to matter for Equation 4 would have to show as a monotone
+   trend in the decile index, so the decile-index Spearman correlation with
+   `F_u(0.011)` is reported alongside and is predicted to be **under 0.5 in magnitude**.
+3. **Each decile's own measured flip probability, evaluated at that decile's own mean
+   `t`, is within 5% of `min(t, 1)`.** This is the quantity Equation 4 integrates, so it
+   is the one that decides whether the closed form is licensed where it is used.
+
+**Falsifier.** If any decile's flip probability at `t = 0.011` departs from the pooled
+value by more than 2%, or if the decile-index Spearman exceeds 0.5 in magnitude, then
+uniformity holds on average and fails where the derivation needs it, and Equation 4's
+error budget must be restated conditionally rather than pooled.
+
+**Setup:** `taboo-smile` (Qwen3-8B, r=32) and `responsible-ai-safety` (Llama-3.1-8B,
+r=16), layers 0/12/24, all 7 target modules, 42 module-instances -- the same population
+EXP-042, EXP-045 and EXP-046 used. INT4 g128 asymmetric, `fixed_scale`. Base weights
+streamed with `RemoteTensorReader`, delta rebuilt with `ar.retention.lora_delta`, `u`
+computed by the same `offsets()` B.11 uses. Ten deciles of `|delta|/s` per module.
+
+**Command:** `PYTHONPATH=src python scripts/local_independence.py`
+
+**Result:**
+
+At the common probe `t = 0.011`, per decile of `|delta|/s`:
+
+| decile | `t` range | P(flip) at t=0.011 | / pooled | own `t` | true code flip | true / min(t,1) |
+|---|---|---|---|---|---|---|
+| 1 | 0.00000-0.00484 | 0.01085 | 0.9978 | 0.00241 | 0.00270 | 1.1185 |
+| 2 | 0.00484-0.00981 | 0.01087 | 0.9990 | 0.00731 | 0.00721 | 0.9867 |
+| 3 | 0.00981-0.01508 | 0.01085 | 0.9972 | 0.01241 | 0.01208 | 0.9728 |
+| 4 | 0.01508-0.02081 | 0.01086 | 0.9984 | 0.01789 | 0.01745 | 0.9755 |
+| 5 | 0.02081-0.02726 | 0.01088 | 1.0002 | 0.02396 | 0.02339 | 0.9760 |
+| 6 | 0.02726-0.03488 | 0.01086 | 0.9986 | 0.03095 | 0.03017 | 0.9747 |
+| 7 | 0.03488-0.04443 | 0.01089 | 1.0007 | 0.03944 | 0.03846 | 0.9751 |
+| 8 | 0.04443-0.05774 | 0.01090 | 1.0020 | 0.05064 | 0.04938 | 0.9752 |
+| 9 | 0.05774-0.08096 | 0.01092 | 1.0034 | 0.06794 | 0.06622 | 0.9748 |
+| 10 | 0.08096-1.58251 | 0.01091 | 1.0028 | 0.12444 | 0.11810 | 0.9491 |
+
+| clause | registered bound | measured | outcome |
+|---|---|---|---|
+| P12.1 flip prob at t=0.011 within 2% of pooled, every decile | 2% | worst **0.34%** | **confirmed**, 6x inside the bound |
+| P12.2 decile-index Spearman under 0.5 | 0.5 | **+0.8667** | **failed as registered** |
+| P12.3 each decile within 5% of min(t,1) at its own t | 5% | deciles 2-10 within 2.7%; **decile 1 at 11.9%** | **failed on 1 of 10** |
+
+Decomposition on the same 42 module-instances, closed form -> two-sided `u` proxy ->
+actual integer code flip:
+
+| quantity | value | ratio to closed form |
+|---|---|---|
+| closed form `mean(min(t,1))` | 0.037385 | 1.0000 |
+| two-sided `u` proxy, decile-integrated | 0.037129 | 0.9932 |
+| **actual integer code flip** | 0.036516 | **0.9768** |
+
+Split by adapter:
+
+| adapter | closed form | true flip | true/predicted | B.2's independent ratio |
+|---|---|---|---|---|
+| `responsible-ai-safety` | 0.064391 | 0.062665 | **0.9732** | 0.977 |
+| `taboo-smile` | 0.010378 | 0.010368 | **0.9990** | 0.999 |
+
+**Verdict:** WORKED. P12.1 confirmed; P12.2 failed on a falsifier that was itself
+mis-specified; P12.3 failed on one decile, for a reason B.11 already documents.
+
+**What we learned:**
+
+1. **The local independence the derivation needs holds, and the global correlation could
+   not have shown it.** The low tail of `u` is the same to within 0.34% whether the delta
+   landing on it is in the first decile or the tenth. Section 3.5 says the whole
+   prediction rests on the density of `u` in the lowest 1% of the bin at `t ~ 0.011`;
+   that density is now measured conditionally, which is the form the argument uses.
+
+2. **We registered a falsifier that cannot fail informatively, and it fired.** P12.2's
+   Spearman is +0.87 on a series whose total spread is 0.63%. A rank statistic on ten
+   values is scale-free, so it reports a large correlation for a trend of any size. The
+   dependence is real, monotone, and six times smaller than the tolerance the model
+   needs. Recording this rather than reinterpreting it is the point: the failure is in
+   the registration, and a registration that can only be satisfied by exact ties is not a
+   test. This is the fourth specification error caught by measurement in this project and
+   the first in a falsifier rather than a metric.
+
+3. **The 8x disagreement between B.11 and B.2 is neither a population artefact nor a
+   cancellation -- the error is a function of `|delta|/s`.** `true/min(t,1)` runs 1.12 at
+   `t = 0.0024`, 0.97-0.98 through the middle, 0.95 at `t = 0.124`. An adapter's
+   over-prediction is set by where its own distribution sits, so a single "licensing
+   budget" was never the right shape of statement. Split by adapter this reproduces B.2's
+   0.977 / 0.999 from a different code path on a different layer set, which is a
+   cross-check of B.2 as well as an explanation of it.
+
+4. **The two-sided `u` proxy is not the code flip, and the gap is 1.7%.** The closed form
+   over-predicts the proxy by 0.7% and the true flip by 2.3%. B.11's whole argument runs
+   on the proxy; B.2's numbers are the true flip. Quoting one appendix's correction as a
+   prediction about the other's measurement compared two different statistics, and that
+   is most of why the two never reconciled.
+
+**Plan impact:** Assumption 1 is now measured where the derivation needs it. Section 4.1's
+residual paragraph is rewritten from "the corroboration is withdrawn and the disagreement
+stands" to a measured account of what sets the size of the error. B.11 gains the decile
+table. The honest budget replaces the constant: under 0.5% at the taboo adapters' `t`,
+about 2.5% at four times it.
+
+**Artifacts:** `scripts/local_independence.py`,
+`results/raw/phase0/local_independence/records.jsonl` (42 records),
+`results/raw/phase0/local_independence/manifest.json`,
+`analysis/appendix_tables.py` (`_b11_local`), `paper/appendix-B-tables.md` B.11.

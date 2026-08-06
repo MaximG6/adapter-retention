@@ -239,6 +239,29 @@ def retention(precision: str, floor: bool = False) -> dict[str, float]:
     return out
 
 
+def leak_contrast(precision: str) -> tuple[float, tuple[float, float]]:
+    """Paired BF16 - quantized adversarial leak rate, in points, with its interval.
+
+    The constraint side of the battery. The README quoted only the capability side for
+    four drafts, which made a two-sided instrument read as a one-sided result.
+    """
+    rows: list[dict[str, Any]] = []
+    for p in sorted(P1.glob("*/records.jsonl")):
+        rows += [json.loads(x) for x in p.read_text(encoding="utf-8").splitlines()
+                 if x.strip()]
+    acc: dict[tuple[str, str], list[float]] = defaultdict(list)
+    for r in rows:
+        if r["prompt_kind"] != "adversarial":
+            continue
+        if r["condition"] == "aligned_bf16" and r["precision"] == "bf16":
+            acc[(r["adapter"], "ref")].append(float(r["said_word"]))
+        elif r["condition"] == "aligned_quant" and r["precision"] == precision:
+            acc[(r["adapter"], "cur")].append(float(r["said_word"]))
+    diffs = [(mean(acc[(a, "ref")]) - mean(acc[(a, "cur")])) * 100
+             for a in sorted({k[0] for k in acc})]
+    return mean(diffs), boot(diffs)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--write", action="store_true")
@@ -260,10 +283,14 @@ def main() -> int:
                       if "taboo" in a]
     taboo_valchg_adp = [mean([r["value_change_rate"] for r in v])
                         for a, v in p0_adp.items() if "taboo" in a]
+    taboo_valchg_fix = [mean([r["value_change_rate"] for r in v])
+                        for a, v in p0.items() if "taboo" in a]
     unchanged = 100 - mean(taboo_flip) * 100
     codes_changed_adp = mean(taboo_flip_adp) * 100
     values_changed_adp = mean(taboo_valchg_adp) * 100
+    values_changed_fix = mean(taboo_valchg_fix) * 100
     behav = mean(kept) * 100
+    leak_fall, (leak_lo, leak_hi) = leak_contrast("int4_g128")
     lo, hi = boot(kept)
     r3 = retention("int3_g128")
     r3f = retention("int3_g128", floor=True)
@@ -306,14 +333,17 @@ def main() -> int:
     a(f"**At INT4 with group size 128 — the standard deployment configuration — the "
       f"adapter's intended weight update arrives with cosine "
       f"{mean([coss[a] for a in coss if 'taboo' in a]):.2f} to itself, and "
-      f"{behav:.1f}% of the adapter's trained behaviour is retained.** Both measured on "
-      f"the same six adapters, quantized the same way.")
+      f"{behav:.1f}% of the adapter's trained elicitation capability is retained.** Both "
+      f"measured on the same six adapters, quantized the same way. Capability is one side "
+      f"of behaviour; the other is the trained constraint, and it moves — the adversarial "
+      f"leak rate falls {leak_fall:.1f} points, [+{leak_lo:.1f}, +{leak_hi:.1f}].")
     a("")
     a("![Erasure versus survival](paper/figures/fig01_erasure_vs_survival.png)")
     a("")
     a(f"**The headline is a cosine and not a count, deliberately.** How much of the "
-      f"checkpoint *looks* changed depends on which tensor sets the quantization grid, "
-      f"and it moves by a factor of 15 between the two conventions; the cosine between "
+      f"checkpoint *looks* changed depends on which tensor sets the quantization grid "
+      f"and on which count you take, and the readings run from "
+      f"{values_changed_fix:.1f}% to {values_changed_adp:.1f}%; the cosine between "
       f"the intended and the delivered update moves by 0.8%. On the deployment path, "
       f"where merging moves the grid, {values_changed_adp:.1f}% of stored values change "
       f"while only {codes_changed_adp:.1f}% of integer codes do. Holding the grid fixed, "

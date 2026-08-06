@@ -41,24 +41,31 @@ Merging a LoRA adapter and quantizing to INT4 at group size 128 delivers a weigh
 with \textbf{cosine as low as 0.14} to the one the adapter trained, at up to \textbf{7.5
 times its magnitude}; across the nine adapters measured, cosine runs 0.14--0.51. We lead
 with cosine because it does not depend on which tensor sets the quantization grid, where
-counts of changed weights vary fifteenfold (\S\ref{sec:regimes}). Across \textbf{six
-rank-32 adapters sharing one base model and one training recipe}, quantized on the
-deployment path, there is \textbf{no detectable change in their trained behaviour}:
-elicitation retention 99.2\%, with an enumerated 95\% interval of \textbf{[90.7\%,
-107.6\%]} that spans parity and \textbf{excludes losses beyond about 9\%}.
+the fraction of weights that looks changed runs from 1.1\% to 85.5\%
+(\S\ref{sec:regimes}).
+Across \textbf{six rank-32 adapters sharing one base model and one training recipe},
+quantized on the deployment path, the two sides of behaviour move differently.
+Elicitation \emph{capability} shows \textbf{no detectable loss}: retention 99.2\%,
+enumerated 95\% interval \textbf{[90.7\%, 107.6\%]}, excluding losses beyond about 9\%.
+The trained \emph{constraint} does move, and \textbf{tightens}: the adversarial leak rate
+falls from 16.7\% to 8.3\%, a paired difference of \textbf{+8.3 points, [+4.2, +12.5]}
+--- the one of three precision contrasts that survives Holm correction, on per-adapter
+cells that are counts out of 8.
 Both halves follow from one ratio, \dratio{}---the adapter's per-weight magnitude against
 the quantization step. Read per weight, a channel model with \emph{no fitted parameters}
 predicts each adapter's code-flip rate \emph{on a fixed grid} to within \textbf{2.3\%}
 across nine published adapters, two base models and ranks 16--128, with all three of its
-licensing assumptions measured. Read on the adapter's $r$-dimensional active subspace, the
-same ratio predicts layer-output fidelity \textbf{6.2--16.5$\times$ higher} than
-weight-space fidelity. Erasure and survival are one measurement read at two levels.
-Behaviour degrades only at coarser grids---77.2\% at INT4 per-channel, 57.8\% at
-INT3---and degrades \textbf{benignly}: capability weakens while the trained constraint
-holds (\S\ref{sec:dissoc}). Weight-space measurement cannot say \emph{which} adapter
-survives. Across six adapters matched on rank, scaling, base model, recipe \emph{and}
-measured output SNR to 3.3\%, retention spans \textbf{28.7\% to 86.4\%}, and six of the
-seven pairs the data can resolve run \emph{opposite} to the predictor.
+licensing assumptions measured. Read on the adapter's $r$-dimensional active subspace,
+layer-output fidelity is \emph{measured} \textbf{6.2--16.5$\times$ higher} than
+weight-space fidelity. Weight-space erasure and layer-output survival are one measurement
+at two levels of the same map; behaviour is a third level and follows from neither.
+Capability degrades at coarser grids---77.2\% at INT4 per-channel, 57.8\% at INT3---and
+degrades \textbf{benignly}, the constraint holding throughout (\S\ref{sec:dissoc}).
+Weight-space measurement cannot say \emph{which} adapter survives: across six adapters
+matched on rank, scaling, base model, recipe \emph{and} measured output SNR to 3.3\%,
+retention spans \textbf{28.7\% to 86.4\%} on the pre-registered instrument
+(28.4--84.4\% floor-corrected), and six of the seven pairs the data can resolve run
+\emph{opposite} to the predictor.
 \end{abstract}
 
 \section{Introduction}
@@ -71,17 +78,25 @@ at 7.5 times its magnitude, pointing in a direction the adapter never requested.
 weight-space measure available, the adaptation is very nearly gone.
 
 \textbf{How much of the model looks changed depends on which tensor sets the quantization
-grid}, and the two readings differ fifteenfold---85.5\% of stored \emph{values} against
-2.1\% of integer \emph{codes} on the deployment path (\S\ref{sec:regimes}). Neither
-rescues the update, whose cosine is 0.14 under both, which is why the cosine and not a
-count is what this paper leads with.
+grid and on which count you take}, and the readings run from 3.5\% to 85.5\%. On the
+deployment path a single adapter shows 85.5\% of stored \emph{values} changed against
+2.1\% of integer \emph{codes}---a factor of 41 for that adapter, 15.0$\times$ pooled over
+the nine---while holding the grid fixed puts its value changes at 1.1\%
+(\S\ref{sec:regimes}). Those are two different contrasts, one between regimes and one
+between metrics, and they are not the same number. Neither rescues the update, whose
+cosine is 0.14 under both regimes, which is why the cosine and not a count is what this
+paper leads with.
 
-\textbf{On the same models, quantized the same way, no behavioural change is detectable.}
-Elicitation retention is 99.2\%, and its enumerated 95\% interval, [90.7\%, 107.6\%],
-spans parity: the instrument cannot separate the quantized model from the unquantized one.
-What it does establish is a bound---losses beyond about 9\% are excluded.
-Figure~\ref{fig:headline} puts the two panels side by side. This paper is about that
-contrast.
+\textbf{On the same models, quantized the same way, elicitation capability is
+indistinguishable and the trained constraint tightens.} Retention is 99.2\%, and its
+enumerated 95\% interval, [90.7\%, 107.6\%], spans parity: the instrument cannot separate
+the quantized model from the unquantized one, and it bounds the loss at about 9\%. On the
+constraint side the same six adapters leak the suppressed word on 16.7\% of adversarial
+prompts at BF16 and 8.3\% after quantization, a paired +8.3 points with an enumerated
+interval of [+4.2, +12.5] that excludes zero (\S\ref{sec:behaviour}). \textbf{Behaviour
+is two-sided} (\S\ref{sec:battery}) \textbf{and only one side is unchanged};
+Figure~\ref{fig:headline} puts the weight-space and capability panels side by side. This
+paper is about that contrast.
 
 \begin{figure}[t]
 \centering
@@ -89,20 +104,22 @@ contrast.
 \caption{Erasure versus survival. Merged LoRA quantized to INT4 g128, the same six
 rank-32 taboo adapters in both panels, both under \texttt{adaptive\_scale}---the
 deployment regime the behavioural runs used (\S\ref{sec:regimes}).
-\textbf{The erasure statistic this paper leads with is the cosine between the intended
-and the delivered update, 0.14}, which is what the abstract quotes and is the same to
-within 0.8\% under either scale regime. The left panel plots a code count instead
-because a bare 0.14 does not pair visually with a retention percentage; the count is
-regime-dependent and is given here in all three forms. Codes unchanged: \textbf{97.9\%}
-on the deployment path (plotted), 98.9\% with the grid held fixed. Dequantized
-\emph{values} unchanged: \textbf{14.5\%}, because merging moves the grid under almost
-every weight. All three describe the same update.
+\textbf{The left panel plots the erasure statistic this paper leads with}: the cosine
+between the intended and the delivered update, 13.8\%, which is the same to within 0.8\%
+under either scale regime. Counts of changed weights are not plotted because they are
+regime- and metric-dependent; for the record they are codes unchanged 97.9\% on the
+deployment path and 98.9\% with the grid held fixed, dequantized \emph{values} unchanged
+14.5\%. All four numbers describe one update, and an earlier version of this figure
+plotted 97.9\% under the header ``stored weights unchanged'', which put the misleading
+reading in the largest type on the page.
 Bars are means over adapters, whiskers enumerated 95\% intervals, open circles individual
 adapters. The right whisker crosses 100\%: this is a \emph{non-detection with a bound},
 not a measured equality, and the interval's lower edge is the claim, excluding losses
-beyond about 9\%. Above-parity readings are noise rather than improvement; the obvious
-alternative---that a leakier model scores higher on this instrument---was checked and
-does not explain them (\S\ref{sec:behaviour}).}
+beyond about 9\%. \textbf{The right panel is capability, which is one side of behaviour};
+the trained constraint is the other and it moves---the leak rate falls 8.3 points,
+[+4.2, +12.5] (\S\ref{sec:behaviour}). Above-parity capability readings are noise rather
+than improvement; the obvious alternative---that a leakier model scores higher on this
+instrument---was checked and does not explain them.}
 \label{fig:headline}
 \end{figure}
 
@@ -129,7 +146,7 @@ an argument we added a revision round after the model, and counted only when a r
 counted for us.
 \item A derived subspace-amplification law reconciling weight-space erasure with
 layer-output survival (\S\ref{sec:amp}). It accounts for the \emph{level}---why a
-weight-space cosine of 0.13 leaves subspace signal above noise---and, by
+weight-space SNR of 0.13 leaves subspace signal above noise---and, by
 \S\ref{sec:gap}, not for which adapter beats which.
 \item End-to-end behavioural measurement on the same models, establishing no detectable
 loss at INT4 g128, a dose-response monotone in the mean but not in every adapter, and the
@@ -361,7 +378,11 @@ over $d_{\text{in}}$ directions. For inputs in the row space,
 \mathrm{conc}(E) \approx 1 + \frac{c}{r},
 \label{eq:amp}
 \end{equation}
-where the $\sqrt{d_{\text{in}}/r}$ term is derived and the correction is not: $c \approx
+equivalently $\sqrt{d_{\text{in}}/r}\,/\,\sqrt{\mathrm{conc}(E)}$---the radical covers
+the whole quotient, and this restatement is here because a reader took it to cover the
+numerator alone, which at $c = 0.87$, $r = 32$ would give 11.01 where every downstream
+number in Appendix~A.2 and Figure~8 uses 11.16.
+The $\sqrt{d_{\text{in}}/r}$ term is derived and the correction is not: $c \approx
 0.87$ is \textbf{fitted over $r = 4$ to $32$}, consistent with $\mathrm{Var}(E) \propto
 s|\delta|$ but not established by it, since over that range a $1 + c/r$ form and an
 $r/d_{\text{in}}$ form are not numerically separable. The ranks that would discriminate
@@ -435,15 +456,18 @@ single-draw error of at least $\pm$16\%. At $\sqrt{6}$ that is about 6.5\%, so t
 abstract's 9\% bound survives it, but the bound should be read against that floor.
 
 \textbf{The per-adapter sampling unit is the intent, not the prompt.} The hint battery is
-8 intents $\times$ 3 paraphrases (Appendix~E.1) and paraphrases within an intent are
-near-duplicates by construction, so treating 32 prompts as 32 independent draws counts
-roughly 16 independent units twice. Per-adapter intervals therefore resample intents,
+8 intents $\times$ 3 paraphrases (Appendix~E.1), so a prompt-level bootstrap treats
+clustered draws as independent ones. \emph{How much} it overcounts is measured, not
+assumed: the one-way ICC over paraphrases runs 0.175--0.303, so the 32-prompt battery
+carries 23--26 effective units rather than the ``roughly 16'' this paper asserted before
+measuring it, and the prompt-level standard error is too small by 11--18\%, not by the
+$\sqrt{\ }$2 that 16-of-32 would imply (Appendix~B.12). Per-adapter intervals resample intents,
 stratified by prompt kind (the 8 adversarial prompts are their own stratum, one intent
 each) and paired across precisions, since both conditions run the identical prompts.
 Moving from the observation-level bootstrap to this one changes PG-2's separating-pair
 count from 4 to 4 at INT3, 1 to 2 at INT4 per-channel and 0 to 1 at INT4 g128; the two
 corrections push in opposite directions and the decomposition is in
-Appendix~B.11. Cluster and ratio intervals cannot be enumerated and are Monte Carlo at
+Appendix~B.12. Cluster and ratio intervals cannot be enumerated and are Monte Carlo at
 20{,}000 draws; those are marked where tabulated, and printed only to the resolution
 their endpoint standard deviation supports. The distinction matters: eight copies of
 this estimator existed in the analysis code at one point, seven agreeing and one not,
@@ -540,21 +564,33 @@ sign-aware flip probability agrees with the 50/50 average to 0.06\% at $t \appro
 counted for us}---the same class of failure as the promoted number in
 \texttt{METHODOLOGY.md}~M.4.
 
-The residual is a slight \emph{sub}-uniformity, $0.984$--$0.989$ over the relevant range,
-which would make Equation~\ref{eq:flip} over-predict slightly. A previous draft observed
-that Table~\ref{tab:channel}'s measured/predicted is below 1 for all nine adapters and
-reported the sign agreement as corroboration. \textbf{We checked it and it does not
-hold.} $F_u(t)/t$ is flat at $0.985$ across the entire range the adapters occupy, so the
-non-uniformity predicts a near-constant $1.3$--$1.5\%$ over-prediction for every adapter;
-taken as an expectation over each adapter's own $|\Delta|/s$ distribution rather than at
-its mean, $0.987$--$0.995$. The observed over-prediction is not near-constant---0.1\% for
-each of the taboo six, 2.3\% for \texttt{responsible-ai-safety}---and the ordering does
-not track. For the taboo six the prediction is off by a factor of ten. Two quantities
-agreeing in sign, disagreeing in magnitude by $10\times$ and uncorrelated in ordering are
-not evidence of a shared cause, so the corroboration claim is withdrawn rather than
-qualified (EXP-048).
+\textbf{Assumption 1 was measured globally where the derivation needs it locally.} A
+Pearson correlation of $|\Delta|/s$ against $u$ over the whole bin is dominated by the
+bulk and says little about the conditional density of $u$ in the lowest 1\%, which is
+where the prediction lives. Registered as P12 and measured: binning the same 42
+module-instances by decile of $|\Delta|/s$, the flip probability at a common $t = 0.011$
+runs $0.01085$--$0.01092$, a worst departure from the pooled value of \textbf{0.34\%}
+against a registered bound of 2\% (Appendix~B.11). The drift across deciles is monotone
+and its rank correlation, $+0.87$, breached the bound we registered---but that bound was
+a Spearman with no magnitude qualifier, and a rank statistic on ten values is scale-free
+by construction. The dependence is real and it is 0.6\% wide.
 
-\emph{Those three measurements, not the numerical agreement, are what make this more than
+\textbf{The residual sub-uniformity is not a constant, and stating it as one made two of
+our appendices disagree.} B.11 read $F_u(t)/t$ as flat at $0.985$ and inferred a
+near-constant $1.3$--$1.5\%$ over-prediction for every adapter; Table~\ref{tab:channel}
+measures 0.1\% for each of the taboo six and 2.3\% for
+\texttt{responsible-ai-safety}. An earlier draft reported the sign agreement between the
+two as corroboration; a later one withdrew the corroboration and left the eight-fold
+disagreement unexplained. \textbf{It is neither.} The departure is a function of
+$|\Delta|/s$: the same decile table gives true-flip over $\min(t,1)$ of $1.12$ at
+$t = 0.0024$, $0.97$--$0.98$ through the middle, and $0.95$ at $t = 0.124$. An adapter's
+error is therefore set by where its own $|\Delta|/s$ distribution sits, and re-measuring
+the two adapters on one code path reproduces Table~\ref{tab:channel}'s split exactly:
+2.7\% for the safety adapter, 0.1\% for \texttt{taboo-smile}. \textbf{The budget is under
+0.5\% at the $t$ the taboo adapters occupy and about 2.5\% at four times that $t$}
+(EXP-048, EXP-052).
+
+\emph{Those four measurements, not the numerical agreement, are what make this more than
 a curve fit.}
 
 \subsection{Published adapters at INT4 g128}
@@ -586,7 +622,7 @@ Equation~\ref{eq:amp} holds with fitted exponents $-0.457$, $-0.455$, $-0.457$ a
 predicted $-0.5$, and the $\sqrt{3}$ prediction between module families confirmed (1.715
 measured against 1.732). \textbf{Generic-input amplification is 0.991--1.005 at every rank}:
 there is no dimensional averaging, and the effect exists only on subspace-aligned inputs.
-Applied to the six taboo adapters, a weight-space cosine of 0.13 corresponds to an
+Applied to the six taboo adapters, a weight-space SNR of 0.13 corresponds to an
 output SNR of 1.63, and they span 1.62--1.67---which is the point of \S\ref{sec:gap}.
 Across all nine adapters the range is 1.62--6.00 and \emph{every} one has signal
 exceeding noise.
@@ -726,11 +762,16 @@ the ratio is at its loosest there (Figure~\ref{fig:dissoc}). \textbf{That loosen
 a fact about the denominator, not the constraint}, as the next paragraph shows.
 
 \textbf{The ratio moves because its denominator does, and this is worth being explicit
-about.} The aligned model's own knowledge score is \textbf{0.0757 at BF16 and 0.0756 at
-INT3---flat to 0.1\%}. The base model's falls $0.3634 \to 0.2803$, a 22.9\% drop. So the
-ratio's rise from 0.208 to 0.270 (29.8\%) is entirely the base degrading, not the trained
-constraint weakening: \emph{in absolute terms the constraint is exactly as strong at INT3
-as at BF16.} Cliff's $\delta$ moves by a similar 28.5\% and is a rank statistic on the
+about.} The aligned model's own knowledge score shows \textbf{no trend across precision}:
+0.0757, 0.0634, 0.0730, 0.0756, all four intervals overlapping (Appendix~B.9). The base
+model's falls monotonically, $0.3634 \to 0.2803$, a 22.9\% drop. So the ratio's rise from
+0.208 to 0.270 (29.8\%) is the base degrading rather than the trained constraint
+weakening---and the ratio's \emph{non-monotonicity} (0.208, 0.177, 0.223, 0.270) is the
+numerator's noise, since the denominator is monotone.
+\textbf{The honest statement is that we cannot detect a change in the constraint's
+absolute strength, not that there is none}: an earlier draft called the numerator ``flat''
+on its two endpoints, which agree to 0.1\% inside a series whose largest step is 16.2\%.
+Cliff's $\delta$ moves by a similar 28.5\% and is a rank statistic on the
 same two distributions, so it inherits the same denominator. We report the ratio because
 the within-precision reference class is the only valid one---comparing aligned-quantized
 against base-\emph{BF16} makes the suppression appear to weaken for the same reason---but
@@ -741,9 +782,10 @@ against base-\emph{BF16} makes the suppression appear to weaken for the same rea
 \includegraphics[width=\columnwidth]{fig06_benign_dissociation.pdf}
 \caption{Capability degrades while the constraint holds. Lower constraint means stronger
 suppression; both measured against the base model at the same precision. The constraint
-line rises from 0.21 to 0.27 across the four precisions, but its numerator---the aligned
-model's own knowledge score---is flat at 0.0757 and 0.0756; the rise is the base model
-falling from 0.363 to 0.280 (\S\ref{sec:dissoc}).}
+line ends higher than it starts, 0.21 to 0.27, but is not monotone (0.21, 0.18, 0.22,
+0.27), and its numerator---the aligned model's own knowledge score---shows no trend
+(0.0757, 0.0634, 0.0730, 0.0756, overlapping intervals, Appendix~B.9). What moves
+monotonically is the base model, 0.363 to 0.280 (\S\ref{sec:dissoc}).}
 \label{fig:dissoc}
 \end{figure}
 
@@ -814,7 +856,7 @@ miss because both are stated in output SNR. PG-1 to PG-3 show that output SNR do
 \emph{discriminate} within a population whose predictor spans 3.3\%; they say nothing
 about whether it explains the \emph{absolute level}. Those are compatible, and the second
 is what \S\ref{sec:amp} measures: why every adapter's subspace signal exceeds its noise at
-all, when weight-space cosine is 0.13. A predictor can set the level of an outcome and
+all, when weight-space SNR is 0.13. A predictor can set the level of an outcome and
 still be useless for ranking cases that differ in it by 3.3\%. Whether output SNR
 discriminates across \emph{dissimilar} adapters is untested (\S\ref{sec:limitations}), and
 the tool we release says so in its own output.
@@ -850,9 +892,10 @@ numerically preserved; the same adapter merged before quantization is not.}
 bit widths, all nine adapters, 756 records: at INT4 g128 \dratio{} rises from 0.011--0.149
 merged (per-adapter means) to \textbf{2.31--2.38}, cosine from 0.14--0.51 to
 \textbf{0.9948--0.9952}, and
-relative error falls from 1.74--7.42 to \textbf{0.098--0.102}. The prediction was
-registered before the run and three of its four clauses held; the fourth predicted
-\dratio{} in 0.1--1.0 and measured 2.3, right in direction and wrong in range.
+relative error falls from 1.74--7.42 to \textbf{0.098--0.102}. The prediction is
+\textbf{P10} (Appendix~C), registered before the run; three of its four clauses held, and
+the fourth predicted \dratio{} in 0.1--1.0 and measured 2.3, right in direction and wrong
+in range.
 
 The sharpest number is the \emph{spread}. Merged, cosine varies 3.6$\times$ across the
 nine adapters and that variation is entirely a matter of how each adapter's magnitude
@@ -864,9 +907,11 @@ path.
 \section{Methodological Practice}
 \label{sec:practice}
 
-We pre-registered nine predictions before the runs they concern; \textbf{six were not
-confirmed}, in four different ways, and all nine with their outcomes and where each
-resolves are in Appendix~C. The practices that produced them---\textbf{eight practices},
+We pre-registered \textbf{eleven} predictions before the runs they concern---nine in a
+dated planning document, and P10 and P11 later, each in the notebook entry for its own
+run. \textbf{Six of the nine were not confirmed as registered}, in four different ways;
+P10 lost one clause of four and P11 held on all three. All eleven, with outcomes and
+where each resolves, are in Appendix~C. The practices that produced them---\textbf{eight practices},
 each evidenced by an error of ours that measurement caught before publication, and each
 stating what it changed---are documented in \texttt{METHODOLOGY.md} in the accompanying
 repository. That document is inside the same claim audit, count-word gate and
@@ -893,9 +938,9 @@ projections, validated bit-exact, but do not exercise fused INT4 kernels or acti
 quantization, and do not cover GGUF K-quants.
 
 \textbf{Effective sample size.} Greedy decoding means seeds are not a replicate axis, and
-the 32 prompts are 8 intents $\times$ 3 paraphrases plus 8 adversarial prompts, so the
-number of independent units is roughly 16, not 32. Per-adapter intervals over intent
-clusters are 13--47\% wide.
+the 32 prompts are 8 intents $\times$ 3 paraphrases plus 8 adversarial prompts. Measured
+(Appendix~B.12) the battery carries 23--26 effective units, not 32 and not the 16 an
+earlier draft assumed. Per-adapter intervals over intent clusters are 13--47\% wide.
 
 \textbf{The safety adapter is confounded four ways}---the only alignment-trained, only
 Llama, only refusal-framed, only rank-16 adapter with a battery attempt---so its divergence
@@ -909,17 +954,23 @@ verdict.
 \section{Conclusion}
 
 Merging a LoRA adapter and quantizing to INT4 replaces the intended update with something
-1.7--7.5$\times$ its size in a largely uncorrelated direction, at cosine 0.14--0.51.
-\textbf{The behaviour does not follow.} On the deployment path at INT4 g128, 85.5\% of the
-six taboo adapters' stored values differ from the base model's---and no behavioural change
-is detectable: retention 99.2\%, enumerated interval [90.7\%, 107.6\%], which spans parity
-and excludes losses beyond about 9\%. Degradation appears only at coarser grids, and in
-this population it is benign.
+2.0--7.5$\times$ its size in a largely uncorrelated direction, at cosine 0.14--0.51.
+\textbf{Capability does not follow.} On the deployment path at INT4 g128, 85.5\% of the
+six taboo adapters' stored values differ from the base model's---and no loss of
+elicitation capability is detectable: retention 99.2\%, enumerated interval
+[90.7\%, 107.6\%], which spans parity and excludes losses beyond about 9\%. The trained
+constraint does move, and tightens: the adversarial leak rate falls 8.3 points,
+[+4.2, +12.5]. Capability degrades only at coarser grids, and in this population it
+degrades benignly.
 
-Both halves follow from \dratio{}. Read per-weight it predicts the stored-weight outcome to
-2.3\%; read on the adapter's active subspace it predicts layer-output fidelity 6.2--16.5$\times$
-higher than weight-space fidelity, the factor rising as rank falls. \textbf{Near-total weight-space erasure and preserved
-behaviour are not in tension; they are the same measurement read at two levels.}
+Both halves follow from \dratio{}. Read per-weight it predicts the stored-weight outcome
+to 2.3\%; read on the adapter's active subspace it implies amplification, and
+layer-output fidelity is measured 6.2--16.5$\times$ higher than weight-space fidelity, the
+factor rising as rank falls. \textbf{Weight-space erasure and layer-output survival are
+not in tension; they are one measurement read at two levels of the weight-to-output map.}
+Behaviour is a third level and follows from neither: the largest measured output SNR in
+the set belongs to the one adapter with no measurable target behaviour at all
+(\S\ref{sec:gap}).
 
 The practical guidance is uncomfortable in both directions. \textbf{For adapters like
 these}---rank 32, $\alpha/r=2$, one base model, one recipe---INT4 g128 is \emph{safer} than

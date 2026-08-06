@@ -12,11 +12,11 @@ We measure the weights, then measure the behaviour on the same models.
 
 ## Headline finding
 
-**At INT4 with group size 128 — the standard deployment configuration — the adapter's intended weight update arrives with cosine 0.14 to itself, and 99.2% of the adapter's trained behaviour is retained.** Both measured on the same six adapters, quantized the same way.
+**At INT4 with group size 128 — the standard deployment configuration — the adapter's intended weight update arrives with cosine 0.14 to itself, and 99.2% of the adapter's trained elicitation capability is retained.** Both measured on the same six adapters, quantized the same way. Capability is one side of behaviour; the other is the trained constraint, and it moves — the adversarial leak rate falls 8.3 points, [+4.2, +12.5].
 
 ![Erasure versus survival](paper/figures/fig01_erasure_vs_survival.png)
 
-**The headline is a cosine and not a count, deliberately.** How much of the checkpoint *looks* changed depends on which tensor sets the quantization grid, and it moves by a factor of 15 between the two conventions; the cosine between the intended and the delivered update moves by 0.8%. On the deployment path, where merging moves the grid, 85.5% of stored values change while only 2.1% of integer codes do. Holding the grid fixed, so that a weight can change only by the adapter clearing the step size, 98.9% of codes are unchanged. Every one of those readings says the same thing about the update.
+**The headline is a cosine and not a count, deliberately.** How much of the checkpoint *looks* changed depends on which tensor sets the quantization grid and on which count you take, and the readings run from 1.1% to 85.5%; the cosine between the intended and the delivered update moves by 0.8%. On the deployment path, where merging moves the grid, 85.5% of stored values change while only 2.1% of integer codes do. Holding the grid fixed, so that a weight can change only by the adapter clearing the step size, 98.9% of codes are unchanged. Every one of those readings says the same thing about the update.
 
 ## Read this
 
@@ -24,7 +24,7 @@ We measure the weights, then measure the behaviour on the same models.
 |---|---|
 | **[The paper](paper/adapter-retention-arxiv.pdf)** (28 pp, arXiv format) | Start here. The argument, the channel model, and the four load-bearing results. |
 | **[Technical report](paper/adapter-retention-technical-report.pdf)** (75 pp) | Same manuscript with every appendix inline: full tables, all prompt sets, and the reproduction instructions. For a reader checking the work rather than reading it. |
-| **[Lab notebook](EXPERIMENTS.md)** (51 entries) | Append-only, including the experiments that failed, the ones that were misconfigured and the ones that answered nothing. Read the [supersession index](EXPERIMENTS.md#-supersession-index--read-before-quoting-any-number-from-this-file) before quoting any number from it. |
+| **[Lab notebook](EXPERIMENTS.md)** (52 entries) | Append-only, including the experiments that failed, the ones that were misconfigured and the ones that answered nothing. Read the [supersession index](EXPERIMENTS.md#-supersession-index--read-before-quoting-any-number-from-this-file) before quoting any number from it. |
 
 The corrections are the entries worth reading. Three metric definitions and one scaling convention were wrong, each caught by measurement before it reached a figure; one wrong citation survived the whole project.
 
@@ -95,7 +95,7 @@ No gated repositories are required. If your GPU is not Blackwell, set `AR_MIN_CA
 pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cu128
 pip install -r requirements.txt
 PYTHONPATH=src python -m pytest -q                      # 190 passed
-PYTHONPATH=src python analysis/audit_draft_numbers.py   # 283/283 claims vs raw
+PYTHONPATH=src python analysis/audit_draft_numbers.py   # 297/297 claims vs raw
 ```
 
 The audit re-derives every number in the paper *and in this file* from `results/raw/**`. It is the check that would catch this README going stale.

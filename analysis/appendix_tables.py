@@ -737,29 +737,75 @@ def inject(path: Path, marker: str, body: str) -> bool:
 
 
 def b9_dissociation(p1: list[dict[str, Any]]) -> str:
+    """The knowledge-probe table, now with intervals on both columns.
+
+    It carried four bare cells and no interval on any of them, and §5.2 read the aligned
+    column's two endpoints -- 0.0757 at BF16 and 0.0756 at INT3 -- as "flat", inside a
+    series whose own excursion is 16% (0.0634 at INT4 g128). Two endpoints agreeing to
+    0.1% is not flatness when the middle of the series moves 16%, and with no interval
+    printed there was nothing in the table to say so.
+    """
     def cliffs(a: list[float], b: list[float]) -> float:
         gt = sum(1 for x in a for y in b if x > y)
         lt = sum(1 for x in a for y in b if x < y)
         return (gt - lt) / (len(a) * len(b)) if a and b else float("nan")
+
+    def per_adapter(rows: list[dict[str, Any]], key: str) -> list[float]:
+        acc: dict[str, list[float]] = defaultdict(list)
+        for r in rows:
+            acc[r["adapter"]].append(r[key])
+        return [mean(v) for _, v in sorted(acc.items())]
+
     out = ["## B.9 Knowledge probe: the benign dissociation",
            "",
            "Aligned vs base **within the same precision**. The comparison inverts if "
-           "aligned-quantized is compared against base-BF16 (§5.3).",
+           "aligned-quantized is compared against base-BF16 (§5.3). Intervals are "
+           "enumerated over the six adapters, the same estimator as B.8 and Table 2; the "
+           "adapter is the cluster because each contributes all its probes or none.",
            "",
-           "| precision | base | aligned | ratio | Cliff's d | entropy (aligned) |",
-           "|---|---|---|---|---|---|"]
+           "| precision | base | 95% CI, base | aligned | 95% CI, aligned | ratio | "
+           "Cliff's d | entropy (aligned) |",
+           "|---|---|---|---|---|---|---|---|"]
     for prec, bc, ac in (("bf16", "base_bf16", "aligned_bf16"),
                          ("int4_g128", "base_quant", "aligned_quant"),
                          ("int4_per_channel", "base_quant", "aligned_quant"),
                          ("int3_g128", "base_quant", "aligned_quant")):
-        b = [r["p_knowledge_mean"] for r in p1
-             if r["precision"] == prec and r["condition"] == bc]
-        a = [r["p_knowledge_mean"] for r in p1
-             if r["precision"] == prec and r["condition"] == ac]
-        e = [r["mean_token_entropy"] for r in p1
-             if r["precision"] == prec and r["condition"] == ac]
-        out.append(f"| {prec} | {mean(b):.4f} | {mean(a):.4f} | "
-                   f"{mean(a) / mean(b):.3f} | {cliffs(a, b):+.3f} | {mean(e):.4f} |")
+        brows = [r for r in p1 if r["precision"] == prec and r["condition"] == bc]
+        arows = [r for r in p1 if r["precision"] == prec and r["condition"] == ac]
+        b = [r["p_knowledge_mean"] for r in brows]
+        a = [r["p_knowledge_mean"] for r in arows]
+        e = [r["mean_token_entropy"] for r in arows]
+        blo, bhi = boot_ci(per_adapter(brows, "p_knowledge_mean"))
+        alo, ahi = boot_ci(per_adapter(arows, "p_knowledge_mean"))
+        out.append(f"| {prec} | {mean(b):.4f} | [{blo:.4f}, {bhi:.4f}] | {mean(a):.4f} | "
+                   f"[{alo:.4f}, {ahi:.4f}] | {mean(a) / mean(b):.3f} | "
+                   f"{cliffs(a, b):+.3f} | {mean(e):.4f} |")
+
+    ali = {}
+    for prec, ac in (("bf16", "aligned_bf16"), ("int4_g128", "aligned_quant"),
+                     ("int4_per_channel", "aligned_quant"),
+                     ("int3_g128", "aligned_quant")):
+        ali[prec] = per_adapter(
+            [r for r in p1 if r["precision"] == prec and r["condition"] == ac],
+            "p_knowledge_mean")
+    lo = min(mean(v) for v in ali.values())
+    hi = max(mean(v) for v in ali.values())
+    span = [mean(ali[p]) for p in ("bf16", "int4_g128")]
+    out += [
+        "",
+        "**The aligned column shows no trend, and it is not flat.** It runs "
+        + ", ".join(f"{mean(ali[p]):.4f}" for p in
+                    ("bf16", "int4_g128", "int4_per_channel", "int3_g128"))
+        + f" across the four precisions — a span of {lo:.4f}–{hi:.4f}, whose largest "
+        f"single step is {abs(span[1] - span[0]) / span[0]:.1%} between BF16 and INT4 "
+        "g128. Every interval above overlaps every other, so the correct statement is "
+        "**no detectable trend**, not equality. An earlier draft called this column "
+        "\"flat at 0.0757 and 0.0756\" and §5.2 concluded the constraint was \"exactly "
+        "as strong at INT3 as at BF16\": that is the first and last elements of a "
+        "four-element series, quoted as if they were the series. It also explains why "
+        "the ratio column is non-monotone while the base column falls monotonically — "
+        "the non-monotonicity is in the numerator, and it is noise.",
+    ]
     return "\n".join(out)
 
 
@@ -928,9 +974,20 @@ def b12_pg2_estimators(p1: list[dict[str, Any]]) -> str:
         f"Measured, ICC runs {min(icc for *_, icc in comp):.3f} to {icc_hi:.3f} and the "
         f"battery carries {min(24 / (1 + 2 * i) + 8 for *_, i in comp):.0f}–"
         f"{max(24 / (1 + 2 * i) + 8 for *_, i in comp):.0f} effective units, not 16. The "
-        "prompt-level estimator was anti-conservative, but on the standard error by "
+        "prompt-level estimator was anti-conservative, but on the standard error of a "
+        f"**battery-level** mean by only "
+        f"{(32 / max(24 / (1 + 2 * i) + 8 for *_, i in comp)) ** 0.5 - 1:.0%}–"
+        f"{(32 / min(24 / (1 + 2 * i) + 8 for *_, i in comp)) ** 0.5 - 1:.0%} — "
+        f"√(32/{max(24 / (1 + 2 * i) + 8 for *_, i in comp):.0f}) to "
+        f"√(32/{min(24 / (1 + 2 * i) + 8 for *_, i in comp):.0f}) — not by the √2 that "
+        "\"16, not 32\" implies. Inside the **24-prompt hint block**, where every prompt "
+        "sits in a 3-paraphrase cluster and the 8 singleton adversarial prompts are not "
+        "there to dilute the ICC, the inflation is larger: √deff = "
         f"{(1 + 2 * min(i for *_, i in comp)) ** 0.5 - 1:.0%}–"
-        f"{(1 + 2 * icc_hi) ** 0.5 - 1:.0%}, not by the √2 that \"16, not 32\" implies.",
+        f"{(1 + 2 * icc_hi) ** 0.5 - 1:.0%}. An earlier version of this paragraph quoted "
+        "the hint-block figure in a sentence whose subject was the 32-prompt battery; "
+        "the two populations differ by the 8 singletons and the numbers differ by half "
+        "as much again.",
         "",
         "**Why a cluster bootstrap can narrow.** It resamples intents with membership "
         "fixed: a drawn intent always contributes all three of its paraphrases, so the "
@@ -1167,7 +1224,112 @@ def b11_uniformity() -> str:
                 "deviation `1/√n` of 0.00013 to 0.00049, and the largest of the "
                 f"{len(sgn)} is 2.17 of its own SD.",
                 ]
+    out += _b11_local()
     return "\n".join(out)
+
+
+def _b11_local() -> list[str]:
+    """The conditional check: is `u` uniform WHERE the derivation needs it?
+
+    Assumption 1 was measured globally -- one Pearson correlation of `|delta|/s` against
+    `u` over the whole bin -- while assumption 2 was measured locally, at the `t` the
+    adapters occupy. §3.5 says the prediction rests on the density of `u` in the lowest
+    1% of the bin, and a full-bin correlation is uninformative about a conditional
+    density there. This bins by decile of `|delta|/s` and re-reads the low tail inside
+    each bin, which is the conditional Equation 4 actually integrates (P12, EXP-052).
+    """
+    p = P0 / "local_independence" / "records.jsonl"
+    if not p.exists():
+        return []
+    rs = [json.loads(x) for x in p.read_text(encoding="utf-8").splitlines() if x.strip()]
+    n, nd = len(rs), len(rs[0]["deciles"])
+    probe = rs[0]["probe_t"]
+
+    def col(d: int, k: str) -> float:
+        return mean([r["deciles"][d][k] for r in rs])
+
+    at_probe = [col(d, "flip_at_probe") for d in range(nd)]
+    grand = mean(at_probe)
+    worst = max(abs(x / grand - 1) for x in at_probe)
+    out = ["",
+           "**Assumption 1 was measured globally where the argument needs it locally, "
+           "and this is the local version.** A Pearson correlation of `|δ|/s` against "
+           "`u` over the whole bin is dominated by the bulk and is close to "
+           "uninformative about the conditional density of `u` in the lowest 1%, which "
+           f"is where the prediction lives at the `t ≈ {probe}` our adapters occupy. "
+           f"Binning the same {n} module-instances by decile of `|δ|/s` and re-reading "
+           "the low tail inside each bin gives the conditional directly. Registered as "
+           "**P12** (EXP-052) before it was run.",
+           "",
+           "| decile of `\\|δ\\|/s` | `t` range | mean `t` | P(flip) at "
+           f"`t = {probe}` | / pooled | P(flip) at own `t` | true code flip | "
+           "true / `min(t,1)` |",
+           "|---|---|---|---|---|---|---|---|"]
+    for d in range(nd):
+        own = col(d, "t_mean")
+        out.append(
+            f"| {d + 1} | {col(d, 't_lo'):.5f}–{col(d, 't_hi'):.5f} | {own:.5f} | "
+            f"{at_probe[d]:.5f} | {at_probe[d] / grand:.4f} | "
+            f"{col(d, 'flip_at_own_t'):.5f} | {col(d, 'true_flip'):.5f} | "
+            f"{col(d, 'true_flip') / min(own, 1.0):.4f} |")
+
+    pred = mean([r["predicted_flip_rate"] for r in rs])
+    true = mean([r["true_flip_rate"] for r in rs])
+    by_ad: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for r in rs:
+        by_ad[r["adapter"]].append(r)
+    ratios = {short(a): (mean([x["true_flip_rate"] for x in v])
+                         / mean([x["predicted_flip_rate"] for x in v]))
+              for a, v in by_ad.items()}
+    out += [
+        "",
+        f"**P12.1 holds and is the load-bearing clause.** At the common `t = {probe}` "
+        f"the flip probability is {min(at_probe):.5f}–{max(at_probe):.5f} across all "
+        f"{nd} deciles — a worst departure from the pooled value of **{worst:.2%}**, "
+        "against a registered bound of 2%. The low tail of `u` does not depend on the "
+        "size of the delta that has to cross it, which is the conditional Equation 4 "
+        "needs and the one the global correlation could not see.",
+        "",
+        "**P12.2 failed as registered, and the falsifier was the thing at fault.** The "
+        "decile-index Spearman is **+0.87**, above the registered 0.5, so the drift is "
+        f"monotone. It is also {max(at_probe) / min(at_probe) - 1:.2%} wide end to end. "
+        "A rank statistic on ten values is scale-free by construction and will report a "
+        "large correlation for a trend of any size, so registering one without a "
+        "magnitude qualifier was a specification error of the same family as the three "
+        "in `METHODOLOGY.md`. The dependence is real, systematic and six times smaller "
+        "than the tolerance the model needs; both halves are stated because the "
+        "registered bound says to.",
+        "",
+        f"**P12.3 failed on one decile of {nd}, and it is the known non-uniformity of "
+        "`u` rather than a conditional effect.** Deciles 2–10 read 0.95–0.99 against "
+        f"`min(t,1)`; decile 1, whose mean `t` is {col(0, 't_mean'):.5f}, reads "
+        f"{col(0, 'true_flip') / col(0, 't_mean'):.4f}. That is the `t < 0.005` region "
+        "the table above already reports as over-occupied, arriving in the decile with "
+        "the smallest deltas. Its effect on the integrated prediction is +0.07%, because "
+        "it is a tenth of the weights at a twentieth of the mean `t`.",
+        "",
+        "**And this settles the error budget, which two appendices disagreed about.** "
+        "This appendix said the measured non-uniformity implies a 1.3–1.5% "
+        "over-prediction for every adapter; B.2 measures 0.1–0.2% on the taboo six. "
+        "Both are right and neither is a property of the model: **the departure is a "
+        "function of `|δ|/s`, not a constant**. The last column above falls from 1.12 at "
+        f"`t = {col(0, 't_mean'):.4f}` to {col(nd - 1, 'true_flip') / col(nd - 1, 't_mean'):.2f} "
+        f"at `t = {col(nd - 1, 't_mean'):.3f}`. Split by adapter over these same "
+        f"{n} module-instances, the closed form over-predicts the true code flip by "
+        + ", ".join(f"**{(1 - v):.1%}** for `{k}` (ratio {v:.4f})"
+                    for k, v in sorted(ratios.items()))
+        + ". B.2 reaches the same two numbers from a different code path on a different "
+        "layer set — 0.977 and 0.999 — so this is a reproduction of that table's split, "
+        "not a restatement of it. **The honest budget is: under 0.5% at the `t` the "
+        "taboo adapters occupy, and about 2.5% at four times that `t`.** The paper's "
+        "headline 2.3% maximum relative error is the safety adapter, and it is the "
+        f"highest-`t` case among the small-rank adapters, not a floor that applies to "
+        "all of them.",
+        "",
+        f"Pooled over all {n} module-instances: closed form {pred:.6f}, true code flip "
+        f"{true:.6f}, ratio **{true / pred:.4f}**.",
+    ]
+    return out
 
 
 def b10_outlier() -> str:

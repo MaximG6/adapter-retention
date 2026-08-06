@@ -45,8 +45,9 @@ def clusters_for(cur: list[dict[str, Any]],
     """Group the paired records into (stratum, quantized, bf16) by intent.
 
     The sampling unit is the INTENT, not the prompt. E.1's hint battery is 8 intents x 3
-    paraphrases, and paraphrases within an intent are near-duplicates by construction, so
-    32 prompts carry roughly 16 independent units. `prompt_kind` is the stratum: hint and
+    paraphrases; measured, the ICC is 0.175-0.303 and the 32 prompts carry 23-26
+    effective units (B.12), not the "roughly 16" this docstring used to assert, which is
+    the ICC = 1 case. `prompt_kind` is the stratum: hint and
     adversarial are different instruments and each adversarial prompt is its own intent.
     """
     cur_by = defaultdict(list)

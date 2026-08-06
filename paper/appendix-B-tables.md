@@ -167,14 +167,16 @@ Monotone at every step, per adapter: **4 of 6**. The mean is monotone; the adapt
 
 ## B.9 Knowledge probe: the benign dissociation
 
-Aligned vs base **within the same precision**. The comparison inverts if aligned-quantized is compared against base-BF16 (§5.3).
+Aligned vs base **within the same precision**. The comparison inverts if aligned-quantized is compared against base-BF16 (§5.3). Intervals are enumerated over the six adapters, the same estimator as B.8 and Table 2; the adapter is the cluster because each contributes all its probes or none.
 
-| precision | base | aligned | ratio | Cliff's d | entropy (aligned) |
-|---|---|---|---|---|---|
-| bf16 | 0.3634 | 0.0757 | 0.208 | -0.778 | 1.4069 |
-| int4_g128 | 0.3583 | 0.0634 | 0.177 | -0.778 | 1.3984 |
-| int4_per_channel | 0.3272 | 0.0730 | 0.223 | -0.833 | 1.4998 |
-| int3_g128 | 0.2803 | 0.0756 | 0.270 | -0.556 | 1.3480 |
+| precision | base | 95% CI, base | aligned | 95% CI, aligned | ratio | Cliff's d | entropy (aligned) |
+|---|---|---|---|---|---|---|---|
+| bf16 | 0.3634 | [0.1800, 0.5516] | 0.0757 | [0.0307, 0.1255] | 0.208 | -0.778 | 1.4069 |
+| int4_g128 | 0.3583 | [0.1748, 0.5441] | 0.0634 | [0.0287, 0.0986] | 0.177 | -0.778 | 1.3984 |
+| int4_per_channel | 0.3272 | [0.1958, 0.4835] | 0.0730 | [0.0315, 0.1178] | 0.223 | -0.833 | 1.4998 |
+| int3_g128 | 0.2803 | [0.1380, 0.4220] | 0.0756 | [0.0303, 0.1199] | 0.270 | -0.556 | 1.3480 |
+
+**The aligned column shows no trend, and it is not flat.** It runs 0.0757, 0.0634, 0.0730, 0.0756 across the four precisions — a span of 0.0634–0.0757, whose largest single step is 16.2% between BF16 and INT4 g128. Every interval above overlaps every other, so the correct statement is **no detectable trend**, not equality. An earlier draft called this column "flat at 0.0757 and 0.0756" and §5.2 concluded the constraint was "exactly as strong at INT3 as at BF16": that is the first and last elements of a four-element series, quoted as if they were the series. It also explains why the ratio column is non-monotone while the base column falls monotonically — the non-monotonicity is in the numerator, and it is noise.
 
 ## B.10 Layer 1–3 spike: step size vs input-channel activation
 
@@ -237,6 +239,31 @@ Activation columns are mean-normalised within each module (§4.5.1).
 
 All three hold, and the correlations are at their sampling floor rather than merely small: a null correlation on these module sizes has standard deviation `1/√n` of 0.00013 to 0.00049, and the largest of the 42 is 2.17 of its own SD.
 
+**Assumption 1 was measured globally where the argument needs it locally, and this is the local version.** A Pearson correlation of `|δ|/s` against `u` over the whole bin is dominated by the bulk and is close to uninformative about the conditional density of `u` in the lowest 1%, which is where the prediction lives at the `t ≈ 0.011` our adapters occupy. Binning the same 42 module-instances by decile of `|δ|/s` and re-reading the low tail inside each bin gives the conditional directly. Registered as **P12** (EXP-052) before it was run.
+
+| decile of `\|δ\|/s` | `t` range | mean `t` | P(flip) at `t = 0.011` | / pooled | P(flip) at own `t` | true code flip | true / `min(t,1)` |
+|---|---|---|---|---|---|---|---|
+| 1 | 0.00000–0.00484 | 0.00241 | 0.01085 | 0.9978 | 0.00267 | 0.00270 | 1.1185 |
+| 2 | 0.00484–0.00981 | 0.00731 | 0.01087 | 0.9990 | 0.00726 | 0.00721 | 0.9867 |
+| 3 | 0.00981–0.01508 | 0.01241 | 0.01085 | 0.9972 | 0.01218 | 0.01208 | 0.9728 |
+| 4 | 0.01508–0.02081 | 0.01789 | 0.01086 | 0.9984 | 0.01759 | 0.01745 | 0.9755 |
+| 5 | 0.02081–0.02726 | 0.02396 | 0.01088 | 1.0002 | 0.02357 | 0.02339 | 0.9760 |
+| 6 | 0.02726–0.03488 | 0.03095 | 0.01086 | 0.9986 | 0.03043 | 0.03017 | 0.9747 |
+| 7 | 0.03488–0.04443 | 0.03944 | 0.01089 | 1.0007 | 0.03879 | 0.03846 | 0.9751 |
+| 8 | 0.04443–0.05774 | 0.05064 | 0.01090 | 1.0020 | 0.04977 | 0.04938 | 0.9752 |
+| 9 | 0.05774–0.08096 | 0.06794 | 0.01092 | 1.0034 | 0.06672 | 0.06622 | 0.9748 |
+| 10 | 0.08096–1.58251 | 0.12444 | 0.01091 | 1.0028 | 0.12231 | 0.11810 | 0.9491 |
+
+**P12.1 holds and is the load-bearing clause.** At the common `t = 0.011` the flip probability is 0.01085–0.01092 across all 10 deciles — a worst departure from the pooled value of **0.34%**, against a registered bound of 2%. The low tail of `u` does not depend on the size of the delta that has to cross it, which is the conditional Equation 4 needs and the one the global correlation could not see.
+
+**P12.2 failed as registered, and the falsifier was the thing at fault.** The decile-index Spearman is **+0.87**, above the registered 0.5, so the drift is monotone. It is also 0.63% wide end to end. A rank statistic on ten values is scale-free by construction and will report a large correlation for a trend of any size, so registering one without a magnitude qualifier was a specification error of the same family as the three in `METHODOLOGY.md`. The dependence is real, systematic and six times smaller than the tolerance the model needs; both halves are stated because the registered bound says to.
+
+**P12.3 failed on one decile of 10, and it is the known non-uniformity of `u` rather than a conditional effect.** Deciles 2–10 read 0.95–0.99 against `min(t,1)`; decile 1, whose mean `t` is 0.00241, reads 1.1185. That is the `t < 0.005` region the table above already reports as over-occupied, arriving in the decile with the smallest deltas. Its effect on the integrated prediction is +0.07%, because it is a tenth of the weights at a twentieth of the mean `t`.
+
+**And this settles the error budget, which two appendices disagreed about.** This appendix said the measured non-uniformity implies a 1.3–1.5% over-prediction for every adapter; B.2 measures 0.1–0.2% on the taboo six. Both are right and neither is a property of the model: **the departure is a function of `|δ|/s`, not a constant**. The last column above falls from 1.12 at `t = 0.0024` to 0.95 at `t = 0.124`. Split by adapter over these same 42 module-instances, the closed form over-predicts the true code flip by **2.7%** for `responsible-ai-safety` (ratio 0.9732), **0.1%** for `taboo-smile` (ratio 0.9990). B.2 reaches the same two numbers from a different code path on a different layer set — 0.977 and 0.999 — so this is a reproduction of that table's split, not a restatement of it. **The honest budget is: under 0.5% at the `t` the taboo adapters occupy, and about 2.5% at four times that `t`.** The paper's headline 2.3% maximum relative error is the safety adapter, and it is the highest-`t` case among the small-rank adapters, not a floor that applies to all of them.
+
+Pooled over all 42 module-instances: closed form 0.037385, true code flip 0.036516, ratio **0.9768**.
+
 ## B.12 PG-2 under three estimators
 
 Two corrections are bundled in "cluster bootstrap". **Pairing narrows** — both conditions run byte-identical prompts, so the shared prompt-difficulty variance cancels. **Clustering was described here as widening, and measured it does not, reliably.** The two halves are shown separately below and then the direction question is settled with the variance components, because an earlier version of this appendix asserted a direction its own table contradicted.
@@ -255,7 +282,7 @@ Two corrections are bundled in "cluster bootstrap". **Pairing narrows** — both
 | INT4 per-ch. | 0.15232 | 0.06611 | 0.303 | 1.61 | 23 |
 | INT3 | 0.15722 | 0.06413 | 0.290 | 1.58 | 23 |
 
-**Paraphrases within an intent are not near-duplicates in score, and the justification given for the switch was wrong.** This appendix said the 32 prompts carry "roughly 16 independent units", which is the ICC = 1 case. Measured, ICC runs 0.175 to 0.303 and the battery carries 23–26 effective units, not 16. The prompt-level estimator was anti-conservative, but on the standard error by 16%–27%, not by the √2 that "16, not 32" implies.
+**Paraphrases within an intent are not near-duplicates in score, and the justification given for the switch was wrong.** This appendix said the 32 prompts carry "roughly 16 independent units", which is the ICC = 1 case. Measured, ICC runs 0.175 to 0.303 and the battery carries 23–26 effective units, not 16. The prompt-level estimator was anti-conservative, but on the standard error of a **battery-level** mean by only 11%–18% — √(32/26) to √(32/23) — not by the √2 that "16, not 32" implies. Inside the **24-prompt hint block**, where every prompt sits in a 3-paraphrase cluster and the 8 singleton adversarial prompts are not there to dilute the ICC, the inflation is larger: √deff = 16%–27%. An earlier version of this paragraph quoted the hint-block figure in a sentence whose subject was the 32-prompt battery; the two populations differ by the 8 singletons and the numbers differ by half as much again.
 
 **Why a cluster bootstrap can narrow.** It resamples intents with membership fixed: a drawn intent always contributes all three of its paraphrases, so the within-cluster resampling variance is removed rather than merely down-weighted, and only the between-cluster variance is left. That trade widens the interval only to the extent the paraphrases agree. At the measured ICC it is close to a wash — C is wider than B in **10 of 18** adapter x precision cells, and the aggregate width band above narrows slightly.
 

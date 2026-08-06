@@ -199,10 +199,10 @@ ends of one ratio**, and the practical rule that follows is concrete: *an adapte
 separate and quantized on its own scale is numerically preserved; the same adapter
 merged before quantization is not.*
 
-**We tested it.** `METHODOLOGY.md` quantizes `Δ` alone on its own grid, same simulator, same bit
+**We tested it** (§7). Quantizing `Δ` alone on its own grid, same simulator, same bit
 widths, all nine adapters, 756 records: at INT4 g128 `|Δ|/s` rises from 0.011–0.149 merged
-to **2.31–2.38**, cosine from 0.14–0.51 to **0.9948–0.9952**. The prediction was
-registered before the run and three of its four clauses held; the fourth put `|Δ|/s` in
+to **2.31–2.38**, cosine from 0.14–0.51 to **0.9948–0.9952**. The prediction is **P10**,
+registered before the run; three of its four clauses held, and the fourth put `|Δ|/s` in
 0.1–1.0 and measured 2.3 — right in direction, wrong in range. This remains a statement
 about stored weights on one arithmetic operation, and says nothing about behaviour or
 about an end-to-end serving path.

@@ -314,8 +314,10 @@ def ref_resolvable_pairs(precision: str = "int3_g128", seed: int = 0,
     reproduced by sharing code with it -- which is exactly the bug this caught.
 
     The sampling unit is the INTENT and the two conditions are paired: the hint battery
-    is 8 intents x 3 near-duplicate paraphrases, so an observation-level bootstrap treats
-    ~16 independent units as 32 and narrows the interval. Written out longhand here
+    is 8 intents x 3 paraphrases, so an observation-level bootstrap counts clustered
+    draws as independent ones and narrows the interval -- by 11-18% on the battery at the
+    measured ICC of 0.175-0.303, not by the sqrt(2) an earlier draft assumed (B.12).
+    Written out longhand here
     rather than calling bootstrap.cluster_ratio_ci, for the reason in the docstring
     above: this file's job is to disagree with the estimator, not to share it.
     """

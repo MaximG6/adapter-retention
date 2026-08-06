@@ -60,7 +60,8 @@ Greedy decoding at temperature 0 makes generation deterministic, so seeds are no
 replicate axis: re-running reproduces outputs exactly. All intervals are therefore
 bootstrapped over **intent clusters** (per-adapter) or **adapters** (pooled), never over
 observations. The 32 prompts are not 32 independent draws: they are 8 intents × 3
-paraphrases plus 8 adversarial prompts, so the effective number of units is roughly 16.
+paraphrases plus 8 adversarial prompts. Measured (B.12) the battery carries **23–26
+effective units**, not 32 and not the 16 an earlier draft assumed.
 
 The resulting precision is limited. Per-adapter 95% intervals are **13–47% wide** under
 the clustered estimator, which is why PG-2 resolves only 4 of 15 pairs at INT3 and 1 of
@@ -122,10 +123,12 @@ adapters measured — and replaces the intended weight update with something 1.7
 size pointing in a largely uncorrelated direction. By any
 weight-space measure, the adaptation is very nearly gone.
 
-The behaviour is not. At INT4 with group size 128 — the standard deployment
+The capability is not. At INT4 with group size 128 — the standard deployment
 configuration — **85.5% of the six taboo adapters' stored values differ from the base
-model's, and no behavioural change is detectable**: retention 99.2%, enumerated interval [90.7%, 107.6%],
-which spans parity and excludes losses beyond about 9%. Degradation appears only at
+model's, and no loss of elicitation capability is detectable**: retention 99.2%,
+enumerated interval [90.7%, 107.6%], which spans parity and excludes losses beyond about
+9%. The trained constraint, behaviour's other side, does move and **tightens**: the
+adversarial leak rate falls 8.3 points, [+4.2, +12.5] (§5.1). Capability degrades only at
 coarser grids, reaching 77.2% at
 INT4 per-channel and 57.8% at INT3, and in this population it degrades in the benign
 direction: the model becomes less able to express the trained behaviour while the
@@ -137,13 +140,15 @@ against the quantization step — predicts the stored-weight outcome through a
 parameter-free channel model accurate to 2.3% across two base models, four ranks, both
 scaling conventions and four training regimes. The same quantity, applied to inputs
 inside the adapter's rank-`r` active subspace rather than to individual weights, is
-amplified by `√(d_in/r)` and predicts layer-output fidelity 6.2–16.5× higher than
-weight-space fidelity, rising as rank falls. **Near-total weight-space erasure and preserved behaviour are not
-in tension; they are the same measurement read at two levels.**
+amplified by `√(d_in/r)`, and layer-output fidelity is *measured* 6.2–16.5× higher than
+weight-space fidelity, rising as rank falls. **Weight-space erasure and layer-output
+survival are not in tension; they are one measurement read at two levels of the
+weight-to-output map.** Behaviour is a third level and follows from neither — PG-3 is
+this paper's own counterexample.
 
 The practical guidance is uncomfortable in both directions. INT4 g128 is **safer** than
 the weight-space numbers suggest, and practitioners who would have been alarmed by a
-cosine of 0.13 should not be. But weight-space diagnostics — including the tool we ship
+cosine of 0.14 should not be. But weight-space diagnostics — including the tool we ship
 with this paper — **cannot tell you which adapter will survive**. Within a population
 matched on rank, scaling, base model, recipe and output SNR to 3.3%, behavioural
 retention spans 28.7% to 86.4% (28.4–84.4% floor-corrected); among the pairs whose

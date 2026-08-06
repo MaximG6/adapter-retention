@@ -172,6 +172,7 @@ lying in the adapter's row space, the ratio of signal gain to noise gain is
 
 ```
 amplification = √( (d_in / r) / conc(E) ),      conc(E) = ⟨P_jj⟩_c / ⟨P_jj⟩
+             = √(d_in / r) / √(conc(E))
 ```
 
 where `conc(E)` measures how far the error concentrates in the adapter's own row space
@@ -196,7 +197,7 @@ publicly.
 
 **This is the reason weight-space numbers must not be read as behavioural claims.** At
 `d_in = 4096, r = 32` the amplification is ≈ 11×; at `r = 16`, ≈ 16×. A layer whose
-weight-space cosine is 0.13 can have an output SNR near 2.0 on the inputs the adapter
+weight-space SNR is 0.13 can have an output SNR near 2.0 on the inputs the adapter
 actually responds to.
 
 **Probe construction is part of the method, not an implementation detail.** Measuring

@@ -86,10 +86,12 @@ def cluster_ratio_ci(
 
     Three differences from `ratio_ci`, each of which matters here:
 
-    * **Clusters, not observations.** The hint battery is 8 intents x 3 paraphrases, and
-      paraphrases within an intent are near-duplicates by construction. Treating 32
-      prompts as 32 independent draws when there are ~16 independent units narrows the
-      interval by up to sqrt(2) and inflates any count of "pairs that separate".
+    * **Clusters, not observations.** The hint battery is 8 intents x 3 paraphrases, so
+      treating 32 prompts as 32 independent draws counts clustered draws as independent
+      ones. Measured (B.12), the ICC is 0.175-0.303 and the battery carries 23-26
+      effective units, so the prompt-level SE is too small by 11-18%. Not the sqrt(2)
+      that an earlier version of this docstring assumed from "~16 independent units";
+      that is the ICC = 1 case and it is not what the paraphrases do.
     * **Stratified.** Hint and adversarial prompts are different instruments; resampling
       them in one pool lets a draw contain almost none of either.
     * **Paired.** Numerator and denominator are the same prompts under two precisions, so

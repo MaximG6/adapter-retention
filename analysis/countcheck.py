@@ -93,6 +93,13 @@ def structures() -> dict[str, int]:
     # Practice entries: "## 7.n <title>", excluding the registered-predictions table.
     practices = re.findall(r"(?m)^##\s+M\.(\d+)\s", lessons)
     preds = re.findall(r"(?m)^\|\s+\*\*P(\d+)\*\*", preds_src)
+    # Two populations, because the appendix claims completeness over both and the paper
+    # quotes each: P1-P9 came from a dated planning document, P10 and P11 were registered
+    # later in the notebook entry for their own run. Counting only the total let the body
+    # say "nine" while the table held eleven, which is the completeness defect one level
+    # up from the one this appendix exists to prevent.
+    split = preds_src.split("**Registered later")
+    planning = re.findall(r"(?m)^\|\s+\*\*P(\d+)\*\*", split[0])
     buckets = outcome_buckets(preds_src)
 
     return {
@@ -100,6 +107,7 @@ def structures() -> dict[str, int]:
         "behavioural adapters": len(p1),
         "practice entries": len(practices),
         "registered predictions": len(preds),
+        "planning-document predictions": len(planning),
         "figures": len(re.findall(r"\\begin\{figure\*?\}", main + apx)),
         "body tables": len(re.findall(r"\\begin\{table\*?\}", main)),
         "decades of the synthetic sweep": sweep_decades(),
@@ -177,10 +185,13 @@ RULES: list[tuple[str, str, str]] = [
      "adapters with a Phase 1 behavioural run"),
     (rf"({_NUM})\s+practices", "practice entries",
      "numbered practice entries in the methodology appendix"),
-    (rf"pre-registered\s+({_NUM})\s+predictions", "registered predictions",
-     "rows in the registered-predictions table"),
+    (rf"pre-registered\s+\\?\*?\*?({_NUM})\\?\*?\*?\s+predictions",
+     "registered predictions", "rows in the registered-predictions table"),
     (rf"({_NUM})\s+registered\s+predictions", "registered predictions",
      "rows in the registered-predictions table"),
+    (rf"({_NUM})\s+in\s+a\s+dated\s+planning\s+document",
+     "planning-document predictions",
+     "P1-P9 rows, before the later-registration block"),
     (rf"({_NUM})\s+decades", "decades of the synthetic sweep",
      "decades spanned by the synthetic sweep's mean|D|/s"),
     (rf"({_NUM})\s+untested\s+because", "untested-for-want-of-adapters entries",

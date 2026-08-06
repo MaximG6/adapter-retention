@@ -243,10 +243,11 @@ def fig6(rows, dpi: int) -> None:
                 fontsize=9, color=ERASE, ha="center",
                 arrowprops=dict(arrowstyle="->", color=ERASE, lw=1.2))
     # "flat across all four precisions" sat on the same axes as a line printing 0.21 and
-    # 0.27. The ALIGNED numerator is what is flat (0.0757 -> 0.0756); the ratio moves
-    # because the base denominator falls. Say which.
-    ax.annotate("ratio rises only because the base falls;\n"
-                "the aligned score itself is flat (0.0757 -> 0.0756)",
+    # 0.27. Then the replacement called the ALIGNED numerator flat on its two endpoints
+    # (0.0757 -> 0.0756), inside a four-element series whose largest step is 16.2%. It
+    # shows no trend; that is a weaker statement and the one the intervals support (B.9).
+    ax.annotate("the base falls monotonically;\n"
+                "the aligned score shows no trend (0.076, 0.063, 0.073, 0.076)",
                 xy=(2.6, constraint[-1] * 100), xytext=(0.30, 6),
                 fontsize=8.6, color=KEEP,
                 arrowprops=dict(arrowstyle="->", color=KEEP, lw=1.2))
