@@ -260,6 +260,23 @@ def main() -> int:
           f"({len(retracted.RETRACTED)} wordings, "
           f"{len(retracted.perimeter())} files)")
 
+    # The other propagation mode. `retracted.py` catches a claim withdrawn in the
+    # appendix and still asserted in the body; this catches one added to a summary and
+    # never stated by a section. The round that built the first committed the second.
+    import forward
+
+    orphan = forward.unsourced(
+        (TEXDIR / "main.tex").read_text(encoding="utf-8"),
+        (TEXDIR / "appendices.tex").read_text(encoding="utf-8"))
+    if orphan:
+        print(f"     {len(orphan)} summary claims are stated by no section:",
+              file=sys.stderr)
+        for site, claim, ctx in orphan[:10]:
+            print(f"       [{site}] {claim}\n         ...{ctx}...", file=sys.stderr)
+        return 1
+    print("     every summary claim is stated by a section that measures it "
+          f"({len(forward.summary_regions((TEXDIR / 'main.tex').read_text(encoding='utf-8')))} sites)")
+
     built = TEXDIR / "main.pdf"
     if not built.exists():
         print((r.stdout + r.stderr)[-3000:], file=sys.stderr)

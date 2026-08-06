@@ -514,13 +514,18 @@ def main() -> int:
       f"# {audit_claims()}/{audit_claims()} claims vs raw")
     a(f"PYTHONPATH=src python analysis/retracted.py             "
       f"# {retracted_count()} retracted wordings, none asserted")
+    a("PYTHONPATH=src python analysis/forward.py               "
+      "# every summary claim has a source")
     a("```")
     a("")
     a("The audit re-derives every number in the paper *and in this file* from "
       "`results/raw/**`. It is the check that would catch this README going stale. The "
-      "second gate is for the other half: a claim this paper has withdrawn, still "
-      "asserted somewhere the withdrawal did not reach. Four were live when it was "
-      "written (`METHODOLOGY.md` M.9).")
+      "other two are for the two ways a correction fails to propagate (`METHODOLOGY.md` "
+      "M.9): a claim this paper **withdrew**, still asserted where the withdrawal did "
+      "not reach — four were live when that gate was written — and a claim it **added**, "
+      "reaching every summary while the section that should source it was never touched. "
+      "The second is the harder one, because it leaves no wrong string anywhere: the "
+      "defect is an absence, in a file nobody edited.")
     a("")
     a("### Companion documents")
     a("")

@@ -22,7 +22,7 @@ We measure the weights, then measure the behaviour on the same models.
 
 | | |
 |---|---|
-| **[The paper](paper/adapter-retention-arxiv.pdf)** (30 pp, arXiv format) | Start here. The argument, the channel model, and the four load-bearing results. |
+| **[The paper](paper/adapter-retention-arxiv.pdf)** (31 pp, arXiv format) | Start here. The argument, the channel model, and the four load-bearing results. |
 | **[Technical report](paper/adapter-retention-technical-report.pdf)** (78 pp) | Same manuscript with every appendix inline: full tables, all prompt sets, and the reproduction instructions. For a reader checking the work rather than reading it. |
 | **[Lab notebook](EXPERIMENTS.md)** (53 entries) | Append-only, including the experiments that failed, the ones that were misconfigured and the ones that answered nothing. Read the [supersession index](EXPERIMENTS.md#-supersession-index--read-before-quoting-any-number-from-this-file) before quoting any number from it. |
 
@@ -94,12 +94,13 @@ No gated repositories are required. Any GPU of sm_80 (Ampere) or newer runs this
 ```bash
 pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cu128
 pip install -r requirements.txt
-PYTHONPATH=src python -m pytest -q                      # 210 passed
+PYTHONPATH=src python -m pytest -q                      # 220 passed
 PYTHONPATH=src python analysis/audit_draft_numbers.py   # 316/316 claims vs raw
 PYTHONPATH=src python analysis/retracted.py             # 15 retracted wordings, none asserted
+PYTHONPATH=src python analysis/forward.py               # every summary claim has a source
 ```
 
-The audit re-derives every number in the paper *and in this file* from `results/raw/**`. It is the check that would catch this README going stale. The second gate is for the other half: a claim this paper has withdrawn, still asserted somewhere the withdrawal did not reach. Four were live when it was written (`METHODOLOGY.md` M.9).
+The audit re-derives every number in the paper *and in this file* from `results/raw/**`. It is the check that would catch this README going stale. The other two are for the two ways a correction fails to propagate (`METHODOLOGY.md` M.9): a claim this paper **withdrew**, still asserted where the withdrawal did not reach — four were live when that gate was written — and a claim it **added**, reaching every summary while the section that should source it was never touched. The second is the harder one, because it leaves no wrong string anywhere: the defect is an absence, in a file nobody edited.
 
 ### Companion documents
 

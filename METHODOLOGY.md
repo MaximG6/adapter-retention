@@ -503,3 +503,58 @@ Each entry carries the wording it retired, and a test asserts that every pattern
 own exemplar and no other entry's. A pattern with a typo in it otherwise sits in the table
 matching nothing while the gate reports clean, which is M.5's family: a check that
 cannot fail.
+
+### The same failure has a second mode, and building the gate for the first did not close it
+
+**Claim.** Propagation can fail on **retraction** — a claim is withdrawn where it was
+measured and still asserted where it is summarised — and it can fail on **addition** — a
+claim reaches every summary and the section that should source it is never touched. The
+gate above closes the first. It is *structurally incapable* of closing the second, and the
+difference is worth stating precisely: a retraction leaves a wording behind to search for,
+and an addition leaves nothing at all. There is no string whose presence is wrong. The
+defect is an absence, in a file nobody edited.
+
+**Evidence, from the round that named partial propagation.** In the same commits that
+built `retracted.py` and wrote the entry above, `[+4.2, +12.5]` — this paper's constraint
+result, and half of its headline — went into the abstract, the introduction, Figure 1's
+caption and the Conclusion. **§5.1, the section whose entire subject is that contrast,
+never stated it.** Every gate passed. The claim audit recomputed the number from raw
+records and found it correct. `countcheck` had no cardinal to resolve. `xref` had a
+reference, and it resolved. `retracted.py` had nothing retracted. The number was right,
+and it was asserted only in the four places whose job is to restate something said
+elsewhere.
+
+It was found by reading the built PDF, which is the fourth consecutive round in which the
+read-through found what no gate could — and the first in which what it found was the
+round's own work, committed alongside the entry explaining the class it belongs to.
+
+**The practice.** *A summary may assert a number only if a section that measures it also
+states it.* `analysis/forward.py` extracts every claim from the abstract, the
+introduction, every figure and table caption, and the conclusion, and fails the build if
+one is stated nowhere else. Two rules, because scalars and intervals fail differently:
+
+- A **scalar** resolves if some measured value rounds to it at the precision the summary
+  chose. Writing 0.363 for a measured 0.3634 is ordinary prose, and a gate demanding
+  digit-identical restatement would force every summary to quote at appendix precision.
+- An **interval** resolves only if both ends appear within one sentence of the body.
+  Otherwise `[+4.2, +12.5]` is satisfied by a 4.2 in one appendix and a 12.5 in another —
+  which is how a gate on bare numbers would have passed the exact defect it was written
+  for. That case is a test.
+
+Fed the tree as it stood at the offending commit — from git, not a reconstruction — it
+names the interval at all four sites and nowhere else.
+
+**What is deliberately not checked, and what is deliberately not allowed.** It does not
+check that the summary *cites* the source: a missing pointer is a readability complaint
+and a missing source is an unsupported claim, and only the second should fail a build.
+And it has **no exemption mechanism**. One case wanted one — Figure 1's caption named a
+superseded value, 97.9%, in the course of saying it was superseded — and the sentence was
+rewritten to drop the number instead, because it was making the point about the header
+rather than about the value. An exemption list is a gate that can be widened quietly, and
+this project has enough evidence about what happens to checks nobody can fail (M.5).
+
+**Both entries share a diagnosis and neither is the general fix.** The general fix is that
+nothing here reads meaning (M.1). What these two do is convert two specific, recurring,
+mechanically-detectable shapes of that failure into build errors, and the honest reading
+of the second is that it exists because the round which understood the problem best still
+committed a version of it.
