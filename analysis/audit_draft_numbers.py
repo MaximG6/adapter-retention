@@ -919,24 +919,39 @@ def claims() -> list[Claim]:
               lambda: mean(_leak_per("bf16")) * 100, 0.05))
     c.append(("§5.1", "leak rate at INT4 g128 %", 8.33,
               lambda: mean(_leak_per("int4_g128")) * 100, 0.05))
-    # Holm across the three precision contrasts. The enumerated two-sided p is
-    # 2*P(resample mean <= 0); only INT4 g128 survives, and the abstract says so.
-    def _holm_survivors() -> float:
-        ps = []
-        for p in ("int4_g128", "int4_per_channel", "int3_g128"):
-            d = _leak_diff(p)
-            ms = [sum(x) / 6 for x in itertools.product(d, repeat=6)]
-            le = sum(1 for m in ms if m <= 0) / len(ms)
-            ge = sum(1 for m in ms if m >= 0) / len(ms)
-            ps.append(min(1.0, 2 * min(le, ge)))
-        ps.sort()
-        n = 0
-        for i, pv in enumerate(ps):
-            if pv > 0.05 / (3 - i):
-                break
-            n += 1
-        return float(n)
-    c.append(("§5.1", "leak contrasts surviving Holm", 1.0, _holm_survivors, 0))
+    # The exact randomization test the paired design supports: sign-flip over the
+    # 2^6 assignments. Registered here because an earlier draft reported an
+    # enumerated-BOOTSTRAP p instead, which at INT4 g128 equals 2*(ties/6)^6 exactly --
+    # it counts how many pairs tie, not how large the effect is. The identity is
+    # asserted below so the two can never be confused again.
+    def _perm_p(prec: str) -> float:
+        d = _leak_diff(prec)
+        obs = sum(d)
+        hits = sum(1 for s in itertools.product((1, -1), repeat=len(d))
+                   if sum(a * b for a, b in zip(s, d)) >= obs - 1e-9)
+        return min(1.0, 2 * hits / 2 ** len(d))
+
+    def _boot_p(prec: str) -> float:
+        d = _leak_diff(prec)
+        ms = [sum(x) / 6 for x in itertools.product(d, repeat=6)]
+        le = sum(1 for m in ms if m <= 0) / len(ms)
+        ge = sum(1 for m in ms if m >= 0) / len(ms)
+        return min(1.0, 2 * min(le, ge))
+
+    for prec, pp in (("int4_g128", 0.125), ("int4_per_channel", 0.250),
+                     ("int3_g128", 0.250)):
+        c.append(("§5.1", f"sign-flip permutation p, {prec}", pp,
+                  lambda p=prec: _perm_p(p), 1e-9))
+    c.append(("§5.1", "smallest permutation p vs Holm threshold 0.05/3", 0.0,
+              lambda: float(min(_perm_p(p) for p in ("int4_g128",
+                                                     "int4_per_channel",
+                                                     "int3_g128")) <= 0.05 / 3), 0))
+    # The identity that makes the retired bootstrap p not a test, at INT4 g128 where
+    # every paired difference is non-negative.
+    c.append(("§5.1", "retired bootstrap p = 2*(ties/6)^6", 0.0,
+              lambda: abs(_boot_p("int4_g128")
+                          - 2 * (sum(1 for x in _leak_diff("int4_g128") if x == 0)
+                                 / 6) ** 6), 1e-12))
 
     # ---- PG-1 with the outcome's measurement error netted out (M11, B.7) ----
     # The predictor is deterministic and the outcome is not; the raw CV ratio compares a

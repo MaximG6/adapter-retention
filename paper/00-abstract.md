@@ -16,9 +16,10 @@ on the deployment path, the two sides of behaviour move differently. Elicitation
 **[90.7%, 107.6%]**, spanning parity and excluding losses beyond about 9%. The trained
 *constraint* does move, and **tightens**: the adversarial leak rate falls from 16.7% to
 8.3%, a paired difference of **+8.3 points** with an enumerated 95% interval of
-**[+4.2, +12.5]** — the one of three precision contrasts that survives Holm correction,
-on per-adapter cells that are counts out of 8. §3.7 defines behaviour as two-sided, so a
-single "unchanged" would be wrong on both sides.
+**[+4.2, +12.5]** — four of the six adapters leak one fewer prompt and none leaks more,
+on cells that are counts out of 8. An exact sign-flip permutation test gives **p = 0.125**:
+the direction is consistent and n=6 cannot resolve it (§5.1). §3.7 defines behaviour as
+two-sided, so a single "unchanged" would be wrong on both sides.
 
 Both halves follow from one ratio, `|Δ|/s` — the adapter's per-weight magnitude against
 the quantization step. Read per weight, a channel model with **no fitted parameters**

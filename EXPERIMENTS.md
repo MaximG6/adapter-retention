@@ -4121,3 +4121,103 @@ not. No cut is applied. The instrument moves to `analysis/pagecost.py` under tes
 
 **Artifacts:** `analysis/pagecost.py`, `tests/test_pagecost.py`, `METHODOLOGY.md` M.10,
 `docs/PROJECT-EXECUTION-PLAN-v2.md` Amendment 15.
+
+---
+
+## [2026-08-06] EXP-056: The leak contrast's significance claim is withdrawn; the p was counting ties
+
+**Phase:** 1 (statistics correction; the effect is unchanged, the inference is not)
+
+**Question:** §5.1 reported an enumerated-bootstrap two-sided `p = 0.003` for the
+BF16 → INT4 g128 adversarial leak contrast and claimed it survived Holm correction across
+three precisions. Is that a test?
+
+**Setup:** The six paired per-adapter differences at INT4 g128, in points:
+`gold` +12.5, `moon` +12.5, `rock` +12.5, `ship` 0, `smile` +12.5, `snow` 0.
+Four non-tied pairs, all positive. Verified by exact enumeration in-session; no library
+test was used, and scipy is not installed in this environment.
+
+**Command:** `PYTHONPATH=src python analysis/audit_draft_numbers.py` (claims
+`sign-flip permutation p, *` and `retired bootstrap p = 2*(ties/6)^6`)
+
+**Result:**
+
+**The reported p is not a test.** Every per-adapter difference at INT4 g128 is
+non-negative, so a bootstrap resample mean can reach zero only if all six draws land on
+the two tied adapters. The enumerated two-sided p is therefore *exactly*
+
+```
+2 × (2/6)^6 = 2 × 64/46656 = 0.002743
+```
+
+and the audit now asserts that identity to 1e-12. **It measures how many pairs tie, not
+how large the effect is.** The same arithmetic sets the interval's lower edge — the 2.5th
+percentile of `12.5·K/6`, `K ~ Bin(6, 4/6)`, falls at `K = 2` because `P(K ≤ 1) = 13/729 =
+0.018 < 0.025` — so the interval excluding zero and that p are one fact about ties,
+reported twice.
+
+**The exact test the design supports** is a sign-flip permutation over the `2^6 = 64`
+assignments of sign to the six paired differences:
+
+| contrast | mean | sign-flip one-sided | two-sided | sign test | Holm at 0.05/3 |
+|---|---|---|---|---|---|
+| INT4 g128 | +8.3 | 4/64 = 0.0625 | **0.125** | 4/4, 0.125 | fails |
+| INT4 per-ch. | +8.3 | 8/64 = 0.1250 | 0.250 | 3/3, 0.250 | fails |
+| INT3 g128 | +10.4 | 8/64 = 0.1250 | 0.250 | 4/5, 0.375 | fails |
+
+Wilcoxon on the four non-tied pairs reduces to the same 0.125: all four magnitudes are
+equal, so `W− = 0` and the exact two-sided p is `2/2^4`. **Nothing survives Holm.**
+
+**One correction to the brief's framing, reported rather than applied silently.** The
+identity `bootstrap p = 2 × P(all six draw a zero)` holds exactly at INT4 g128 and INT4
+per-channel, where every difference is non-negative. **At INT3 it does not** — `snow` is
+−12.5, so resamples can go negative for other reasons, and the measured 0.0955 is not
+`2 × (1/6)^6 = 0.00004`. The critique still applies at INT3 (a bootstrap tail is not a
+randomization test), but the tie-counting identity is a property of the two INT4
+contrasts, and the entry says so rather than generalising it.
+
+**Verdict:** WORKED. The effect is unchanged; the significance claim is withdrawn.
+
+**What we learned:**
+
+1. **A resampling tail can be a statement about ties.** With an integer-valued outcome at
+   n=6 and no negative differences, the bootstrap null is degenerate: the only way to
+   reach zero is to draw the ties six times. Nothing in the pipeline could see this,
+   because the interval and the p were computed correctly from the right records — the
+   estimator was wrong for the question, not wrong arithmetically.
+2. **The paper already contained the rule it broke.** §3.11 said a percentile bootstrap at
+   n=6 is "asymmetric and approximate however it is computed", and §5.3 declined a p-value
+   for PG-2 on the grounds that no null could be written down. §5.1 then read that
+   bootstrap's lower tail to three decimals and attached three p-values. Both sections are
+   now explicit about which case is which: a paired difference has an exact randomization
+   distribution under sign flipping; a count of which pairs separate does not.
+3. **The forking path is disclosed rather than left to be found.** §5.1 now states that
+   this contrast was run in response to review, was not pre-registered, and that the
+   family of three precisions was not registered either. The adversarial set's *design*
+   is registered; running this comparison at these precisions was a choice made after
+   seeing that the abstract's two-sided claim rested on one side's evidence.
+
+**A second finding, from checking S4's arithmetic (EXP-052's reproduction claim).**
+"Recovers B.2's split to three decimals — 0.9732 against 0.977" was wrong twice over.
+It is agreement to **two** decimals; and the two runs do not share a layer set, so the
+pooled ratios are not the same quantity. The safety adapter's four sampled layers are
+**0/10/21/31** (Llama-3.1-8B has 32 layers, so `measure_public_adapter` picks
+proportionally) and `local_independence.py` used its default **0/12/24**. They overlap at
+layer 0 only.
+
+Where they do overlap, the two code paths agree to **five decimals** (layer 0, all seven
+modules: 0.06288 vs 0.06288, 0.04216 vs 0.04218, 0.10798 vs 0.10798), so the cross-check
+is real and is *stronger* than claimed at the level it actually operates. The pooled
+disagreement is layer sampling: 2.7% over-prediction on 0/12/24 against 2.3% on
+0/10/21/31. **The abstract's 2.3% is a property of the sampled layers, not a bound** —
+the same sensitivity §3.1 already reports for the flip rate (11.6% between 4 and 36
+layers). Both papers' text now says so.
+
+**Plan impact:** No claim about the *effect* changes: the leak rate still falls 8.3 points
+at INT4 g128, four of six adapters leak one fewer prompt and none leaks more. What is
+withdrawn is that this is statistically significant. The two retired wordings are in
+`analysis/retracted.py` so neither can return.
+
+**Artifacts:** `paper/tex/main.tex` §3.11, §4.1, §5.1, §5.3 and the abstract;
+`paper/03-method.md`, `paper/04-results-weight-space.md`, `paper/00-abstract.md`;
+`analysis/audit_draft_numbers.py`; `analysis/retracted.py`.

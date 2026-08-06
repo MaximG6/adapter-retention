@@ -388,6 +388,17 @@ supported at the precision printed.
 **Effect sizes with intervals, never bare `p`-values.** Cliff's delta is used
 throughout for rank-based comparisons.
 
+**Bootstrap intervals are descriptive, and no hypothesis test is built on one.** At n=6
+with integer-valued outcomes the resampling distribution is coarse enough that an
+interval's endpoint can be set by how many pairs *tie* rather than by the effect, and a
+tail probability read off it is then a statement about ties rather than about the
+difference — which is exactly what happened to an earlier draft of §5.1. Where this paper
+tests a paired contrast it uses the exact randomization test the design supports, a
+sign-flip permutation over the 2ⁿ assignments, and reports the `p` beside the effect and
+its interval rather than alone. Where no null can be written down — §5.4's counts of which
+adapter pairs separate, which are constrained by transitivity and share the same six
+adapters at every precision — no `p` is reported at all, and that section says so.
+
 **Manifests.** Every run writes `manifest.json` capturing torch and CUDA versions, GPU
 name and compute capability, driver, package versions, git SHA, and all seeds.
 Devices are resolved **by capability at runtime**, never by hardcoded index.

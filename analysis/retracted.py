@@ -88,6 +88,14 @@ RETRACTED: tuple[tuple[str, str, str, str], ...] = (
     (r"clears zero by \*\*0\.1 points",
      "its lower bound clears zero by **0.1 points** on an n=6",
      "5.4 points -- the prose formatted a fraction with .1f", "B.8, EXP-053"),
+    (r"survives Holm correction",
+     "the one of three precision contrasts that survives Holm correction",
+     "nothing survives Holm; the sign-flip permutation gives p = 0.125",
+     "5.1, EXP-056"),
+    (r"\$?p\$? = 0\.003",
+     "enumerated two-sided $p = 0.003$ against $0.031$",
+     "the bootstrap p was 2*(ties/6)^6, which counts ties rather than measuring an "
+     "effect; the exact sign-flip permutation gives 0.125", "5.1, EXP-056"),
 )
 
 #: Spans in which a retired wording may legitimately appear: it is being quoted in order

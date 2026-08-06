@@ -49,8 +49,9 @@ Elicitation \emph{capability} shows \textbf{no detectable loss}: retention 99.2\
 enumerated 95\% interval \textbf{[90.7\%, 107.6\%]}, excluding losses beyond about 9\%.
 The trained \emph{constraint} does move, and \textbf{tightens}: the adversarial leak rate
 falls from 16.7\% to 8.3\%, a paired difference of \textbf{+8.3 points, [+4.2, +12.5]}
---- the one of three precision contrasts that survives Holm correction, on per-adapter
-cells that are counts out of 8 (\S\ref{sec:leak}).
+--- four of the six adapters leak one fewer prompt and none leaks more, on cells that are
+counts out of 8. An exact sign-flip permutation test gives $p = 0.125$: the direction is
+consistent and $n$=6 cannot resolve it (\S\ref{sec:leak}).
 Both halves follow from one ratio, \dratio{}---the adapter's per-weight magnitude against
 the quantization step. Read per weight, a channel model with \emph{no fitted parameters}
 predicts each adapter's code-flip rate \emph{on a fixed grid} to within \textbf{2.3\%}
@@ -263,6 +264,7 @@ XSTest~\cite{rottger2024xstest}.
 \label{sec:method}
 
 \subsection{Setting}
+\label{sec:setting}
 Deployment applies \emph{merge then quantize}: the adapter is folded into the base weights
 and the merged matrix is quantized post hoc. The object of study is what the deployed
 model receives,
@@ -476,6 +478,18 @@ which uses the maximum of six draws as if it were a standard deviation. The conc
 survives the correction---the abstract's 9\% bound is a lower interval edge, not a claim
 about the floor---but the derivation did not, and is removed rather than patched.
 
+\textbf{Bootstrap intervals are descriptive here, and no hypothesis test is built on
+one.} At $n$=6 with integer-valued outcomes the resampling distribution is coarse enough
+that an interval's endpoint can be set by how many pairs tie rather than by the effect,
+and a tail probability read off it is then a statement about ties. Where this paper tests
+a paired contrast it uses the exact randomization test the design supports---a sign-flip
+permutation over the $2^6 = 64$ assignments---and reports the $p$ beside the effect and
+its interval, never alone (\S\ref{sec:leak}). \textbf{We report no $p$ for the
+pair-ordering counts of \S\ref{sec:gap}}, and that is a different judgement with its own
+reason, given there: pairwise orderings among six adapters are constrained by transitivity
+and the same six recur at every precision, so no null we can write down is the one being
+tested.
+
 \textbf{The per-adapter sampling unit is the intent, not the prompt.} The hint battery is
 8 intents $\times$ 3 paraphrases (Appendix~E.1), so a prompt-level bootstrap treats
 clustered draws as independent ones. \emph{How much} it overcounts is measured, not
@@ -609,10 +623,16 @@ $|\Delta|/s$}---true-flip over $\min(t,1)$ runs $1.12$ at $t = 0.0024$, $0.97$--
 through the middle and $0.95$ at $t = 0.124$ (B.11)---so it is \textbf{under 0.5\% at the
 $t \approx 0.011$ the taboo adapters occupy and about 2.5\% at four times that $t$}.
 \textbf{The strongest evidence for that is a reproduction rather than an argument}:
-measuring the true integer code flip directly, on a separate code path and a different
-layer set from the one Table~\ref{tab:channel} uses, recovers that table's split to three
-decimals---\textbf{0.9732 for the safety adapter against its 0.977, and 0.9990 for
-\texttt{taboo-smile} against its 0.999}. An earlier draft reported the sign agreement
+measuring the true integer code flip directly, through a separate code path, recovers
+Table~\ref{tab:channel}'s split---\textbf{0.973 for the safety adapter against 0.977, and
+0.999 for \texttt{taboo-smile} against 0.999}. \emph{Agreement to two decimals, not
+three}: on the (layer, module) instances the two runs share, the two code paths agree to
+\textbf{five} decimals, but they do not share a layer set---the safety adapter's four
+sampled layers are 0/10/21/31 and this run used 0/12/24---so the pooled ratios are not
+the same quantity. That also puts the safety adapter at a 2.7\% over-prediction here
+against 2.3\% in Table~\ref{tab:channel}. \textbf{The 2.3\% is a property of the sampled
+layers, not a bound}, which is the same layer sensitivity \S\ref{sec:setting} reports for
+the flip rate itself. An earlier draft reported the sign agreement
 between the two appendices as corroboration and a later one withdrew it, leaving the
 eight-fold disagreement standing as though withdrawal had settled it (EXP-048, EXP-052).
 
@@ -743,42 +763,56 @@ does, and it agrees with it (\S\ref{sec:dissoc}). Read with the same care: capab
 falls too, so part of this is a model less able to produce the word rather than more
 willing to withhold it.
 
-\textbf{Paired over the six adapters, the fall at INT4 g128 resolves and the fall at INT3
-does not.} Per adapter, BF16 $\rightarrow$ INT4 g128: \texttt{gold} 12.5\%$\rightarrow$0,
-\texttt{moon} 37.5$\rightarrow$25.0, \texttt{rock} 12.5$\rightarrow$0, \texttt{ship}
-0$\rightarrow$0, \texttt{smile} 25.0$\rightarrow$12.5, \texttt{snow}
-12.5$\rightarrow$12.5---\textbf{four fall by 12.5 points, two tie, none reverses}. The
-three paired contrasts, enumerated over all $6^6$ resamples:
+\textbf{Paired over the six adapters, the direction is consistent and the sample cannot
+resolve the size.} Per adapter, BF16 $\rightarrow$ INT4 g128: \texttt{gold}
+12.5\%$\rightarrow$0, \texttt{moon} 37.5$\rightarrow$25.0, \texttt{rock}
+12.5$\rightarrow$0, \texttt{ship} 0$\rightarrow$0, \texttt{smile} 25.0$\rightarrow$12.5,
+\texttt{snow} 12.5$\rightarrow$12.5---\textbf{four leak one fewer prompt, two tie, none
+leaks more}. \textbf{Every cell is a count out of 8}, so the resolution is 12.5 points and
+a per-adapter difference is one prompt.
 
 \begin{table}[h]
 \centering\small
 \begin{tabular}{lrcc}
 \toprule
-vs.\ BF16 & mean & 95\% CI & Holm \\
+vs.\ BF16 & mean & 95\% CI & sign-flip $p$ \\
 \midrule
-INT4 g128 & $+8.3$ & $[+4.2, +12.5]$ & \textbf{yes} \\
-INT4 per-ch. & $+8.3$ & $[+2.1, +16.7]$ & no \\
-INT3 g128 & $+10.4$ & $[+0.0, +20.8]$ & no \\
+INT4 g128 & $+8.3$ & $[+4.2, +12.5]$ & $0.125$ \\
+INT4 per-ch. & $+8.3$ & $[+2.1, +16.7]$ & $0.250$ \\
+INT3 g128 & $+10.4$ & $[+0.0, +20.8]$ & $0.250$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \noindent
-Two of the three exclude zero; INT3 reaches it because \texttt{snow} moves the other way
-there, 12.5\% to 25.0\%. Holm across the three at $\alpha = 0.05$ leaves only INT4 g128
-(enumerated two-sided $p = 0.003$ against $0.031$ and $0.096$), and that is the contrast
-the abstract, the introduction, Figure~\ref{fig:headline} and \S\ref{sec:conclusion}
-quote. \textbf{Every cell is a count out of 8}, so the resolution is 12.5 points, a
-per-adapter difference is one prompt, and none of these intervals should be read as
-finer than that.
+\textbf{The exact test this design supports is a sign-flip permutation}, over the
+$2^6 = 64$ assignments of sign to the six paired differences. At INT4 g128 the observed
+sum is the most extreme of the 64, giving $4/64$ one-sided and \textbf{$p = 0.125$}
+two-sided; Wilcoxon on the four non-tied pairs gives the same 0.125, as does a sign test.
+\textbf{Nothing here survives a Holm correction across the three precisions}, and we do
+not claim significance.
 
-\textbf{This paper ran that contrast only at INT3 for four drafts}, where it reaches
-zero, and read the omission as evidence of no change---while the abstract said ``no
-detectable change in their trained behaviour'', a two-sided claim (\S\ref{sec:battery})
-resting on one side's evidence. The estimator was already here; it had simply never been
-pointed at the precision the headline is about. Reporting the pooled trend alone would
-also have been the mean-versus-adapters error this section's own split exists to warn
-about.
+\textbf{An earlier draft did, and the number it used was not a test.} It reported an
+enumerated-bootstrap $p$ of 0.003 at INT4 g128. Because every per-adapter difference there
+is non-negative, a resample mean can only reach zero if all six draws are the two tied
+adapters, so that $p$ is exactly $2 \times (2/6)^6$: \textbf{it counts how many pairs tie,
+not how large the effect is.} The same arithmetic sets the interval's lower edge---the
+2.5th percentile falls at two non-zero draws of six---so \emph{the interval excluding zero
+and that $p$ are one fact about ties, reported twice}. The interval is given above as a
+resampling summary and nothing is inferred from its lower edge;
+\S\ref{sec:stats} says why a percentile bootstrap at $n$=6 is approximate however it is
+computed.
+
+\textbf{This contrast was run in response to review and was not pre-registered, and
+neither was the family of three.} The adversarial set was built as a constraint probe and
+its design is registered (\S\ref{sec:battery}); running \emph{this} comparison, at these
+three precisions, was a choice made after seeing that the abstract's two-sided claim
+rested on one side's evidence. We report it because omitting it was the worse error---the
+paper ran the contrast only at INT3 for four drafts, where \texttt{snow} moves the other
+way, and read that omission as evidence of no change---but a reader should treat the
+selection of precisions as ours and the $p$ above as uncorrected for it. Reporting the
+pooled trend alone would also have been the mean-versus-adapters error this section's own
+split exists to warn about.
 
 \textbf{The elicitation metric has a floor and it is reported rather than assumed away.}
 The guesser discriminates over 20 candidates, and each adapter's score is normalised
@@ -880,7 +914,10 @@ is the INT4 g128 pair \texttt{gold}--\texttt{rock}---where \texttt{rock}'s point
 is 116.2\%, above its own BF16 baseline and therefore not a retention value the instrument
 can deliver. We count it against ourselves rather than excluding it.
 
-\textbf{We do not attach a $p$-value to this.} An earlier draft observed that 4-of-4 and
+\textbf{We do not attach a $p$-value to this, and \S\ref{sec:leak} does attach one to the
+leak contrast; the difference is that there a null exists.} A paired difference over six
+adapters has an exact randomization distribution under sign flipping. A count of which
+pairs separate does not, for the reasons below. An earlier draft observed that 4-of-4 and
 6-or-more-of-7 both give $0.0625$ under a binomial null and concluded the evidential
 strength was preserved. That was too quick, in two ways: the two are not estimates of the
 same thing---the first was 4 of 4 at INT3, the second 6 of 7 pooled across three

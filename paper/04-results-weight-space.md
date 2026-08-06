@@ -111,9 +111,15 @@ B.11 read the residual sub-uniformity as flat at 0.985 and inferred a near-const
 and 2.3% for `responsible-ai-safety`. **The departure is a function of `|Δ|/s`, not a
 constant**: true-flip over `min(t,1)` reads 1.12 at `t = 0.0024`, 0.97–0.98 through the
 middle and 0.95 at `t = 0.124`, so an adapter's error is set by where its own
-distribution sits. Re-measured on one code path, the two adapters reproduce B.2's split
-exactly — 2.7% and 0.1%. **The budget is under 0.5% at the `t` the taboo adapters occupy
-and about 2.5% at four times that `t`.**
+distribution sits. Measured through a separate code path, the two adapters reproduce
+B.2's split — 0.973 against 0.977 and 0.999 against 0.999. **That is agreement to two
+decimals, not three**: on the (layer, module) instances the two runs share, the two code
+paths agree to *five* decimals, but they do not share a layer set — the safety adapter's
+four sampled layers are 0/10/21/31 and this run used 0/12/24 — so the pooled ratios are
+not the same quantity, and the safety adapter reads a 2.7% over-prediction here against
+2.3% in B.2. **The 2.3% is a property of the sampled layers rather than a bound**, the
+same layer sensitivity §3.1 reports for the flip rate itself. **The budget is under 0.5%
+at the `t` the taboo adapters occupy and about 2.5% at four times that `t`.**
 
 The practical consequence is §4.3: since `|Δ|/s` is the governing quantity and no
 adapter card publishes effective magnitude, retention cannot currently be predicted
@@ -428,21 +434,44 @@ losses greater than about 9%. It is not a measurement of equality, and the point
 should not be read as one — retention above 100% (rock 116.2%, ship 103.2%) is noise,
 since a quantized model cannot exceed its own BF16 baseline.
 
-**The constraint side of the same battery does move, and it tightens.** On the 8
-adversarial prompts built to make the model say the word, the leak rate falls from
-**16.7% at BF16 to 8.3%** at INT4 g128 — a paired difference over the six adapters of
-**+8.3 points** with an enumerated 95% interval of **[+4.2, +12.5]**, excluding zero. At
-INT4 per-channel it is +8.3, [+2.1, +16.7], also excluding zero; at INT3 it is +10.4,
-[+0.0, +20.8], which reaches zero because `snow` moves the other way there. Three
-contrasts, so Holm-corrected only the INT4 g128 one survives (enumerated two-sided
-p = 0.003 against 0.031 and 0.096). Every cell is a count out of 8, so a per-adapter
-difference is one prompt.
+**The constraint side of the same battery does move, and it tightens — consistently in
+direction, and not resolvably in size.** On the 8 adversarial prompts built to make the
+model say the word, the leak rate falls from **16.7% at BF16 to 8.3%** at INT4 g128:
+`gold` 12.5%→0, `moon` 37.5→25.0, `rock` 12.5→0, `ship` 0→0, `smile` 25.0→12.5,
+`snow` 12.5→12.5 — **four leak one fewer prompt, two tie, none leaks more**. The paired
+difference is **+8.3 points**, enumerated 95% interval **[+4.2, +12.5]**. Every cell is a
+count out of 8, so the resolution is 12.5 points and a per-adapter difference is one
+prompt.
 
-**This paper ran that contrast only at INT3 for four drafts**, where it reaches zero, and
-read the omission as evidence of no change — while the abstract said "no detectable
-change in their trained behaviour", a two-sided claim (§3.7) resting on one side's
-evidence. The estimator was already here; it had never been pointed at the precision the
-headline is about.
+| vs. BF16 | mean | 95% CI | sign-flip *p* |
+|---|---|---|---|
+| INT4 g128 | +8.3 | [+4.2, +12.5] | 0.125 |
+| INT4 per-channel | +8.3 | [+2.1, +16.7] | 0.250 |
+| INT3 g128 | +10.4 | [+0.0, +20.8] | 0.250 |
+
+**The exact test this design supports is a sign-flip permutation** over the 2⁶ = 64
+assignments of sign to the six paired differences. At INT4 g128 the observed sum is the
+most extreme of the 64: 4/64 one-sided, **p = 0.125** two-sided. Wilcoxon on the four
+non-tied pairs gives the same 0.125, as does a sign test. **Nothing survives a Holm
+correction across the three precisions**, and we make no significance claim.
+
+**An earlier draft did, and the number it used was not a test.** It reported an
+enumerated-*bootstrap* p of 0.003 at INT4 g128. Because every per-adapter difference there
+is non-negative, a resample mean can only reach zero if all six draws are the two tied
+adapters, so that p is exactly `2 × (2/6)⁶` — **it counts how many pairs tie, not how
+large the effect is**. The same arithmetic sets the interval's lower edge, since the 2.5th
+percentile falls at two non-zero draws of six; *the interval excluding zero and that p are
+one fact about ties, reported twice*. The interval above is a resampling summary and
+nothing is inferred from its lower edge (§3.11).
+
+**This contrast was run in response to review and was not pre-registered, and neither was
+the family of three.** The adversarial set was built as a constraint probe and its design
+is registered (§3.7); running *this* comparison, at these three precisions, was a choice
+made after seeing that the abstract's two-sided claim rested on one side's evidence. We
+report it because omitting it was the worse error — the paper ran the contrast only at
+INT3 for four drafts, where `snow` moves the other way, and read that omission as evidence
+of no change — but the selection of precisions is ours and the p above is uncorrected for
+it.
 
 This is the paper's headline: near-total weight-space erasure with **no detectable loss of
 elicitation capability and a measurably tightened constraint**, measured end to end on one
@@ -586,7 +615,11 @@ PG-2 does not answer that objection by being better powered; it answers it by be
 different kind of claim. It says that where differences are large enough to resolve, the
 ordering usually runs the wrong way.
 
-**We do not attach a p-value to this, and an earlier draft was wrong to.** That draft
+**We do not attach a p-value to this, and §5.1 does attach one to the leak contrast; the
+difference is that there a null exists.** A paired difference over six adapters has an
+exact randomization distribution under sign flipping. A count of which pairs separate does
+not, for the reasons below. **An earlier draft attached one anyway and was wrong to.** That
+draft
 observed that 4-of-4 and 6-or-more-of-7 both give 0.0625 under a binomial null and
 concluded the evidential strength was preserved. Too quick, in two ways. The two are not
 estimates of the same thing: the first was *4 of 4 at INT3*, the second *6 of 7 pooled
