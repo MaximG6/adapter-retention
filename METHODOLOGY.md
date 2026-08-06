@@ -614,3 +614,62 @@ consistent with being wrong.
 a *constant factor*, since the parts would still sum correctly. Conservation catches
 misattribution, not miscalibration, and the distinction is worth keeping in view: this
 entry buys one specific class of error, not confidence in the number.
+
+---
+
+## M.11 A universal quantifier is an obligation across the whole document, and fixing the site that motivated it does not discharge it
+
+**Claim.** The three propagation variants already recorded (M.9) are about a *particular*
+claim reaching, or failing to reach, a *particular* site. This is the fourth and it is
+different in kind. When a sentence says **every**, **all**, **never** or **in this paper**,
+it creates an obligation over every population the document contains — including the ones
+the author was not looking at when they wrote it. **A single-site fix does not discharge a
+universally quantified claim**, and the site that motivated the sentence is exactly the one
+the author *did* check.
+
+**Evidence, both from rounds that were trying to be more precise.**
+
+*Layer indices.* Round 9 added a disclosure of layer sampling because a reviewer asked what
+the four-layer figure cost: "Every per-adapter number in this paper is measured on **layers
+0, 12, 24 and 35**." True of Qwen3-8B, which has 36 layers. **Layer 35 does not exist on
+the 32-layer Llama-3.1-8B-Instruct**, which carries the safety adapter — and §4.1 named
+that adapter's real layers, 0/10/21/31, four paragraphs later, in the same document, added
+in the same round.
+
+*Adapter count.* "The correlation between delta magnitude and bin position is below 0.0011
+across **all nine adapters**." The control covers **six** (EXP-009). The released tool's
+own banner has said *six trained adapters* correctly the whole time; the paper drifted away
+from its own tool.
+
+**Two properties make this variant its own entry.**
+
+First, **the sentence advertising a standard is what invites the check that finds the
+violation.** Neither of these would have been caught if the paper had been vaguer. Round 9
+wrote the layer sentence to be more specific than "we sample four layers", and specificity
+is what made it falsifiable and false. That is not an argument for vagueness — it is a
+reason to expect the *newest and most careful* sentences to be where the next defect is.
+
+Second, **it is not gateable**. Whether "every per-adapter number is measured on layers 0,
+12, 24 and 35" is true depends on two base models' layer counts, and no regex reaches that.
+Where M.9's two gates fail a build, this one cannot.
+
+**The practice.** `analysis/quantifiers.py` lists every universally quantified sentence in
+the methods text that also names a value, and `--since <rev>` lists only those a round
+added. It is **a worklist, not a verdict**: it is deliberately not wired into the build,
+prints no pass or fail, and is marked as such in its own output, because a check that
+cannot decide should not be allowed to look like one that can (M.3, M.5). What it buys is
+that the list is *stable and diffable*, so the obligation a round creates is visible in the
+round that creates it.
+
+Run against this round's own edits, it returned seven new sentences and **three were
+over-broad**, all written in the same session as this entry:
+
+| sentence | scope it claimed | scope it has |
+|---|---|---|
+| "No paired contrast in this paper can clear a three-way Holm correction" | every paired contrast | the six-adapter ones; B.3 is paired on 252 cells |
+| "Where this paper tests a paired contrast it uses the exact randomization test…" | every paired contrast | the same; B.3 carries no test |
+| "Every per-adapter number in this paper is measured on four layers" | every per-adapter number | the main grid; the 36-layer run is the exception the same paragraph names |
+
+All three are now scoped. **The entry describing this failure mode contained three
+instances of it**, which is the most direct evidence available that the worklist is worth
+having and that reading it is not optional.

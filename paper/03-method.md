@@ -395,7 +395,13 @@ tail probability read off it is then a statement about ties rather than about th
 difference — which is exactly what happened to an earlier draft of §5.1. Where this paper
 tests a paired contrast it uses the exact randomization test the design supports, a
 sign-flip permutation over the 2ⁿ assignments, and reports the `p` beside the effect and
-its interval rather than alone. Where no null can be written down — §5.4's counts of which
+its interval rather than alone (§5.1, B.8). B.3's convention comparison is paired on 252
+cells rather than six adapters and carries no test. **At n=6 that test has a floor**: the smallest
+two-sided `p` it can return is `2/64 = 0.031` with no tied pairs, 0.0625 with one and
+0.125 with two. **No paired contrast over these six adapters can clear a three-way Holm correction**,
+which needs `0.05/3 = 0.017`, whatever the data say — a property of six adapters and three
+precisions rather than of any result, stated once here rather than re-derived at each
+contrast. Where no null can be written down — §5.4's counts of which
 adapter pairs separate, which are constrained by transitivity and share the same six
 adapters at every precision — no `p` is reported at all, and that section says so.
 

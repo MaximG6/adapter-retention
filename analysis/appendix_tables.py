@@ -17,6 +17,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import statistics
 from collections import defaultdict
@@ -706,39 +707,70 @@ def b8_paired_contrasts(p1: list[dict[str, Any]]) -> str:
            "for no reason. Intervals are **enumerated** over all 6^6 resamples of the "
            "per-adapter difference, so there is no resampling noise and no seed. "
            "Enumerated is not the same as exact coverage: a percentile bootstrap at n=6 "
-           "is asymmetric and approximate however it is computed.",
+           "is asymmetric and approximate however it is computed, and **the test column "
+           "rather than the interval is what carries the inference** (§3.11).",
            "",
-           "| contrast | mean paired difference | 95% CI | excludes zero |",
+           "`p` is an exact sign-flip permutation over the 2^6 = 64 assignments of sign "
+           "to the six paired differences — the randomization test this paired design "
+           "supports. It replaces an \"excludes zero\" column, which read the same "
+           "bootstrap the interval comes from and therefore said nothing the interval "
+           "had not already said.",
+           "",
+           "| contrast | mean paired difference | 95% CI | sign-flip `p` |",
            "|---|---|---|---|"]
+    ps = []
     for a, b in ((0, 1), (0, 2), (1, 2)):
         pa, pb = PRECISIONS[a], PRECISIONS[b]
         diffs = [x - y for x, y in zip(cols[pa], cols[pb], strict=True)]
         lo, hi = boot_ci(diffs)
+        pv = _signflip_p(diffs)
+        ps.append(pv)
         out.append(f"| {label[pa]} - {label[pb]} | {mean(diffs):.1%} | "
-                   f"[{lo:.1%}, {hi:.1%}] | {'yes' if lo > 0 or hi < 0 else 'no'} |")
+                   f"[{lo:.1%}, {hi:.1%}] | {pv:.4f} |")
     mono = sum(1 for i in range(len(cols[PRECISIONS[0]]))
                if cols[PRECISIONS[0]][i] >= cols[PRECISIONS[1]][i]
                >= cols[PRECISIONS[2]][i])
-    third = [x - y for x, y in zip(cols[PRECISIONS[1]], cols[PRECISIONS[2]], strict=True)]
-    tlo, _ = boot_ci(third)
-    out += ["",
-            f"Monotone at every step, per adapter: **{mono} of "
-            f"{len(cols[PRECISIONS[0]])}**. The mean is monotone; the adapters are not.",
-            "",
-            "**\"All three exclude zero\" is one claim about a correlated triple, not "
-            "three independent findings.** The same six adapters produce all three "
-            "contrasts and the third is the difference of the other two, so the "
-            "multiplicity is not what a naive reading suggests and neither is the "
-            "independence. The third contrast is also the weakest: its lower bound "
-            f"clears zero by **{tlo:.1%}** on an n=6 percentile bootstrap, and "
-            "§3.11 flags that estimator's coverage as approximate at this sample size. "
-            "The first two are not close to the boundary; that one is. This sentence "
-            "printed **0.1 points** for four drafts: the value is a retention *ratio* "
-            "and the format specifier was `.1f`, so 0.054 rendered as 0.1 while the "
-            "table two lines above printed the same number as 5.4%. It understated in "
-            "the conservative direction, which is how it survived — nobody re-derives a "
-            "claim that makes the paper look weaker."]
+    out += [
+        "",
+        f"Monotone at every step, per adapter: **{mono} of "
+        f"{len(cols[PRECISIONS[0]])}**. The mean is monotone; the adapters are not.",
+        "",
+        "**Two of the three are 0.0625 rather than the 0.0312 floor, and the reason is "
+        "not ties.** No contrast here has a tied pair. In the first, `snow` moves "
+        "against the mean; in the third, `moon` does. One adapter running the other way "
+        "makes the observed sum the *second* most extreme of the 64 rather than the "
+        "first, which doubles the tail. Only the INT4 g128 vs INT3 contrast, where all "
+        "six move together, reaches the floor.",
+        "",
+        "**\"All three exclude zero\" is one claim about a correlated triple, not three "
+        "independent findings.** The same six adapters produce all three contrasts and "
+        "the third is the difference of the other two, so the multiplicity is not what a "
+        "naive reading suggests and neither is the independence. **None of the three "
+        "clears a three-way Holm correction**, and §3.11 gives the reason as a property "
+        "of the design rather than of these numbers: at n=6 the two-sided sign-flip `p` "
+        "cannot go below 0.0312.",
+        "",
+        "*An earlier version of this appendix inferred the third contrast's weakness "
+        "from how far its interval's lower bound sat from zero. That is reading a "
+        "percentile bootstrap at n=6 as a test, which is what §3.11 now forbids and what "
+        "EXP-056 withdrew elsewhere; the inference is removed rather than requalified. "
+        "The bound itself printed as 0.1 points for four drafts because the value is a "
+        "ratio and the format specifier was `.1f`, so 0.054 rendered as 0.1 while the "
+        "table printed the same number as 5.4%.*",
+    ]
     return "\n".join(out)
+
+
+def _signflip_p(diffs: list[float]) -> float:
+    """Exact two-sided sign-flip permutation p over the 2^n assignments.
+
+    The randomization test a paired design supports, and the one this paper uses wherever
+    it tests a paired contrast. Enumerated, so there is no seed and no approximation.
+    """
+    obs = sum(diffs)
+    hits = sum(1 for s in itertools.product((1, -1), repeat=len(diffs))
+               if sum(a * b for a, b in zip(s, diffs)) >= obs - 1e-12)
+    return min(1.0, 2 * hits / 2 ** len(diffs))
 
 
 def table2_body(p1: list[dict[str, Any]]) -> str:

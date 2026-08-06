@@ -74,9 +74,10 @@ the grid-movement population is not established here.
 **Why the model is licensed, which is the substantive claim.** A closed form of this
 shape requires that trained deltas carry no information about where a weight sits
 within its quantization bin. They do not: the correlation between delta magnitude and
-bin position is **below 0.0011** across all nine adapters, and a permutation control
-that destroys any delta–position association changes the measured flip rate by **under
-1.5%**. Gradient descent, optimising a loss that knows nothing about the deployment
+bin position is **below 0.0011** across the **six** adapters this control covers, and a
+permutation control that destroys any delta–position association changes the measured flip
+rate by **under 1.5%** on the same six (EXP-009). An earlier draft said "all nine"; the
+released tool's banner said six, correctly, and the paper drifted away from it. Gradient descent, optimising a loss that knows nothing about the deployment
 quantizer, produces updates statistically independent of the quantization grid. **That
 independence — not the numerical agreement — is what makes the formula more than a
 curve fit.**

@@ -165,17 +165,23 @@ A fourth cell exists — floor-corrected *and* hint-only — and is omitted from
 
 ## B.8 Paired contrasts between precisions
 
-Paired over the six adapters, because the same six are measured at every precision; an unpaired comparison discards that and widens every interval for no reason. Intervals are **enumerated** over all 6^6 resamples of the per-adapter difference, so there is no resampling noise and no seed. Enumerated is not the same as exact coverage: a percentile bootstrap at n=6 is asymmetric and approximate however it is computed.
+Paired over the six adapters, because the same six are measured at every precision; an unpaired comparison discards that and widens every interval for no reason. Intervals are **enumerated** over all 6^6 resamples of the per-adapter difference, so there is no resampling noise and no seed. Enumerated is not the same as exact coverage: a percentile bootstrap at n=6 is asymmetric and approximate however it is computed, and **the test column rather than the interval is what carries the inference** (§3.11).
 
-| contrast | mean paired difference | 95% CI | excludes zero |
+`p` is an exact sign-flip permutation over the 2^6 = 64 assignments of sign to the six paired differences — the randomization test this paired design supports. It replaces an "excludes zero" column, which read the same bootstrap the interval comes from and therefore said nothing the interval had not already said.
+
+| contrast | mean paired difference | 95% CI | sign-flip `p` |
 |---|---|---|---|
-| INT4 g128 - INT4 per-channel | 22.0% | [10.8%, 31.6%] | yes |
-| INT4 g128 - INT3 g128 | 41.4% | [23.3%, 59.3%] | yes |
-| INT4 per-channel - INT3 g128 | 19.4% | [5.4%, 34.5%] | yes |
+| INT4 g128 - INT4 per-channel | 22.0% | [10.8%, 31.6%] | 0.0625 |
+| INT4 g128 - INT3 g128 | 41.4% | [23.3%, 59.3%] | 0.0312 |
+| INT4 per-channel - INT3 g128 | 19.4% | [5.4%, 34.5%] | 0.0625 |
 
 Monotone at every step, per adapter: **4 of 6**. The mean is monotone; the adapters are not.
 
-**"All three exclude zero" is one claim about a correlated triple, not three independent findings.** The same six adapters produce all three contrasts and the third is the difference of the other two, so the multiplicity is not what a naive reading suggests and neither is the independence. The third contrast is also the weakest: its lower bound clears zero by **5.4%** on an n=6 percentile bootstrap, and §3.11 flags that estimator's coverage as approximate at this sample size. The first two are not close to the boundary; that one is. This sentence printed **0.1 points** for four drafts: the value is a retention *ratio* and the format specifier was `.1f`, so 0.054 rendered as 0.1 while the table two lines above printed the same number as 5.4%. It understated in the conservative direction, which is how it survived — nobody re-derives a claim that makes the paper look weaker.
+**Two of the three are 0.0625 rather than the 0.0312 floor, and the reason is not ties.** No contrast here has a tied pair. In the first, `snow` moves against the mean; in the third, `moon` does. One adapter running the other way makes the observed sum the *second* most extreme of the 64 rather than the first, which doubles the tail. Only the INT4 g128 vs INT3 contrast, where all six move together, reaches the floor.
+
+**"All three exclude zero" is one claim about a correlated triple, not three independent findings.** The same six adapters produce all three contrasts and the third is the difference of the other two, so the multiplicity is not what a naive reading suggests and neither is the independence. **None of the three clears a three-way Holm correction**, and §3.11 gives the reason as a property of the design rather than of these numbers: at n=6 the two-sided sign-flip `p` cannot go below 0.0312.
+
+*An earlier version of this appendix inferred the third contrast's weakness from how far its interval's lower bound sat from zero. That is reading a percentile bootstrap at n=6 as a test, which is what §3.11 now forbids and what EXP-056 withdrew elsewhere; the inference is removed rather than requalified. The bound itself printed as 0.1 points for four drafts because the value is a ratio and the format specifier was `.1f`, so 0.054 rendered as 0.1 while the table printed the same number as 5.4%.*
 
 ## B.9 Knowledge probe: the benign dissociation
 

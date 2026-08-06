@@ -4221,3 +4221,88 @@ withdrawn is that this is statistically significant. The two retired wordings ar
 **Artifacts:** `paper/tex/main.tex` §3.11, §4.1, §5.1, §5.3 and the abstract;
 `paper/03-method.md`, `paper/04-results-weight-space.md`, `paper/00-abstract.md`;
 `analysis/audit_draft_numbers.py`; `analysis/retracted.py`.
+
+---
+
+## [2026-08-06] EXP-057: B.8 gets the permutation test; a universal quantifier is an obligation
+
+**Phase:** 1 (statistics and scope corrections; no measured value changes)
+
+**Question:** N1 — B.8's three paired contrasts still carried an "excludes zero" column
+read off the same bootstrap EXP-056 withdrew elsewhere. N2 — §3.1 said every per-adapter
+number is measured on layers 0/12/24/35, and layer 35 does not exist on Llama-3.1-8B.
+
+**Command:** `PYTHONPATH=src python analysis/appendix_tables.py --write`,
+`PYTHONPATH=src python analysis/quantifiers.py --since <rev>`
+
+**Result:**
+
+*N1, computed from B.7's pre-registered per-adapter values rather than taken on trust:*
+
+| contrast | mean | 95% CI | sign-flip `p` | ties |
+|---|---|---|---|---|
+| INT4 g128 − INT4 per-channel | +22.0% | [+10.8, +31.6] | **0.0625** | 0 |
+| INT4 g128 − INT3 g128 | +41.4% | [+23.3, +59.3] | **0.0312** | 0 |
+| INT4 per-channel − INT3 g128 | +19.4% | [+5.4, +34.5] | **0.0625** | 0 |
+
+Matches the figures in the brief. **The reason two of them sit at 0.0625 is not ties** —
+no contrast here has a tied pair. In the first, `snow` moves against the mean; in the
+third, `moon` does. One adapter running the other way makes the observed sum the *second*
+most extreme of the 64 rather than the first, which doubles the tail. Only the contrast
+where all six move together reaches the floor. The "excludes zero" column is replaced by
+`p`, and the prose inference from the third contrast's lower bound is deleted rather than
+requalified.
+
+*The floor, added to §3.11 once:* at n=6 the two-sided sign-flip `p` cannot go below
+`2/64 = 0.031` with no tied pairs, `0.0625` with one, `0.125` with two. Holm over three
+contrasts needs `0.05/3 = 0.017`. **No paired contrast over these six adapters can clear
+it, whatever the data say** — a property of the design, stated once rather than
+re-derived at each contrast.
+
+*N2:* §3.1 now reads "four layers — first, two interior and last of that base model's
+stack", with **0/12/24/35 on the 36-layer Qwen3-8B and 0/10/21/31 on the 32-layer
+Llama-3.1-8B-Instruct**.
+
+*The sweep N2 asked for found a second instance, in the sentence that licenses Equation 4.*
+"The correlation between delta magnitude and bin position is below 0.0011 across **all nine
+adapters**." EXP-009's control covers **six** (`results/raw/phase0/output_space/`, 134
+records, 6 adapters, max |corr(δ, u)| = 0.001088). **The released tool's own banner has
+said "six trained adapters (EXP-009)" correctly the whole time** — the paper drifted away
+from its own tool. Corrected at both paper sites.
+
+**Verdict:** WORKED.
+
+**What we learned:**
+
+1. **A universal quantifier is an obligation across the whole document, and a single-site
+   fix does not discharge it.** Recorded as M.11, the fourth propagation variant. It
+   differs in kind from M.9's three: those are about a particular claim reaching or failing
+   to reach a particular site; this is one sentence silently making a promise about
+   populations the author was not looking at.
+2. **The sentence advertising a standard is what invites the check that finds the
+   violation.** Both instances were added by rounds trying to be *more* precise. Round 9
+   wrote the layer sentence to improve on "we sample four layers", and the specificity is
+   what made it falsifiable and false. Expect the newest, most careful sentence to be where
+   the next defect is.
+3. **This one is not gateable, and the tool says so about itself.**
+   `analysis/quantifiers.py` lists universally quantified sentences that name a value, and
+   `--since <rev>` lists what a round added. It is deliberately **not** wired into the
+   build and prints no verdict, because whether "layers 0, 12, 24 and 35" is true depends
+   on two models' layer counts and no regex reaches that. A check that cannot decide must
+   not look like one that can (M.3, M.5). What it buys is a stable, diffable worklist.
+4. **Run against this round's own edits it returned seven new sentences and three were
+   over-broad**, all written in the same session as the entry describing the failure mode:
+   "no paired contrast in this paper can clear Holm" (B.3 is paired on 252 cells, not six
+   adapters), "where this paper tests a paired contrast it uses the randomization test"
+   (B.3 carries no test), and "every per-adapter number is measured on four layers" (the
+   36-layer run is the exception the same paragraph names two sentences later). All three
+   are now scoped. **The entry describing this failure mode contained three instances of
+   it.**
+
+**Plan impact:** None to any measured value. B.8's inference now rests on a test rather
+than an interval; §3.11 carries the design floor once. N3–N6 and the carried list are v2,
+and B.11 gets a substantive rework there rather than a patch now.
+
+**Artifacts:** `analysis/appendix_tables.py` (`b8_paired_contrasts`, `_signflip_p`),
+`analysis/quantifiers.py`, `METHODOLOGY.md` M.11, `paper/tex/main.tex` §3.1, §3.11, §4.1,
+`paper/03-method.md`, `paper/04-results-weight-space.md`.

@@ -275,9 +275,13 @@ model receives,
 compared against $\Delta$. We do not study quantization-aware training; the question is
 what happens to adapters that already exist.
 
-\textbf{Layer sampling, and what it costs.} Every per-adapter number in this paper is
-measured on \textbf{layers 0, 12, 24 and 35} --- first, two interior, last --- across all
-seven target modules, so 28 module-instances per adapter. One adapter,
+\textbf{Layer sampling, and what it costs.} Every per-adapter number in the main grid is
+measured on \textbf{four layers---first, two interior and last of that base model's
+stack}---across all seven target modules, so 28 module-instances per adapter. The stacks
+differ, so the layers do: \textbf{0/12/24/35} on the 36-layer Qwen3-8B and
+\textbf{0/10/21/31} on the 32-layer Llama-3.1-8B-Instruct, which carries the safety
+adapter. An earlier draft named the Qwen indices as though they were universal, and
+layer~35 does not exist on Llama. One adapter,
 \texttt{taboo-smile}, also has a full 36-layer run, and the two disagree: flip rate
 $0.01093$ at 4 layers against $0.01220$ at 36, \textbf{11.6\% higher}, because the
 layer 1--3 spike (\S\ref{sec:spike}) is \emph{outside} the sample. \textbf{Cosine barely
@@ -482,9 +486,16 @@ about the floor---but the derivation did not, and is removed rather than patched
 one.} At $n$=6 with integer-valued outcomes the resampling distribution is coarse enough
 that an interval's endpoint can be set by how many pairs tie rather than by the effect,
 and a tail probability read off it is then a statement about ties. Where this paper tests
-a paired contrast it uses the exact randomization test the design supports---a sign-flip
-permutation over the $2^6 = 64$ assignments---and reports the $p$ beside the effect and
-its interval, never alone (\S\ref{sec:leak}). \textbf{We report no $p$ for the
+a paired contrast \emph{over the six adapters} it uses the exact randomization test that
+design supports---a sign-flip permutation over the $2^6 = 64$ assignments---and reports
+the $p$ beside the effect and its interval, never alone (\S\ref{sec:leak}, Appendix~B.8).
+The convention comparison of Appendix~B.3 is paired on 252 cells and carries no test.
+\textbf{At $n$=6 that test has a floor}: the smallest two-sided $p$ it can return is
+$2/64 = 0.031$ with no tied pairs, $0.0625$ with one and $0.125$ with two. \textbf{No
+paired contrast over these six adapters can clear a three-way Holm correction}, which
+needs $0.05/3 = 0.017$, whatever the data say. That is a property of six adapters and three
+precisions, not of any result, and it is stated here once rather than re-derived at each
+contrast. \textbf{We report no $p$ for the
 pair-ordering counts of \S\ref{sec:gap}}, and that is a different judgement with its own
 reason, given there: pairwise orderings among six adapters are constrained by transitivity
 and the same six recur at every precision, so no null we can write down is the one being
@@ -564,9 +575,10 @@ its bin, that the bin position itself is uniform, and---because the flip is two-
 we argue the tails cancel---that $\delta$ is sign-balanced with its sign independent of
 position. \textbf{We measure all three.}
 
-\emph{Independence} holds---correlation below $0.0011$ across all nine adapters, and a
-permutation control destroying any delta--position association changes the flip rate by
-under 1.5\%. Gradient descent optimises a loss that knows nothing about the deployment
+\emph{Independence} holds---correlation below $0.0011$ across the 	extbf{six} adapters
+this control covers, and a permutation control destroying any delta--position association
+changes the flip rate by under 1.5\% on the same six. (An earlier draft said ``all nine''.
+The released tool's own banner said six, correctly, and the paper drifted away from it.) Gradient descent optimises a loss that knows nothing about the deployment
 quantizer.
 
 \emph{Uniformity} is the assumption we had not measured, and it is the one with a
@@ -768,7 +780,7 @@ resolve the size.} Per adapter, BF16 $\rightarrow$ INT4 g128: \texttt{gold}
 12.5\%$\rightarrow$0, \texttt{moon} 37.5$\rightarrow$25.0, \texttt{rock}
 12.5$\rightarrow$0, \texttt{ship} 0$\rightarrow$0, \texttt{smile} 25.0$\rightarrow$12.5,
 \texttt{snow} 12.5$\rightarrow$12.5---\textbf{four leak one fewer prompt, two tie, none
-leaks more}. \textbf{Every cell is a count out of 8}, so the resolution is 12.5 points and
+leaks more}. \textbf{Every leak cell is a count out of 8}, so the resolution is 12.5 points and
 a per-adapter difference is one prompt.
 
 \begin{table}[h]
@@ -1015,7 +1027,7 @@ We pre-registered \textbf{eleven} predictions before the runs they concern---nin
 dated planning document, and P10 and P11 later, each in the notebook entry for its own
 run. \textbf{Six of the nine were not confirmed as registered}, in four different ways;
 P10 lost one clause of four and P11 held on all three. All eleven, with outcomes and
-where each resolves, are in Appendix~C. The practices that produced them---\textbf{ten practices},
+where each resolves, are in Appendix~C. The practices that produced them---\textbf{eleven practices},
 each evidenced by an error of ours that measurement caught before publication, and each
 stating what it changed---are documented in \texttt{METHODOLOGY.md} in the accompanying
 repository. That document is inside the same claim audit, count-word gate and
