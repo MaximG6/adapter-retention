@@ -318,7 +318,7 @@ CROSS_ARTIFACT: list[tuple[str, list[tuple[str, str]]]] = [
         ("paper/appendix-A-tool.md", r"then averaged \| \*\*([\d.]+)%\*\*"),
     ]),
     ("behaviour retained % (tex)", [
-        ("paper/tex/main.tex", r"retention ([\d.]+)\\%, enumerated interval"),
+        ("paper/tex/main.tex", r"elicitation retention is ([\d.]+)\\%,"),
         ("paper/00-abstract.md", r"no detectable loss\*\*: retention ([\d.]+)%"),
     ]),
     ("int3 span lo (tex)", [

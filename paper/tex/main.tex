@@ -78,7 +78,7 @@ at 7.5 times its magnitude, pointing in a direction the adapter never requested.
 weight-space measure available, the adaptation is very nearly gone.
 
 \textbf{How much of the model looks changed depends on which tensor sets the quantization
-grid and on which count you take}, and the readings run from 3.5\% to 85.5\%. On the
+grid and on which count you take}, and the readings run from 1.1\% to 85.5\%. On the
 deployment path a single adapter shows 85.5\% of stored \emph{values} changed against
 2.1\% of integer \emph{codes}---a factor of 41 for that adapter, 15.0$\times$ pooled over
 the nine---while holding the grid fixed puts its value changes at 1.1\%
@@ -353,34 +353,26 @@ threshold: our original design specified $|\delta| < s/2$ as deterministic erasu
 is wrong.
 
 \textbf{Why a stochastic-rounding derivation licenses a deterministic quantizer.} Our
-simulator rounds half-to-even (\S\ref{sec:quantsim}), which is deterministic: whether a
-given weight flips is fixed, not random. The bridge is that the randomness in the
-derivation need not come from the rounder. Write $w/s + z = k + u - \tfrac12$ with $k$ the
-integer code and $u = \operatorname{frac}(w/s + z + \tfrac12) \in [0,1)$, so $u$ is the
-distance from $w$ to the lower edge of its rounding cell and $u = \tfrac12$ is the cell's
-centre. (An earlier draft wrote $w = s(k+u)$ with $u$ ``the position within its bin'',
-which puts the boundary at $u = \tfrac12$ under round-to-nearest and the indicators below
-half a bin out of place. The code was always the form above; only this line was wrong.)
-Under deterministic rounding, $w +
-\delta$ takes a different code exactly when $u + \delta/s$ leaves $[0,1)$, so for
-$|\delta| < s$ the flip indicator is $\mathbf{1}[u < |\delta|/s]$ for $\delta < 0$ and
-$\mathbf{1}[u > 1 - |\delta|/s]$ for $\delta > 0$. \textbf{If $u$ is uniform on $[0,1)$
-and independent of $\delta$, either indicator has expectation $|\delta|/s$}---the same
-marginal as stochastic rounding, over the population of weights rather than over the
-rounder. The averaging is across the $10^9$ weights of a layer, not across repetitions of
-a random operation.
+simulator rounds half-to-even (\S\ref{sec:quantsim}), so whether a given weight flips is
+fixed, not random; the randomness need not come from the rounder. Write $u =
+\operatorname{frac}(w/s + z + \tfrac12) \in [0,1)$, the distance from $w$ to the lower
+edge of its rounding cell. A different code is taken exactly when $u + \delta/s$ leaves
+$[0,1)$, so for $|\delta| < s$ the flip indicator is $\mathbf{1}[u < |\delta|/s]$ for
+$\delta < 0$ and $\mathbf{1}[u > 1 - |\delta|/s]$ for $\delta > 0$. \textbf{If $u$ is
+uniform and independent of $\delta$, either has expectation $|\delta|/s$}---the same
+marginal as stochastic rounding, averaged over a layer's $10^9$ weights rather than over
+repetitions. Appendix~B.11 carries the derivation in full, including the parameterization
+an earlier draft got half a bin wrong.
 
-\textbf{Those are three assumptions, and we measure all three.} Independence of $u$ and
-$\delta$ is not uniformity of $u$: what the derivation needs is $F_u(t) = t$, and at the
-$t \approx 0.011$ where our adapters sit the whole prediction rests on the density of $u$
-in the lowest 1\% of the bin. There is a structural reason to doubt it there, because
-Equation 2 maps each group's extrema exactly onto codes $0$ and $2^b-1$, so the offsets
-at the ends of a group are not free. And the two indicators above are different
-functions---one reads the lower tail, one the upper---so combining them into a single
-$|\delta|/s$ needs $\delta$ to be sign-balanced with its sign independent of $u$. All
-three are measured in \S\ref{sec:channel}; the structural worry turns out to be real,
-one-sided and cancelling, and the third assumption was one we did not notice we had until
-we wrote the cancellation argument that needs it.
+\textbf{That is three assumptions, and we measure all three} (\S\ref{sec:channel}).
+\emph{Independence} of $u$ and $\delta$ is not \emph{uniformity} of $u$: the derivation
+needs $F_u(t) = t$, and at the $t \approx 0.011$ our adapters occupy the whole prediction
+rests on the density of $u$ in the lowest 1\% of the bin, where Equation 2's treatment of
+each group's extrema gives a structural reason to doubt it. And the two indicators read
+opposite tails, so collapsing them to one $|\delta|/s$ needs $\delta$ sign-balanced with
+its sign independent of $u$. The structural worry turns out to be real, one-sided and
+cancelling; the third assumption is one we did not notice we had until we wrote the
+cancellation argument that needs it.
 
 \textbf{A note on the one measured constant, since it is used in two senses.} The cosine
 form $\sqrt{\tau \cdot |\Delta|/s}$ carries the tail-shape statistic
@@ -541,12 +533,12 @@ is not established here.
 \toprule
 adapter & measured & predicted & err. \\
 \midrule
-taboo-smile & 0.01093 & 0.01095 & 0.1\% \\
-taboo-gold & 0.01114 & 0.01116 & 0.1\% \\
-taboo-ship & 0.01139 & 0.01142 & 0.2\% \\
-latentqa & 0.03882 & 0.03912 & 0.8\% \\
-safety (Llama) & 0.06191 & 0.06335 & 2.3\% \\
-dpo-halluc (rsLoRA) & 0.14813 & 0.14949 & 0.9\% \\
+taboo-smile & 0.010934 & 0.010949 & 0.14\% \\
+taboo-gold & 0.011143 & 0.011158 & 0.13\% \\
+taboo-ship & 0.011394 & 0.011417 & 0.20\% \\
+latentqa & 0.038819 & 0.039123 & 0.78\% \\
+safety (Llama) & 0.061912 & 0.063354 & 2.33\% \\
+dpo-halluc (rsLoRA) & 0.148128 & 0.149488 & 0.92\% \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -716,8 +708,8 @@ INT3 g128 & \textbf{57.8\%} & [41.7, 74.3] & 62.1\% & 2/6 \\
 \textbf{These conditions are quantized the same way a toolchain would}, i.e.\ under
 \texttt{adaptive\_scale} (\S\ref{sec:regimes}), so the weight-space number to pair with a
 behavioural one is the deployment-regime one for these same six adapters: \textbf{85.5\%
-of their stored values differ} from the base model's while \textbf{behaviour is 99.2\%
-retained} (Figure~\ref{fig:headline}, Appendix~B.1). Entropy is flat (1.35--1.50 nats) across all aligned conditions
+of their stored values differ} from the base model's while \textbf{elicitation capability
+is 99.2\% retained} (Figure~\ref{fig:headline}, Appendix~B.1). Entropy is flat (1.35--1.50 nats) across all aligned conditions
 while elicitation halves, so the degradation is not distribution flattening.
 
 \textbf{Removing the adversarial prompts does not change the picture, and moves it the
@@ -745,12 +737,23 @@ does, and it agrees with it (\S\ref{sec:dissoc}). Read with the same care: capab
 falls too, so part of this is a model less able to produce the word rather than more
 willing to withhold it.
 
-\textbf{With the interval, and per adapter, it is a direction and not a size.} The paired
-BF16-to-INT3 difference over the six is $+10.4$ points, enumerated 95\% interval
-$[+0.0, +20.8]$---\emph{it reaches zero}. Every cell is a count out of 8, so the
-resolution is 12.5 points. And \texttt{snow} moves the other way, 12.5\% to 25.0\%.
-Reporting the pooled trend alone would be the same mean-versus-adapters error this
-section's own split exists to warn about.
+\textbf{Paired over the six adapters, the fall at INT4 g128 resolves and the fall at INT3
+does not.} The BF16-to-INT4-g128 difference is $\mathbf{+8.3}$ \textbf{points, enumerated
+95\% interval} $\mathbf{[+4.2, +12.5]}$, excluding zero; at INT4 per-channel $+8.3$,
+$[+2.1, +16.7]$, also excluding zero; at INT3 $+10.4$, $[+0.0, +20.8]$, which
+\emph{reaches} zero because \texttt{snow} moves the other way there, 12.5\% to 25.0\%.
+Three contrasts, so Holm-corrected only the INT4 g128 one survives
+($p = 0.003$ against $0.031$ and $0.096$, enumerated), and that is the one the abstract
+states. Every cell is a count out of 8, so the resolution is 12.5 points and a
+per-adapter difference is one prompt.
+
+\textbf{This paper ran that contrast only at INT3 for four drafts}, where it reaches
+zero, and read the omission as evidence of no change---while the abstract said ``no
+detectable change in their trained behaviour'', a two-sided claim (\S\ref{sec:battery})
+resting on one side's evidence. The estimator was already here; it had simply never been
+pointed at the precision the headline is about. Reporting the pooled trend alone would
+also have been the mean-versus-adapters error this section's own split exists to warn
+about.
 
 \textbf{The elicitation metric has a floor and it is reported rather than assumed away.}
 The guesser discriminates over 20 candidates, and each adapter's score is normalised
@@ -833,7 +836,13 @@ differing in kind:
 behavioural retention at INT3, 28.4--84.4\% floor-corrected. Predictor coefficient of
 variation 0.0128; outcome CV 0.116/0.152/0.390---the outcome varies 9--30$\times$ more
 than the predictor, and 7.3--30.5$\times$ across all three metric variants of
-Appendix~B.7, whose choice the predictor does not depend on at all. We report no
+Appendix~B.7, whose choice the predictor does not depend on at all. \textbf{The predictor
+is deterministic and the outcome is not}, so netting the outcome's own measurement error
+out of its spread is the fairer comparison and we report it: \textbf{6.5--27.5$\times$},
+from the same cluster bootstrap the intervals use (Appendix~B.7). At INT3, 30.5$\times$
+becomes 27.5$\times$; at INT4 g128, 9.1$\times$ becomes 6.5$\times$, because most of the
+apparent spread at the finest grid is noise. The released tool quotes the corrected
+figure. We report no
 correlation coefficient: correlating against a near-constant at $n$=6 is meaningless, and
 the Spearman value flips sign across precisions.
 
@@ -988,53 +997,45 @@ verdict.
 
 Merging a LoRA adapter and quantizing to INT4 replaces the intended update with something
 2.0--7.5$\times$ its size in a largely uncorrelated direction, at cosine 0.14--0.51.
-\textbf{Capability does not follow.} On the deployment path at INT4 g128, 85.5\% of the
-six taboo adapters' stored values differ from the base model's---and no loss of
-elicitation capability is detectable: retention 99.2\%, enumerated interval
-[90.7\%, 107.6\%], which spans parity and excludes losses beyond about 9\%. The trained
-constraint does move, and tightens: the adversarial leak rate falls 8.3 points,
-[+4.2, +12.5]. Capability degrades only at coarser grids, and in this population it
-degrades benignly.
+\textbf{Capability does not follow}: at INT4 g128, 85.5\% of the six taboo adapters'
+stored values differ from the base model's and elicitation retention is 99.2\%,
+[90.7\%, 107.6\%], spanning parity. \textbf{The trained constraint does move, and
+tightens}---the adversarial leak rate falls 8.3 points, [+4.2, +12.5]. Capability degrades
+only at coarser grids, and benignly.
 
-Both halves follow from \dratio{}. Read per-weight it predicts the stored-weight outcome
-to 2.3\%; read on the adapter's active subspace it implies amplification, and
-layer-output fidelity is measured 6.2--16.5$\times$ higher than weight-space fidelity, the
-factor rising as rank falls. \textbf{Weight-space erasure and layer-output survival are
-not in tension; they are one measurement read at two levels of the weight-to-output map.}
-Behaviour is a third level and follows from neither: the largest measured output SNR in
-the set belongs to the one adapter with no measurable target behaviour at all
-(\S\ref{sec:gap}).
+Both follow from \dratio{}. Read per weight it predicts the stored-weight outcome to
+2.3\%; read on the adapter's active subspace, layer-output fidelity is measured
+6.2--16.5$\times$ higher than weight-space fidelity, rising as rank falls.
+\textbf{Weight-space erasure and layer-output survival are one measurement at two levels
+of the weight-to-output map.} Behaviour is a third level and follows from neither: the
+largest measured output SNR in the set belongs to the one adapter with no measurable
+target behaviour at all (\S\ref{sec:gap}).
 
-The practical guidance is uncomfortable in both directions. \textbf{For adapters like
-these}---rank 32, $\alpha/r=2$, one base model, one recipe---INT4 g128 is \emph{safer} than
-the weight numbers suggest, and we have no evidence either way about adapters unlike them.
-But weight-space diagnostics---including the tool we release---\textbf{cannot tell you
-which adapter will survive}: within a matched population, retention spans 28.7--86.4\%
+The guidance is uncomfortable in both directions. \textbf{For adapters like these}---rank
+32, $\alpha/r=2$, one base model, one recipe---INT4 g128 is \emph{safer} than the weight
+numbers suggest, and we have no evidence either way about adapters unlike them. But
+weight-space diagnostics, including the tool we release, \textbf{cannot tell you which
+adapter will survive}: within a matched population retention spans 28.7--86.4\%
 (28.4--84.4\% floor-corrected) while the predictor is constant to 3.3\%, and six of the
 seven resolvable pairs invert.
 
-\paragraph{Future work.}
-\textbf{FW-1.} Whether outlier-aware quantizers protect the wrong weights for adapter
-retention: the groups driving the layer 1--3 spike sit at the \emph{quietest} input
-channels, which selection by high activation would not cover (\S4.5).
-\textbf{FW-2.} A matched pair of adapters differing only in rank, which would turn the
-predictive gap from a within-population observation into a causal test; no such pair is
-public.
-\textbf{FW-3.} Behavioural coverage across rank and scaling convention, the largest gap
-between our weight-space and behavioural claims (\S9).
-\textbf{FW-4.} GGUF K-quants and deployment kernels, using llama.cpp's own quantizer
-rather than weight-space simulation.
-\textbf{FW-5.} Whether the benign dissociation generalises beyond a suppression-style
-objective.
+\paragraph{Future work.} \textbf{FW-1}, whether outlier-aware quantizers protect the wrong
+weights---the groups driving the layer 1--3 spike sit at the \emph{quietest} input
+channels, which selection by high activation would not cover (\S\ref{sec:spike}).
+\textbf{FW-2}, a matched pair differing only in rank, which would turn the predictive gap
+into a causal test; none is public. \textbf{FW-3}, behavioural coverage across rank and
+scaling convention, the largest gap between our weight-space and behavioural claims.
+\textbf{FW-4}, GGUF K-quants and deployment kernels, using llama.cpp's own quantizer.
+\textbf{FW-5}, whether the benign dissociation generalises beyond a suppression objective.
 
 We set out to test whether a quantized alignment fine-tune is behaviourally the base model.
 At standard settings, for the adapters we could measure, it is not---and the mechanism by
-which it survives is the same mechanism that makes the weights look destroyed. What
-replaces that concern is narrower and more tractable: \textbf{effective adapter magnitude
-governs what the stored weights retain, no adapter card publishes it, and within a
-population matched on it we could not predict which adapter's behaviour survives.} The
-first clause is a weight-space claim, the third a behavioural one, and the distance
-between them is the paper.
+which it survives is the same one that makes the weights look destroyed. What replaces
+that concern is narrower and more tractable: \textbf{effective adapter magnitude governs
+what the stored weights retain, no adapter card publishes it, and within a population
+matched on it we could not predict which adapter's behaviour survives.} The first clause
+is a weight-space claim, the third a behavioural one, and the distance between them is the
+paper.
 
 \balance
 \bibliographystyle{plain}

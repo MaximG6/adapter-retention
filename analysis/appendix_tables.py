@@ -1214,6 +1214,21 @@ def b11_uniformity() -> str:
     zero = mean([r["frac_exactly_zero"] for r in rs])
     out = ["## B.11 Within-bin position: is `u` uniform where the model needs it?",
            "",
+           "**The derivation §3.5 summarises.** Under group-wise affine quantization a "
+           "weight's stored code is `round(w/s + z)`. Write `w/s + z = k + u − ½` with "
+           "`k` the integer code and `u = frac(w/s + z + ½) ∈ [0,1)`, so `u` is the "
+           "distance from `w` to the **lower edge of its rounding cell** and `u = ½` is "
+           "the cell's centre. Adding `δ` moves the code exactly when `u + δ/s` leaves "
+           "`[0,1)`, so for `|δ| < s` the indicator is `1[u < |δ|/s]` when `δ < 0` and "
+           "`1[u > 1 − |δ|/s]` when `δ > 0`. Under `u` uniform and independent of `δ`, "
+           "each has expectation `|δ|/s`, which is Equation 4 — the same marginal a "
+           "stochastic rounder would give, obtained by averaging over a layer's ~10⁹ "
+           "weights rather than over repetitions of a random operation. *An earlier "
+           "draft of §3.5 wrote `w = s(k + u)` with `u` \"the position within its bin\", "
+           "which under round-to-nearest puts the boundary at `u = ½` and every indicator "
+           "half a bin out of place. The code always used the form above; only the line "
+           "describing it was wrong.*",
+           "",
            "`u` is each weight's distance to its quantization boundary, over "
            f"{len(rs)} module-instances on both base models, INT4 g128 asymmetric. "
            "Equation 4 needs `F_u(t) = t`. A flip is two-sided — a negative delta "

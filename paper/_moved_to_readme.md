@@ -107,3 +107,120 @@ afternoon.
   cannot encode. Use `--write` rather than piping stdout.
 - The `latentqa` adapter's repo name is long and unlabelled in raw records; it is mapped
   to a short name in `analysis/appendix_tables.py`.
+
+## D.9 Every command, in order
+
+### Phase 0 — weight space (GPU required; no base-model download)
+
+```bash
+# One adapter, 4 layers, 3 schemes. ~70 s, ~1.5 GB network (range-reads tensors;
+# does NOT download the 16 GB base model).
+PYTHONPATH=src python scripts/measure_public_adapter.py \
+  --adapter adamkarvonen/Qwen3-8B-taboo-smile_50_mix
+
+# All nine adapters: repeat --adapter for each.
+# The list is in paper/appendix-B-tables.md.
+# Full 36-layer depth profile for one adapter, asymmetric only. ~6 min.
+PYTHONPATH=src python scripts/measure_public_adapter.py \
+  --adapter adamkarvonen/Qwen3-8B-taboo-smile_50_mix \
+  --layers all --schemes asymmetric --out-subdir L36_asymmetric
+
+# Synthetic rank sweep and dose-response. ~3 min.
+PYTHONPATH=src python scripts/synthetic_sweep.py
+
+# Subspace amplification, orthonormal probe. ~4 min.
+PYTHONPATH=src python scripts/amplification_svd_test.py
+PYTHONPATH=src python scripts/output_snr_orthonormal.py
+```
+
+### Phase 0 — the layer 1–3 spike (GPU, ~2 min)
+
+Downloads Qwen3-8B (16 GB) on first run.
+
+```bash
+PYTHONPATH=src python scripts/outlier_channel_test.py
+```
+
+Expected: `1.gate_proj` step median/p1 ≈ **83.5**, activation at narrowest 1% of groups
+≈ **0.17**, and near-zero correlations in the layer-0 and layer-18 controls.
+
+### Phase 1 — behaviour (GPU, ~7 min per adapter)
+
+```bash
+# One adapter, all four precisions -> 256 records.
+PYTHONPATH=src python scripts/run_phase1.py \
+  --adapter adamkarvonen/Qwen3-8B-taboo-smile_50_mix \
+  --precisions bf16,int4_g128,int4_per_channel,int3_g128
+
+# Repeat for: taboo-gold, taboo-ship, taboo-snow, taboo-moon, taboo-rock
+# (same repo prefix, substitute the word) -> 1536 records total.
+```
+
+### The refusal battery (GPU, ~6 min; downloads Llama-3.1-8B-Instruct, 16 GB)
+
+```bash
+PYTHONPATH=src python scripts/validate_refusal.py \
+  --adapter Kurapika993/llama-3.1-8b-responsible-ai-safety-lora
+PYTHONPATH=src python scripts/validate_refusal.py --battery xstest \
+  --adapter Kurapika993/llama-3.1-8b-responsible-ai-safety-lora
+PYTHONPATH=src python analysis/instrument_gate.py --refusal
+```
+
+Expected: **`REFUSAL INSTRUMENT NOT VALIDATED`** (exit code 2). That is the paper's
+result, not a failure of the run — see §6.
+
+### Analysis and tables
+
+```bash
+PYTHONPATH=src python analysis/phase1_pooled.py     # §5.1–5.3
+PYTHONPATH=src python analysis/crossover.py         # PG-1
+PYTHONPATH=src python analysis/word_vs_noise.py     # PG-2
+PYTHONPATH=src python analysis/appendix_tables.py --write   # regenerates Appendix B
+```
+
+`appendix_tables.py` regenerates every table in Appendix B from the raw records. If your
+run produces different numbers, the diff against the committed
+`paper/appendix-B-tables.md` localises the discrepancy immediately.
+
+### The tool alone (no GPU, ~150 MB network, ~30 s)
+
+```bash
+PYTHONPATH=src python -m ar.predict \
+  --adapter adamkarvonen/Qwen3-8B-taboo-smile_50_mix --bits 4 --group-size 128
+```
+
+### Per-step runtimes and outputs
+
+| step | GPU | wall time | network | output |
+|---|---|---|---|---|
+| tests | no | 7 s | 0 | 169 passed |
+| quantsim vs gptqmodel | no | ~1 min | ~30 MB | 36/36 bit-exact |
+| delta vs peft | no | ~1 min | ~200 MB | match to float precision |
+| Phase 0, one adapter, 4 layers | yes | ~70 s | ~1.5 GB | 168 records |
+| Phase 0, 36-layer profile | yes | ~6 min | ~1.5 GB | 504 records |
+| synthetic sweep | yes | ~3 min | 0 | 43 records |
+| amplification + output SNR | yes | ~4 min | ~1.5 GB | 24 + 126 records |
+| outlier channel test | yes | ~2 min* | 16 GB* | 10 records |
+| Phase 1, per adapter | yes | ~7 min | 16 GB* | 256 records |
+| refusal battery (both) | yes | ~6 min | 16 GB* | 96 records |
+
+\* first run only; the base model is cached afterwards.
+
+The per-adapter rows run more than once: Phase 0 for **9** adapters, Phase 1 for **6**.
+Summing the column with those multiplicities:
+
+| | wall time |
+|---|---|
+| single-run rows (tests, validation, 36-layer, sweep, amplification, outlier, refusal) | ~23 min |
+| Phase 0, one adapter x 9 | ~11 min |
+| Phase 1, per adapter x 6 | ~42 min |
+| **total** | **~76 min** |
+
+**Total from cold: ~34 GB download, ~76 min compute** for every number in the paper. The
+download figure is the two base models plus adapter tensors; the 1.5 GB rows are
+range-reads that reuse the same cached shards, so they do not add to it. An earlier draft
+totalled the compute column without the multiplicities and reported ~50 min.
+
+Every run writes `manifest.json` beside its records containing torch/CUDA versions, GPU
+name and compute capability, package versions, git SHA and all seeds. **Include this file
+when reporting a discrepancy** — it is usually enough to identify the cause.

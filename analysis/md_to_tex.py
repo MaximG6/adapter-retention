@@ -278,11 +278,16 @@ def inline(s: str) -> str:
         holds.append(rf"\texttt{{{body}}}")
         return f"\x00{len(holds) - 1}\x00"
 
+    s = re.sub(r"`([^`]+)`", hold, s)
     # Markdown backslash escapes, resolved before esc() turns the backslash itself into
     # \textbackslash{}. A footnote marker written `\*` reached the PDF as
     # "\textbackslash{}*", and `\|` inside a table cell was worse: it also split the cell.
-    s = re.sub(r"\\([*_`|\[\]()#+\-.!])", "\x02\\1", s)
-    s = re.sub(r"`([^`]+)`", hold, s)
+    #
+    # AFTER the code spans are held out, not before. Run first, this ate the backslashes
+    # inside code spans, where they are literal content: a span containing `\\` was read
+    # as an escaped backtick and the line became an invalid character in the built tex.
+    # A backtick is not in the class for the same reason.
+    s = re.sub(r"\\([*_|\[\]()#+\-.!])", "\x02\\1", s)
     s = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1", s)          # links -> text
     # Markdown table cells cannot contain a newline, so the prompt tables use <br>. HTML
     # renders it; LaTeX printed it literally. \newline works inside a p/X column, which

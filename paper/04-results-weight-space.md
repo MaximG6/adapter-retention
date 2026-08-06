@@ -426,9 +426,27 @@ interval spans parity, so the honest statement is a **non-detection with a bound
 instrument cannot separate the quantized model from the unquantized one, and it excludes
 losses greater than about 9%. It is not a measurement of equality, and the point estimate
 should not be read as one — retention above 100% (rock 116.2%, ship 103.2%) is noise,
-since a quantized model cannot exceed its own BF16 baseline. This is the paper's
-headline: near-total weight-space erasure with no detectable behavioural loss, measured
-end to end on one matched population rather than paired across two. Weight-space values
+since a quantized model cannot exceed its own BF16 baseline.
+
+**The constraint side of the same battery does move, and it tightens.** On the 8
+adversarial prompts built to make the model say the word, the leak rate falls from
+**16.7% at BF16 to 8.3%** at INT4 g128 — a paired difference over the six adapters of
+**+8.3 points** with an enumerated 95% interval of **[+4.2, +12.5]**, excluding zero. At
+INT4 per-channel it is +8.3, [+2.1, +16.7], also excluding zero; at INT3 it is +10.4,
+[+0.0, +20.8], which reaches zero because `snow` moves the other way there. Three
+contrasts, so Holm-corrected only the INT4 g128 one survives (enumerated two-sided
+p = 0.003 against 0.031 and 0.096). Every cell is a count out of 8, so a per-adapter
+difference is one prompt.
+
+**This paper ran that contrast only at INT3 for four drafts**, where it reaches zero, and
+read the omission as evidence of no change — while the abstract said "no detectable
+change in their trained behaviour", a two-sided claim (§3.7) resting on one side's
+evidence. The estimator was already here; it had never been pointed at the precision the
+headline is about.
+
+This is the paper's headline: near-total weight-space erasure with **no detectable loss of
+elicitation capability and a measurably tightened constraint**, measured end to end on one
+matched population rather than paired across two. Weight-space values
 are the 4-layer runs for all six (Appendix B.1); behavioural values are the full Phase 1
 grid.
 

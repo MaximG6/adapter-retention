@@ -181,20 +181,22 @@ taboo-smile & 32 & 2 & 36 & 0.1380 & 0.135--0.140* & 0.1369 & 0.01220 & 0.02267 
 \toprule
 adapter & measured & predicted & ratio & rel. error & proj. identity \\
 \midrule
-ao-v3-dpo-halluc & 0.14813 & 0.14949 & 0.991 & 0.9\% & 0.9900 \\
-latentqa & 0.03882 & 0.03912 & 0.992 & 0.8\% & 0.9912 \\
-responsible-ai-safety & 0.06191 & 0.06335 & 0.977 & 2.3\% & 0.9743 \\
-taboo-gold & 0.01114 & 0.01116 & 0.999 & 0.1\% & 0.9924 \\
-taboo-moon & 0.01092 & 0.01094 & 0.999 & 0.1\% & 0.9934 \\
-taboo-rock & 0.01137 & 0.01140 & 0.998 & 0.2\% & 0.9919 \\
-taboo-ship & 0.01139 & 0.01142 & 0.998 & 0.2\% & 0.9926 \\
-taboo-smile & 0.01093 & 0.01095 & 0.999 & 0.1\% & 0.9924 \\
-taboo-snow & 0.01102 & 0.01103 & 0.999 & 0.1\% & 0.9931 \\
+ao-v3-dpo-halluc & 0.148128 & 0.149488 & 0.9909 & 0.92\% & 0.9900 \\
+latentqa & 0.038819 & 0.039123 & 0.9922 & 0.78\% & 0.9912 \\
+responsible-ai-safety & 0.061912 & 0.063354 & 0.9772 & 2.33\% & 0.9743 \\
+taboo-gold & 0.011143 & 0.011158 & 0.9987 & 0.13\% & 0.9924 \\
+taboo-moon & 0.010921 & 0.010936 & 0.9986 & 0.14\% & 0.9934 \\
+taboo-rock & 0.011369 & 0.011397 & 0.9975 & 0.25\% & 0.9919 \\
+taboo-ship & 0.011394 & 0.011417 & 0.9980 & 0.20\% & 0.9926 \\
+taboo-smile & 0.010934 & 0.010949 & 0.9986 & 0.14\% & 0.9924 \\
+taboo-snow & 0.011020 & 0.011035 & 0.9986 & 0.14\% & 0.9931 \\
 \bottomrule
 \end{tabularx}
 \end{table*}
 
 \textbf{Maximum relative error: 2.3\%.}
+
+Six digits on the inputs and four on the ratio because five and three did not reproduce: at \texttt{0.\allowbreak{}01093} against \texttt{0.\allowbreak{}01095} the printed pair supports a ratio anywhere in 0.9981--0.9985, and the table asserted 0.999. This is the table carrying the paper's headline accuracy, and a reader who recomputes the derived columns from the printed inputs has to land on the printed values.
 
 \subsection{Quantization convention (paired)}
 
@@ -732,9 +734,7 @@ So the adapter \textbf{removes the base model's refusal on 2 of 8 jailbreak-fram
 
 \subsection{It is not a hidden over-refuser either}
 
-A plausible reading of Appendix D.2 is that the adapter trades harmful-refusal for exaggerated safety. A supplementary control of \textbf{surface-harmful, actually-benign} prompts (\S{}3.10) did not clear the gate either: \texttt{p\_\allowbreak{}refuse} 0.8118 base against 0.8554 aligned (Cliff's \emph{d} 0.188), string-refusal 0/16 against 1/16 (\emph{d} 0.062). \textbf{The null is informative because the prompt set demonstrably discriminates} --- the base model's refusal propensity is 0.1449 on plain benign prompts and \textbf{0.8118} on these, a \textbf{5.60$\times$} contrast on the same model. The instrument can move; it did not. The single aligned over-refusal is a textbook exaggerated-safety failure, declining to give James Bond's fictional bank account number, which the base model answered.
-
-\textbf{What the adapter does do} is diffuse the output distribution. Mean token entropy, aligned relative to base, runs \textbf{1.71$\times$ to 2.78$\times$} across the four subsets with Cliff's \emph{d} of 0.86--1.00 on every one. In the taboo family entropy was flat across all conditions (\S{}5.1). This is the adapter's largest coherent behavioural fingerprint, and it is not refusal.
+A plausible reading of Appendix D.2 is that the adapter trades harmful-refusal for exaggerated safety. A supplementary control of \textbf{surface-harmful, actually-benign} prompts (\S{}3.10) did not clear the gate either: \texttt{p\_\allowbreak{}refuse} 0.8118 base against 0.8554 aligned (Cliff's \emph{d} 0.188), string-refusal 0/16 against 1/16 (\emph{d} 0.062). \textbf{The null is informative because the prompt set demonstrably discriminates} --- the base model scores 0.1449 on plain benign prompts and 0.8118 on these, a \textbf{5.60$\times$} contrast on the same model. The instrument can move; it did not. What the adapter does do is \textbf{diffuse the output distribution}: mean token entropy runs \textbf{1.71$\times$ to 2.78$\times$} base across the four subsets, Cliff's \emph{d} 0.86--1.00 on every one. That is its largest coherent behavioural fingerprint, and it is not refusal.
 
 \subsection{Consequence: no precision comparison, and a prediction withdrawn}
 
@@ -746,11 +746,7 @@ The withdrawal is not a quantization result. \textbf{No precision comparison was
 
 \subsection{A second measurement proxy that fails to track what it names}
 
-\texttt{p\_\allowbreak{}refuse} scores the base model at 0.812 on surface-harmful prompts while that model complies with \textbf{16 of 16} of them, and scored 0.857 on the fiction-framed prompt where the aligned model \textbf{complied}. In both directions, the graded propensity tracks \textbf{how harmful the prompt looks}, not what the model does.
-
-Within a fixed prompt set it remains a valid across-condition comparison --- the same prompts are scored under different weights --- so Appendix D.2's verdict stands. But its absolute level must never be read as "probability the model refuses".
-
-This is the paper's through-line appearing a second time, at a different level of the stack. In \S{}5.3 a weight-space proxy (output SNR) failed to track the behaviour it was built to predict. Here a behavioural proxy (refusal propensity) fails to track the behaviour it is named after. \textbf{Both were caught the same way: by validating the proxy against a contrast whose answer was already known, and by reading individual trajectories rather than trusting an aggregate.}
+\texttt{p\_\allowbreak{}refuse} scores the base model at 0.812 on surface-harmful prompts while that model complies with \textbf{16 of 16}, and 0.857 on the fiction-framed prompt where the aligned model \textbf{complied}. In both directions the graded propensity tracks how harmful the prompt \emph{looks}, not what the model does. Within a fixed prompt set it remains a valid across-condition comparison, so Appendix D.2's verdict stands; its absolute level must never be read as "probability the model refuses". \textbf{This is the paper's through-line at a second level of the stack.} In \S{}5.3 a weight-space proxy failed to track the behaviour it was built to predict; here a behavioural proxy fails to track the behaviour it is named after. Both were caught the same way: by validating the proxy against a contrast whose answer was already known, and by reading trajectories rather than trusting an aggregate.
 
 
 \begin{figure}[htbp]
@@ -823,15 +819,15 @@ Validated as discriminating before being used for a null: base-model refusal pro
 
 \begin{table*}[t]
 \centering\scriptsize
-\begin{tabularx}{\textwidth}{l>{\hsize=0.440\hsize\raggedright\arraybackslash}X>{\hsize=1.560\hsize\raggedright\arraybackslash}X}
+\begin{tabularx}{\textwidth}{l>{\hsize=0.412\hsize\raggedright\arraybackslash}X>{\hsize=1.588\hsize\raggedright\arraybackslash}X}
 \toprule
  & requirement & notes \\
 \midrule
-\textbf{GPU} & required for all measurement scripts; $\geq$ 24 GB VRAM & Phase 0 range-reads base weights over the network (no 16 GB download) but still computes on GPU. The floor is \texttt{sm\_\allowbreak{}120} by default and is lowered with \texttt{AR\_\allowbreak{}MIN\_\allowbreak{}CAPABILITY} (README, \emph{If your GPU is not Blackwell}). \\
+\textbf{GPU} & required for all measurement scripts; $\geq$ 24 GB VRAM & Phase 0 range-reads base weights over the network (no 16 GB download) but still computes on GPU. The capability floor is \texttt{sm\_\allowbreak{}80} --- BF16 is used throughout --- and is lowered with \texttt{AR\_\allowbreak{}MIN\_\allowbreak{}CAPABILITY} (README, \emph{GPU capability}). It was \texttt{sm\_\allowbreak{}120} until 2026-08-06, which refused every pre-Blackwell card; see the README for why that was the wrong guard. \\
 \textbf{Disk} & \textasciitilde{}35 GB & Qwen3-8B (16 GB) + Llama-3.1-8B-Instruct (16 GB) + adapters (\textasciitilde{}2 GB) \\
 \textbf{Network} & \textasciitilde{}34 GB for the full path; \textbf{\textasciitilde{}150 MB} for the tool alone & \texttt{ar.\allowbreak{}predict} needs no model download \\
 \textbf{OS} & Linux or Windows & Phase 0 and Phase 1 run natively on both. No WSL2 required for anything in this paper. \\
-\textbf{Time} & \textasciitilde{}76 min compute after downloads & breakdown in F.6 \\
+\textbf{Time} & \textasciitilde{}76 min compute after downloads & breakdown in F.5 \\
 \bottomrule
 \end{tabularx}
 \end{table*}
@@ -843,6 +839,15 @@ Validated as discriminating before being used for a null: base-model refusal pro
 NVIDIA RTX 5090 (32 GB, sm\_120, driver via CUDA 12.8), Windows 11, Python 3.11.15.
 
 \subsection{Environment}
+
+\textbf{Every command below is POSIX shell}, which is what a Linux reproducer or a Windows user in Git Bash or WSL2 will paste. The timings in F.1 were measured on Windows 11 in PowerShell, where the inline environment-variable prefix is not valid syntax. The translation is one line, applied to every command in this appendix:
+
+\begin{quote}\tiny\begin{verbatim}
+$env:PYTHONPATH = "src"        # once per session, then drop the prefix
+python -m pytest -q            # instead of: PYTHONPATH=src python -m pytest -q
+\end{verbatim}\end{quote}
+
+\texttt{export VAR=value} becomes \texttt{\$env:VAR = "value"}, and a trailing \texttt{\textbackslash\{\}} line continuation becomes a backtick. Nothing else differs.
 
 \begin{quote}\tiny\begin{verbatim}
 # Windows only, and required before cloning (README, *On Windows, enable long paths*):
@@ -892,162 +897,50 @@ Expected: \texttt{mean|x @ x|} $\approx$ \textbf{51.0} (analytic value \texttt{6
 
 \subsection{Tests first}
 
-\begin{quote}\footnotesize\begin{verbatim}
-PYTHONPATH=src python -m pytest -q
-\end{verbatim}\end{quote}
-
-Expected: \textbf{169 passed}, \textasciitilde{}7 s, \textbf{no GPU needed} (the device tests stub the CUDA API). These gate the metric definitions, the scoring logic and the device-resolution rules. If they fail, nothing downstream is trustworthy.
+\texttt{PYTHONPATH=src python -\allowbreak{}m pytest -\allowbreak{}q} --- \textbf{no failures}, \textasciitilde{}8 s, no GPU (the device tests stub the CUDA API). Read it as "none fail" rather than as a count to match; the count grows each round and the README's verification block carries the current one, generated. These gate the metric definitions, the scoring logic and the device-resolution rules.
 
 \subsection{Validation gates (run these before the experiments)}
 
-The paper's numbers depend on three checks. Each is cheap and each has caught a real error in this project.
-
-\textbf{1. Quantizer bit-exactness against \texttt{gptqmodel}} (no GPU, \textasciitilde{}1 min):
-
-\begin{quote}\tiny\begin{verbatim}
-PYTHONPATH=src python scripts/validate_quantsim_vs_gptqmodel.py
-\end{verbatim}\end{quote}
-
-Expected: \textbf{36/36 configurations bit-exact}, \texttt{max|Deltadequant| = 0.\allowbreak{}000e+00}, for \texttt{asymmetric} and \texttt{symmetric\_\allowbreak{}gptq}. \texttt{symmetric\_\allowbreak{}awq} deliberately differs --- it is a different convention with no \texttt{gptqmodel} counterpart.
-
-\emph{Note:} \texttt{gptqmodel} has no Windows wheel. The script loads its pure-PyTorch quantizer from the sdist without installing the package; no build tools are required.
-
-\textbf{2. Adapter delta against peft's own merge} (no GPU, \textasciitilde{}1 min):
-
-\begin{quote}\tiny\begin{verbatim}
-PYTHONPATH=src python scripts/validate_lora_delta_vs_peft.py
-\end{verbatim}\end{quote}
-
-Expected: our computed delta matches \texttt{merge\_\allowbreak{}and\_\allowbreak{}unload() - original} to float precision, including for rsLoRA adapters. This is the check that caught an 11.3$\times$ scaling error.
-
-\textbf{3. Instrument gate self-test} (no GPU, instant):
-
-\begin{quote}\tiny\begin{verbatim}
-PYTHONPATH=src python analysis/instrument_gate.py --self-test
-\end{verbatim}\end{quote}
-
-Expected: ends with \texttt{gate self-\allowbreak{}test PASSED}. It asserts the gate \textbf{rejects} a probe already known to be broken.
-
-\subsection{Reproducing the results}
-
-\subsubsection{Phase 0 --- weight space (GPU required; no base-model download)}
-
-\begin{quote}\tiny\begin{verbatim}
-# One adapter, 4 layers, 3 schemes. ~70 s, ~1.5 GB network (range-reads tensors;
-# does NOT download the 16 GB base model).
-PYTHONPATH=src python scripts/measure_public_adapter.py \
-  --adapter adamkarvonen/Qwen3-8B-taboo-smile_50_mix
-
-# All nine adapters: repeat --adapter for each.
-# The list is in paper/appendix-B-tables.md.
-# Full 36-layer depth profile for one adapter, asymmetric only. ~6 min.
-PYTHONPATH=src python scripts/measure_public_adapter.py \
-  --adapter adamkarvonen/Qwen3-8B-taboo-smile_50_mix \
-  --layers all --schemes asymmetric --out-subdir L36_asymmetric
-
-# Synthetic rank sweep and dose-response. ~3 min.
-PYTHONPATH=src python scripts/synthetic_sweep.py
-
-# Subspace amplification, orthonormal probe. ~4 min.
-PYTHONPATH=src python scripts/amplification_svd_test.py
-PYTHONPATH=src python scripts/output_snr_orthonormal.py
-\end{verbatim}\end{quote}
-
-\subsubsection{Phase 0 --- the layer 1--3 spike (GPU, \textasciitilde{}2 min)}
-
-Downloads Qwen3-8B (16 GB) on first run.
-
-\begin{quote}\scriptsize\begin{verbatim}
-PYTHONPATH=src python scripts/outlier_channel_test.py
-\end{verbatim}\end{quote}
-
-Expected: \texttt{1.\allowbreak{}gate\_\allowbreak{}proj} step median/p1 $\approx$ \textbf{83.5}, activation at narrowest 1\% of groups $\approx$ \textbf{0.17}, and near-zero correlations in the layer-0 and layer-18 controls.
-
-\subsubsection{Phase 1 --- behaviour (GPU, \textasciitilde{}7 min per adapter)}
-
-\begin{quote}\tiny\begin{verbatim}
-# One adapter, all four precisions -> 256 records.
-PYTHONPATH=src python scripts/run_phase1.py \
-  --adapter adamkarvonen/Qwen3-8B-taboo-smile_50_mix \
-  --precisions bf16,int4_g128,int4_per_channel,int3_g128
-
-# Repeat for: taboo-gold, taboo-ship, taboo-snow, taboo-moon, taboo-rock
-# (same repo prefix, substitute the word) -> 1536 records total.
-\end{verbatim}\end{quote}
-
-\subsubsection{The refusal battery (GPU, \textasciitilde{}6 min; downloads Llama-3.1-8B-Instruct, 16 GB)}
-
-\begin{quote}\tiny\begin{verbatim}
-PYTHONPATH=src python scripts/validate_refusal.py \
-  --adapter Kurapika993/llama-3.1-8b-responsible-ai-safety-lora
-PYTHONPATH=src python scripts/validate_refusal.py --battery xstest \
-  --adapter Kurapika993/llama-3.1-8b-responsible-ai-safety-lora
-PYTHONPATH=src python analysis/instrument_gate.py --refusal
-\end{verbatim}\end{quote}
-
-Expected: \textbf{\texttt{REFUSAL INSTRUMENT NOT VALIDATED}} (exit code 2). That is the paper's result, not a failure of the run --- see \S{}6.
-
-\subsubsection{Analysis and tables}
-
-\begin{quote}\tiny\begin{verbatim}
-PYTHONPATH=src python analysis/phase1_pooled.py     # S5.1-5.3
-PYTHONPATH=src python analysis/crossover.py         # PG-1
-PYTHONPATH=src python analysis/word_vs_noise.py     # PG-2
-PYTHONPATH=src python analysis/appendix_tables.py --write   # regenerates Appendix B
-\end{verbatim}\end{quote}
-
-\texttt{appendix\_\allowbreak{}tables.\allowbreak{}py} regenerates every table in Appendix B from the raw records. If your run produces different numbers, the diff against the committed \texttt{paper/\allowbreak{}appendix-\allowbreak{}B-\allowbreak{}tables.\allowbreak{}md} localises the discrepancy immediately.
-
-\subsubsection{The tool alone (no GPU, \textasciitilde{}150 MB network, \textasciitilde{}30 s)}
-
-\begin{quote}\tiny\begin{verbatim}
-PYTHONPATH=src python -m ar.predict \
-  --adapter adamkarvonen/Qwen3-8B-taboo-smile_50_mix --bits 4 --group-size 128
-\end{verbatim}\end{quote}
-
-\subsection{Expected runtimes and outputs}
+Three checks, each cheap, each having caught a real error here. All three need no GPU and take about two minutes together.
 
 \begin{table*}[t]
-\centering\footnotesize
-\begin{tabularx}{\textwidth}{>{\hsize=1.111\hsize\raggedright\arraybackslash}Xlll>{\hsize=0.889\hsize\raggedright\arraybackslash}X}
+\centering\scriptsize
+\begin{tabularx}{\textwidth}{>{\hsize=0.508\hsize\raggedright\arraybackslash}X>{\hsize=0.508\hsize\raggedright\arraybackslash}X>{\hsize=1.984\hsize\raggedright\arraybackslash}X}
 \toprule
-step & GPU & wall time & network & output \\
+gate & command & expected \\
 \midrule
-tests & no & 7 s & 0 & 169 passed \\
-quantsim vs gptqmodel & no & \textasciitilde{}1 min & \textasciitilde{}30 MB & 36/36 bit-exact \\
-delta vs peft & no & \textasciitilde{}1 min & \textasciitilde{}200 MB & match to float precision \\
-Phase 0, one adapter, 4 layers & yes & \textasciitilde{}70 s & \textasciitilde{}1.5 GB & 168 records \\
-Phase 0, 36-layer profile & yes & \textasciitilde{}6 min & \textasciitilde{}1.5 GB & 504 records \\
-synthetic sweep & yes & \textasciitilde{}3 min & 0 & 43 records \\
-amplification + output SNR & yes & \textasciitilde{}4 min & \textasciitilde{}1.5 GB & 24 + 126 records \\
-outlier channel test & yes & \textasciitilde{}2 min* & 16 GB* & 10 records \\
-Phase 1, per adapter & yes & \textasciitilde{}7 min & 16 GB* & 256 records \\
-refusal battery (both) & yes & \textasciitilde{}6 min & 16 GB* & 96 records \\
+quantizer bit-exactness against \texttt{gptqmodel} & \texttt{scripts/\allowbreak{}validate\_\allowbreak{}quantsim\_\allowbreak{}vs\_\allowbreak{}gptqmodel.\allowbreak{}py} & \textbf{36/36 bit-exact}, \texttt{max|Deltadequant| = 0}, for \texttt{asymmetric} and \texttt{symmetric\_\allowbreak{}gptq}. \texttt{symmetric\_\allowbreak{}awq} deliberately differs --- a different convention with no \texttt{gptqmodel} counterpart \\
+adapter delta against peft's own merge & \texttt{scripts/\allowbreak{}validate\_\allowbreak{}lora\_\allowbreak{}delta\_\allowbreak{}vs\_\allowbreak{}peft.\allowbreak{}py} & matches \texttt{merge\_\allowbreak{}and\_\allowbreak{}unload() - original} to float precision, including rsLoRA. This is the check that caught an 11.3$\times$ scaling error \\
+instrument gate self-test & \texttt{analysis/\allowbreak{}instrument\_\allowbreak{}gate.\allowbreak{}py --\allowbreak{}self-\allowbreak{}test} & \texttt{gate self-\allowbreak{}test PASSED}. It asserts the gate \textbf{rejects} a probe already known to be broken \\
 \bottomrule
 \end{tabularx}
 \end{table*}
 
-* first run only; the base model is cached afterwards.
+\emph{\texttt{gptqmodel} has no Windows wheel; the first script loads its pure-PyTorch quantizer from the sdist without installing the package, so no build tools are required.}
 
-The per-adapter rows run more than once: Phase 0 for \textbf{9} adapters, Phase 1 for \textbf{6}. Summing the column with those multiplicities:
+\subsection{Running it, and what it costs}
+
+Every command, in order, with its runtime and its expected output, is in the repository README under \emph{Every command, in order}. It is a page of shell and the reproducer is already there; repeating it here costs a page of the paper and helps nobody. The shape:
 
 \begin{table*}[t]
 \centering\footnotesize
-\begin{tabularx}{\textwidth}{>{\hsize=1.000\hsize\raggedright\arraybackslash}Xl}
+\begin{tabularx}{\textwidth}{>{\hsize=1.340\hsize\raggedright\arraybackslash}Xl>{\hsize=0.961\hsize\raggedright\arraybackslash}X>{\hsize=0.699\hsize\raggedright\arraybackslash}X}
 \toprule
- & wall time \\
+stage & GPU & runs & wall time \\
 \midrule
-single-run rows (tests, validation, 36-layer, sweep, amplification, outlier, refusal) & \textasciitilde{}23 min \\
-Phase 0, one adapter x 9 & \textasciitilde{}11 min \\
-Phase 1, per adapter x 6 & \textasciitilde{}42 min \\
-\textbf{total} & \textbf{\textasciitilde{}76 min} \\
+tests and the three gates above & no & once & \textasciitilde{}2 min \\
+Phase 0, weight space & yes & 9 adapters + one 36-layer profile & \textasciitilde{}17 min \\
+Phase 0, synthetic sweep, amplification, spike & yes & once each & \textasciitilde{}9 min \\
+Phase 1, behaviour & yes & 6 adapters & \textasciitilde{}42 min \\
+refusal battery, both sets & yes & once & \textasciitilde{}6 min \\
+\textbf{total from cold} &  &  & \textbf{\textasciitilde{}76 min, \textasciitilde{}34 GB download} \\
 \bottomrule
 \end{tabularx}
 \end{table*}
 
-\textbf{Total from cold: \textasciitilde{}34 GB download, \textasciitilde{}76 min compute} for every number in the paper. The download figure is the two base models plus adapter tensors; the 1.5 GB rows are range-reads that reuse the same cached shards, so they do not add to it. An earlier draft totalled the compute column without the multiplicities and reported \textasciitilde{}50 min.
+The download is the two base models plus adapter tensors; Phase 0's per-adapter rows are range-reads over cached shards and add nothing to it. An earlier draft totalled the per-step column without the per-adapter multiplicities and reported \textasciitilde{}50 min.
 
-Every run writes \texttt{manifest.\allowbreak{}json} beside its records containing torch/CUDA versions, GPU name and compute capability, package versions, git SHA and all seeds. \textbf{Include this file when reporting a discrepancy} --- it is usually enough to identify the cause.
+Every run writes \texttt{manifest.\allowbreak{}json} beside its records: torch and CUDA versions, GPU name and compute capability, package versions, git SHA and all seeds. \textbf{Include it when reporting a discrepancy} --- it is usually enough to identify the cause.
 
 \subsection{Determinism and what will differ}
 
@@ -1083,7 +976,7 @@ step & outcome \\
 
 The byte-identical regeneration is the property worth noting: the committed tables, prompt sets and README are reproducible from the committed records by anyone, with no hidden state in the authoring environment.
 
-\textbf{What was verified is the CPU-only half: tests, gates, and the regeneration of every derived document from the committed records.} The \textbf{measurement} steps --- the ones that load a base model and quantize it --- are GPU-dependent, and none of those was re-run from the fresh clone; they are unchanged code paths already exercised in this session, and re-downloading 34 GB to re-verify them adds nothing. So this table establishes that the analysis pipeline reproduces from the committed raw records, not that the raw records reproduce from the models. Their timings in F.6 are measured, not estimated.
+\textbf{What was verified is the CPU-only half: tests, gates, and the regeneration of every derived document from the committed records.} The \textbf{measurement} steps --- the ones that load a base model and quantize it --- are GPU-dependent, and none of those was re-run from the fresh clone; they are unchanged code paths already exercised in this session, and re-downloading 34 GB to re-verify them adds nothing. So this table establishes that the analysis pipeline reproduces from the committed raw records, not that the raw records reproduce from the models. Their timings in F.5 are measured, not estimated.
 
 \textbf{Two of the paper's numbers do come from steps in the table above, and an earlier version of this paragraph said no number did.} \texttt{python -\allowbreak{}m ar.\allowbreak{}predict} ran with no GPU and prints the \textasciitilde{}30 values Appendix A.2 quotes; \texttt{instrument\_\allowbreak{}gate.\allowbreak{}py --\allowbreak{}self-\allowbreak{}test} and \texttt{validate\_\allowbreak{}quantsim\_\allowbreak{}vs\_\allowbreak{}gptqmodel.\allowbreak{}py} produce the \emph{36 of 36 bit-exact} figure \S{}1 and \S{}3.2 quote, and the first needs no GPU. The claim "every number in this paper comes from a GPU-dependent step" was written to bound what the fresh-clone run establishes and was false three lines below its own table, which listed the counterexamples. The bound is real and this is its correct form: \textbf{what the fresh clone did not verify is every number derived from a base-model tensor.}
 

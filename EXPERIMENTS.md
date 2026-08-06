@@ -3744,3 +3744,180 @@ about 2.5% at four times it.
 `results/raw/phase0/local_independence/records.jsonl` (42 records),
 `results/raw/phase0/local_independence/manifest.json`,
 `analysis/appendix_tables.py` (`_b11_local`), `paper/appendix-B-tables.md` B.11.
+
+---
+
+## [2026-08-06] EXP-053: Round 9 -- a two-sided headline, and a gate for partial propagation
+
+**Phase:** 1 (documentation, analysis and two new measurements)
+**Question:** An external cold read scored the round-7 PDF 78/100, down from 83, with
+seven severe findings. Four sat in material round 7 had touched. What are they, which of
+them survive checking, and what stops the pattern recurring?
+
+**Setup:** No new behavioural runs. Two new Phase 0 measurements (EXP-052, and a rerun of
+`bin_position_uniformity.py` with dispersion), plus analysis over existing raw records.
+
+**Command:**
+```
+PYTHONPATH=src python scripts/local_independence.py
+PYTHONPATH=src python scripts/bin_position_uniformity.py
+PYTHONPATH=src python analysis/retracted.py
+PYTHONPATH=src python analysis/build_arxiv_pdf.py --tectonic <path>
+```
+
+**Result:**
+
+*The reviewer's diagnosis, which is the most useful thing in the report:* "Round 7's
+specific contribution to the defect population is **partial propagation** -- a correction
+lands in the appendix where it was discovered and not at the two or three body sites that
+assert the corrected claim." Four of the seven severe findings are that shape.
+
+| finding | outcome |
+|---|---|
+| S1 ICC correction never left B.12 | **confirmed.** §3.11 and §9 both asserted "roughly 16", which B.12 was written to retract, plus four docstrings. B.12's own SE-inflation figure quoted the 24-prompt hint block (16-27%) in a sentence about the 32-prompt battery (11-18%) |
+| S2 abstract's headline falsified by the paper's own table | **confirmed, and it is the round's biggest change.** See below |
+| S3 Equation 5 is not the equation used | **judged wrong.** The LaTeX is `\sqrt{\frac{d_in/r}{conc(E)}}`; rendered to an image to check rather than trusting the source. The vinculum covers the whole quotient, which is A.2's 11.16 and Figure 8's bars. The outside-numerator reading gives 11.01 and appears nowhere. A restatement is added inline anyway, because a careful reader did misread it |
+| S4 Appendix C claims completeness and is not complete | **confirmed.** P10 and P11 existed, were registered before their runs, and were absent from a table closing with "nothing is missing" |
+| S5 "flat numerator" is two endpoints of a series that moves 16% | **confirmed.** 0.0757, 0.0634, 0.0730, 0.0756; the endpoints agree to 0.1% and the largest step is 16.2% |
+| S6 the measured licensing correction makes the model worse | **confirmed, and answered rather than restated.** See EXP-052 |
+| S7 assumption 1 measured globally, needed locally | **confirmed, and closed.** See EXP-052 |
+
+*S2, the one most likely to produce a reject.* The abstract said "no detectable change in
+their trained behaviour". §3.7 defines behaviour as two-sided, and the constraint side is
+measured. Run at INT4 g128 with the estimator the paper already used at INT3:
+
+| contrast | paired mean | enumerated 95% CI | excludes 0 | two-sided p |
+|---|---|---|---|---|
+| BF16 to INT4 g128 | **+8.33 pts** | **[+4.17, +12.50]** | **yes** | 0.0027 |
+| BF16 to INT4 per-channel | +8.33 pts | [+2.08, +16.67] | yes | 0.0313 |
+| BF16 to INT3 g128 | +10.42 pts | [+0.00, +20.83] | no | 0.0955 |
+
+Holm across the three: only INT4 g128 survives. The paper had run this contrast **only at
+INT3**, where `snow` doubles and the interval reaches zero, and read that omission as a
+null -- at the precision the headline is about, the same estimator resolves it.
+
+*Everything M1 through M20, one line each where the outcome is not obvious:*
+
+- **M1** The Conclusion's "1.7-7.5x its size" took 1.7 from the relative-error column and
+  7.5 from the magnitude-ratio column. B.1's `mag` column is **2.01-7.49**.
+- **M2** "the two readings differ fifteenfold -- 85.5% of values against 2.1% of codes":
+  85.5/2.1 = **40.7**, and it is one adapter's pair. 15.0x is B.4's nine-adapter pooled
+  values-vs-codes ratio, a metric difference and not the regime difference the sentence
+  frames it as.
+- **M3** "the same ratio **predicts** layer-output fidelity 6.2-16.5x higher" -- A.2 says
+  in terms that it is not a prediction and does not pass through `c`. One word, two places.
+- **M4** "weight-space cosine of 0.13" at eight sites. The taboo six run 0.1363-0.1412, so
+  0.14 under either regime; **0.13 is B.13's `SNR_weight`**, which B.13 warns is a
+  different statistic.
+- **M5** Eight references resolving to real but wrong targets, three of them caused by one
+  missing map entry -- see *Plan impact*.
+- **M6** B.8's "clears zero by 0.1 points" against its own table's [5.4%, 34.5%]. **Not a
+  stale sentence:** the value is a ratio and the format specifier was `.1f`, so 0.054
+  printed as 0.1 while the table printed 5.4%. It understated in the conservative
+  direction, which is why nobody re-derived it.
+- **M7** F.8's "every number in this paper comes from a GPU-dependent step" is false three
+  lines below its own table, which lists `ar.predict` (no GPU, ~30 values in A.2) and the
+  36-of-36 figure §1 and §3.2 quote.
+- **M8** "the module ordering is entirely a magnitude effect", contradicted by A.2's own
+  tau bullet: pooled over nine, `k_proj` has the 2nd-highest flip and 4th-lowest cosine
+  while `up_proj` has the 4th-highest flip and 2nd-highest cosine, requiring `k_proj`'s
+  tau to sit **17.5% below** `up_proj`'s. Magnitude and tail shape.
+- **M9** A.4 says the banners print "unconditionally, on every run"; both are absent from
+  A.2's example output, which is now marked as elided at the point they print.
+- **M10** The tool-vs-B.13 bullet compared 0.1341 against **0.1387**, which is
+  `cos/sqrt(1-cos^2)` at the *measured* cosine. The tool prints **0.1442**, so the gap is
+  **7.5%**, not 3.4% -- in the appendix whose subject is that every printed number is a
+  claim.
+- **M11** PG-1 compared a noisy outcome against a deterministic predictor. Netting out the
+  mean squared per-adapter SE from the cluster bootstrap B.12 already had: **30.5x to
+  27.5x** at INT3, **9.1x to 6.5x** at INT4 g128. The tool printed 30x to every user.
+- **M12** "only SpQR selects on weights" is wrong -- its saliency runs through the layer
+  inverse-Hessian built from calibration activations. **FW-1 survives and strengthens for
+  the opposite reason**: a quiet channel has small `H_jj`, hence a large inverse-Hessian
+  diagonal, hence low GPTQ-style sensitivity, so quiet channels are what that criterion
+  deprioritises.
+- **M13** The 0.15-0.19x "quietest channels" range is `gate_proj` alone; `up_proj` in the
+  same layers is 0.61-0.89x with two of three correlations at control level.
+- **M14** Figure 1's left panel plotted **97.9% unchanged codes** under the header "Stored
+  weights UNCHANGED", beside a 99.2% bar, in a figure captioned "erasure versus survival"
+  -- the misleading reading in the largest type on the page, with the qualification in
+  9pt. It now plots cosine, **13.8%**.
+- **M15** §3.5's `w = s(k + u)` with `u` "the position in the bin" puts the
+  round-to-nearest boundary at `u = 1/2`, not 0. B.11's code was always right.
+- **M16** B.11 read the extrema control as "pinned to the safest position, u = 0.494".
+  **A mean of 0.494 is the uniform expectation.** Measured: SD **0.2887** against the
+  uniform `1/sqrt(12) = 0.2887`, IQR **0.500** against 0.500. The extrema are not pinned
+  anywhere.
+- **M17** The 2.3% headline is a 4-layer number and the four layers were never named
+  (0, 12, 24, 35). The one full-depth run disagrees by **11.6%** on flip rate (0.01093 to
+  0.01220) and **0.44%** on cosine -- which is the paper's own argument for leading with
+  cosine, made with its own data, and it was not being made.
+- **M18** "three decades of adapter magnitude" in Contribution 1: the nine span **1.13
+  decades**. The three decades are the synthetic sweep. The abstract had it right.
+- **M19** Four scope leaks, including "erasure and survival are one measurement read at
+  two levels" where the second level is layer-output fidelity and PG-3 is the paper's own
+  counterexample.
+- **M20** The abstract quoted the split and the span without naming a variant, one round
+  after B.7 promised every such site would. Figure 2's caption did the same.
+
+*Moderate and minor, the ones worth naming:*
+
+- **The reproduction path refused to run for almost every reproducer.** `require_cuda`
+  defaulted to a capability floor of **sm_120**, so every measurement script raised on an
+  A100, H100 or 4090. The floor was standing in for a real hazard -- a pre-cu128 torch
+  imports cleanly on Blackwell and returns garbage -- and standing in for it backwards:
+  the population at risk is *new* cards on *old* toolkits. The default is now sm_80, which
+  is what bf16 needs, and the Blackwell case is checked directly.
+- **`\|` in a table cell was both a spurious column break and a `\textbackslash{}`.** It
+  is markdown's only way to write a literal bar, and every table naming `|delta|` or `|r|`
+  used it -- including the two carrying the 2.3% and 10.4% headlines. `\*` had it too.
+- **B.2's derived columns did not reproduce from its own printed inputs.** 0.01093 against
+  0.01095 supports a ratio anywhere in 0.9981-0.9985; the table asserted 0.999.
+- **§3.11's floor derivation** used `rock`'s 116.2% as a single-draw SD and divided by
+  sqrt(6). An extreme order statistic is not an SD. Deleted; the empirical between-adapter
+  SD of 11.5 points is the right quantity and the conclusion survives.
+- Every command in the reproduction appendix is POSIX while D.1 says the timings are
+  Windows 11 with no WSL2 required, and `PYTHONPATH=src python` is not valid PowerShell.
+
+**Verdict:** WORKED.
+
+**What we learned:**
+
+1. **Partial propagation needed a gate, and the gate had to read something none of the
+   others do.** The claim audit recomputes numbers; a retracted *sentence* has none.
+   `countcheck` resolves cardinals, `xref` resolves references. `analysis/retracted.py`
+   holds every retracted wording with what replaced it and fails the build if one is
+   asserted in the perimeter again. The convention that makes it workable was already how
+   this project writes corrections: **a retraction quotes the retired wording and an
+   assertion does not**. Fed the tree as it stood, it found a live one immediately.
+2. **The Python half of that perimeter has to be parsed, not scanned.** A figure's
+   in-panel header is a string literal, so on raw bytes every character of it looks like a
+   quotation -- the gate would have been structurally unable to see "Stored weights
+   UNCHANGED", the one defect a reader would have taken away backwards.
+3. **A reference map with a hole in it is worse than no map.** REFMAP had `5.4 -> 5.3` and
+   not `5.3 -> 5.2`, so every reference to the dissociation section resolved -- in the
+   built paper -- to the predictive gap. Three of them. The existing gate checks that the
+   target EXISTS, which any map satisfies. `xref.section_alignment` matches by numeric
+   fingerprint, because numbers survive a rewrite that title words do not.
+4. **Four of this round's findings were in material the previous round wrote.** A revision
+   round is not a monotone improvement: it adds text at the moment of least review, and
+   the text it adds is the text arguing hardest.
+5. **We withdrew a wrong explanation and stopped, and called that resolved.** M.8's
+   corroboration paragraph was withdrawn last round, leaving an eightfold discrepancy
+   between two of our own appendices standing as though the withdrawal had settled it.
+   EXP-052 settles it. Withdrawal and measurement are different acts.
+6. **The read-through again found what no gate could**, and one of its three finds is this
+   round's own defect: the INT4 leak contrast reached the abstract, the introduction,
+   Figure 1's caption and the Conclusion, and was never stated in §5.1, which is its
+   source. Partial propagation, committed in the round that named it.
+
+**Plan impact:** arXiv PDF 30 pages (11.6 body, 18.0 appendix) from 28; the growth is the
+new evidence. Group 6's cut is re-derived against measured costs and does not reach its
+target -- see the round report. Three new standing gates: retracted wordings, reference
+alignment by content, and the markdown-escape conversions. `METHODOLOGY.md` gains M.9.
+
+**Artifacts:** `analysis/retracted.py`, `tests/test_retracted.py`,
+`analysis/xref.py` (`section_alignment`), `scripts/local_independence.py`,
+`results/raw/phase0/local_independence/`, `results/raw/phase0/bin_position/`,
+`analysis/md_to_tex.py`, `src/ar/device.py`, `METHODOLOGY.md` M.9,
+`paper/07-registered-predictions.md`.

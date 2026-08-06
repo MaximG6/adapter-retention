@@ -76,19 +76,13 @@ about its behaviour under quantization — which we did not measure.
 
 A plausible reading of §6.2 is that the adapter trades harmful-refusal for exaggerated
 safety. A supplementary control of **surface-harmful, actually-benign** prompts (§3.10)
-did not clear the gate either: `p_refuse` 0.8118 base against 0.8554 aligned (Cliff's
-*d* 0.188), string-refusal 0/16 against 1/16 (*d* 0.062). **The null is informative
-because the prompt set demonstrably discriminates** — the base model's refusal
-propensity is 0.1449 on plain benign prompts and **0.8118** on these, a **5.60×**
-contrast on the same model. The instrument can move; it did not. The single aligned
-over-refusal is a textbook exaggerated-safety failure, declining to give James Bond's
-fictional bank account number, which the base model answered.
-
-**What the adapter does do** is diffuse the output distribution. Mean token entropy,
-aligned relative to base, runs **1.71× to 2.78×** across the four subsets with Cliff's
-*d* of 0.86–1.00 on every one. In the taboo family entropy was flat across all
-conditions (§5.2). This is the adapter's largest coherent behavioural fingerprint, and
-it is not refusal.
+did not clear the gate either: `p_refuse` 0.8118 base against 0.8554 aligned (Cliff's *d*
+0.188), string-refusal 0/16 against 1/16 (*d* 0.062). **The null is informative because
+the prompt set demonstrably discriminates** — the base model scores 0.1449 on plain benign
+prompts and 0.8118 on these, a **5.60×** contrast on the same model. The instrument can
+move; it did not. What the adapter does do is **diffuse the output distribution**: mean
+token entropy runs **1.71× to 2.78×** base across the four subsets, Cliff's *d* 0.86–1.00
+on every one. That is its largest coherent behavioural fingerprint, and it is not refusal.
 
 ## 6.4 Consequence: no precision comparison, and a prediction withdrawn
 
@@ -109,17 +103,12 @@ quantization — only that we could not certify an instrument capable of asking.
 ## 6.5 A second measurement proxy that fails to track what it names
 
 `p_refuse` scores the base model at 0.812 on surface-harmful prompts while that model
-complies with **16 of 16** of them, and scored 0.857 on the fiction-framed prompt where
-the aligned model **complied**. In both directions, the graded propensity tracks **how
-harmful the prompt looks**, not what the model does.
-
-Within a fixed prompt set it remains a valid across-condition comparison — the same
-prompts are scored under different weights — so §6.2's verdict stands. But its absolute
-level must never be read as "probability the model refuses".
-
-This is the paper's through-line appearing a second time, at a different level of the
-stack. In §5.4 a weight-space proxy (output SNR) failed to track the behaviour it was
-built to predict. Here a behavioural proxy (refusal propensity) fails to track the
-behaviour it is named after. **Both were caught the same way: by validating the proxy
-against a contrast whose answer was already known, and by reading individual
-trajectories rather than trusting an aggregate.**
+complies with **16 of 16**, and 0.857 on the fiction-framed prompt where the aligned model
+**complied**. In both directions the graded propensity tracks how harmful the prompt
+*looks*, not what the model does. Within a fixed prompt set it remains a valid
+across-condition comparison, so §6.2's verdict stands; its absolute level must never be
+read as "probability the model refuses". **This is the paper's through-line at a second
+level of the stack.** In §5.4 a weight-space proxy failed to track the behaviour it was
+built to predict; here a behavioural proxy fails to track the behaviour it is named after.
+Both were caught the same way: by validating the proxy against a contrast whose answer was
+already known, and by reading trajectories rather than trusting an aggregate.

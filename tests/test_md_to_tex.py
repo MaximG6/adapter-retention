@@ -169,6 +169,16 @@ def test_an_escaped_asterisk_is_not_emphasis_and_not_a_backslash() -> None:
     assert "emph" not in out
 
 
+def test_a_backslash_inside_a_code_span_is_content_not_an_escape() -> None:
+    """The escape resolver, run before code spans were held out, read the `\\\\` in a
+    span as an escaped backtick and emitted a raw control character into the tex. Tectonic
+    rejected the line outright, which is the good case; the same class of bug that does
+    not stop the build is what texcheck exists for."""
+    out = m2t.inline(r"a trailing `\\` continuation")
+    assert "\x02" not in out
+    assert "textbackslash" in out, "the span's backslashes are content"
+
+
 def test_paths_in_code_spans_may_break() -> None:
     out = m2t.inline("`results/raw/phase0/public_adapter/records.jsonl`")
     assert "allowbreak" in out

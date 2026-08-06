@@ -19,7 +19,7 @@ documentation of one.
 | **Disk** | ~35 GB | Qwen3-8B (16 GB) + Llama-3.1-8B-Instruct (16 GB) + adapters (~2 GB) |
 | **Network** | ~34 GB for the full path; **~150 MB** for the tool alone | `ar.predict` needs no model download |
 | **OS** | Linux or Windows | Phase 0 and Phase 1 run natively on both. No WSL2 required for anything in this paper. |
-| **Time** | ~76 min compute after downloads | breakdown in D.6 |
+| **Time** | ~76 min compute after downloads | breakdown in D.5 |
 
 **No gated repositories are required.** The Llama base is fetched from an ungated mirror
 whose four safetensors shards we verified byte-identical (LFS SHA-256) to
@@ -95,171 +95,49 @@ from this means the CUDA build does not match the card; do not proceed.
 
 ## D.3 Tests first
 
-```bash
-PYTHONPATH=src python -m pytest -q
-```
-
-Expected: **no failures**, ~8 s, **no GPU needed** (the device tests stub the CUDA API).
-The count grows with each review round — the README's verification block carries the
-current one, generated rather than typed — so read the assertion as "none fail" rather
-than as a number to match.
-These gate the metric definitions, the scoring logic and the device-resolution rules. If
-they fail, nothing downstream is trustworthy.
+`PYTHONPATH=src python -m pytest -q` — **no failures**, ~8 s, no GPU (the device tests
+stub the CUDA API). Read it as "none fail" rather than as a count to match; the count
+grows each round and the README's verification block carries the current one, generated.
+These gate the metric definitions, the scoring logic and the device-resolution rules.
 
 ## D.4 Validation gates (run these before the experiments)
 
-The paper's numbers depend on three checks. Each is cheap and each has caught a real
-error in this project.
+Three checks, each cheap, each having caught a real error here. All three need no GPU and
+take about two minutes together.
 
-**1. Quantizer bit-exactness against `gptqmodel`** (no GPU, ~1 min):
+| gate | command | expected |
+|---|---|---|
+| quantizer bit-exactness against `gptqmodel` | `scripts/validate_quantsim_vs_gptqmodel.py` | **36/36 bit-exact**, `max\|Δdequant\| = 0`, for `asymmetric` and `symmetric_gptq`. `symmetric_awq` deliberately differs — a different convention with no `gptqmodel` counterpart |
+| adapter delta against peft's own merge | `scripts/validate_lora_delta_vs_peft.py` | matches `merge_and_unload() − original` to float precision, including rsLoRA. This is the check that caught an 11.3× scaling error |
+| instrument gate self-test | `analysis/instrument_gate.py --self-test` | `gate self-test PASSED`. It asserts the gate **rejects** a probe already known to be broken |
 
-```bash
-PYTHONPATH=src python scripts/validate_quantsim_vs_gptqmodel.py
-```
+*`gptqmodel` has no Windows wheel; the first script loads its pure-PyTorch quantizer from
+the sdist without installing the package, so no build tools are required.*
 
-Expected: **36/36 configurations bit-exact**, `max|Δdequant| = 0.000e+00`, for
-`asymmetric` and `symmetric_gptq`. `symmetric_awq` deliberately differs — it is a
-different convention with no `gptqmodel` counterpart.
+## D.5 Running it, and what it costs
 
-*Note:* `gptqmodel` has no Windows wheel. The script loads its pure-PyTorch quantizer
-from the sdist without installing the package; no build tools are required.
+Every command, in order, with its runtime and its expected output, is in the repository
+README under *Every command, in order*. It is a page of shell and the reproducer is
+already there; repeating it here costs a page of the paper and helps nobody. The shape:
 
-**2. Adapter delta against peft's own merge** (no GPU, ~1 min):
+| stage | GPU | runs | wall time |
+|---|---|---|---|
+| tests and the three gates above | no | once | ~2 min |
+| Phase 0, weight space | yes | 9 adapters + one 36-layer profile | ~17 min |
+| Phase 0, synthetic sweep, amplification, spike | yes | once each | ~9 min |
+| Phase 1, behaviour | yes | 6 adapters | ~42 min |
+| refusal battery, both sets | yes | once | ~6 min |
+| **total from cold** | | | **~76 min, ~34 GB download** |
 
-```bash
-PYTHONPATH=src python scripts/validate_lora_delta_vs_peft.py
-```
+The download is the two base models plus adapter tensors; Phase 0's per-adapter rows are
+range-reads over cached shards and add nothing to it. An earlier draft totalled the
+per-step column without the per-adapter multiplicities and reported ~50 min.
 
-Expected: our computed delta matches `merge_and_unload() − original` to float precision,
-including for rsLoRA adapters. This is the check that caught an 11.3× scaling error.
+Every run writes `manifest.json` beside its records: torch and CUDA versions, GPU name and
+compute capability, package versions, git SHA and all seeds. **Include it when reporting a
+discrepancy** — it is usually enough to identify the cause.
 
-**3. Instrument gate self-test** (no GPU, instant):
-
-```bash
-PYTHONPATH=src python analysis/instrument_gate.py --self-test
-```
-
-Expected: ends with `gate self-test PASSED`. It asserts the gate **rejects** a probe
-already known to be broken.
-
-## D.5 Reproducing the results
-
-### Phase 0 — weight space (GPU required; no base-model download)
-
-```bash
-# One adapter, 4 layers, 3 schemes. ~70 s, ~1.5 GB network (range-reads tensors;
-# does NOT download the 16 GB base model).
-PYTHONPATH=src python scripts/measure_public_adapter.py \
-  --adapter adamkarvonen/Qwen3-8B-taboo-smile_50_mix
-
-# All nine adapters: repeat --adapter for each.
-# The list is in paper/appendix-B-tables.md.
-# Full 36-layer depth profile for one adapter, asymmetric only. ~6 min.
-PYTHONPATH=src python scripts/measure_public_adapter.py \
-  --adapter adamkarvonen/Qwen3-8B-taboo-smile_50_mix \
-  --layers all --schemes asymmetric --out-subdir L36_asymmetric
-
-# Synthetic rank sweep and dose-response. ~3 min.
-PYTHONPATH=src python scripts/synthetic_sweep.py
-
-# Subspace amplification, orthonormal probe. ~4 min.
-PYTHONPATH=src python scripts/amplification_svd_test.py
-PYTHONPATH=src python scripts/output_snr_orthonormal.py
-```
-
-### Phase 0 — the layer 1–3 spike (GPU, ~2 min)
-
-Downloads Qwen3-8B (16 GB) on first run.
-
-```bash
-PYTHONPATH=src python scripts/outlier_channel_test.py
-```
-
-Expected: `1.gate_proj` step median/p1 ≈ **83.5**, activation at narrowest 1% of groups
-≈ **0.17**, and near-zero correlations in the layer-0 and layer-18 controls.
-
-### Phase 1 — behaviour (GPU, ~7 min per adapter)
-
-```bash
-# One adapter, all four precisions -> 256 records.
-PYTHONPATH=src python scripts/run_phase1.py \
-  --adapter adamkarvonen/Qwen3-8B-taboo-smile_50_mix \
-  --precisions bf16,int4_g128,int4_per_channel,int3_g128
-
-# Repeat for: taboo-gold, taboo-ship, taboo-snow, taboo-moon, taboo-rock
-# (same repo prefix, substitute the word) -> 1536 records total.
-```
-
-### The refusal battery (GPU, ~6 min; downloads Llama-3.1-8B-Instruct, 16 GB)
-
-```bash
-PYTHONPATH=src python scripts/validate_refusal.py \
-  --adapter Kurapika993/llama-3.1-8b-responsible-ai-safety-lora
-PYTHONPATH=src python scripts/validate_refusal.py --battery xstest \
-  --adapter Kurapika993/llama-3.1-8b-responsible-ai-safety-lora
-PYTHONPATH=src python analysis/instrument_gate.py --refusal
-```
-
-Expected: **`REFUSAL INSTRUMENT NOT VALIDATED`** (exit code 2). That is the paper's
-result, not a failure of the run — see §6.
-
-### Analysis and tables
-
-```bash
-PYTHONPATH=src python analysis/phase1_pooled.py     # §5.1–5.3
-PYTHONPATH=src python analysis/crossover.py         # PG-1
-PYTHONPATH=src python analysis/word_vs_noise.py     # PG-2
-PYTHONPATH=src python analysis/appendix_tables.py --write   # regenerates Appendix B
-```
-
-`appendix_tables.py` regenerates every table in Appendix B from the raw records. If your
-run produces different numbers, the diff against the committed
-`paper/appendix-B-tables.md` localises the discrepancy immediately.
-
-### The tool alone (no GPU, ~150 MB network, ~30 s)
-
-```bash
-PYTHONPATH=src python -m ar.predict \
-  --adapter adamkarvonen/Qwen3-8B-taboo-smile_50_mix --bits 4 --group-size 128
-```
-
-## D.6 Expected runtimes and outputs
-
-| step | GPU | wall time | network | output |
-|---|---|---|---|---|
-| tests | no | 7 s | 0 | 169 passed |
-| quantsim vs gptqmodel | no | ~1 min | ~30 MB | 36/36 bit-exact |
-| delta vs peft | no | ~1 min | ~200 MB | match to float precision |
-| Phase 0, one adapter, 4 layers | yes | ~70 s | ~1.5 GB | 168 records |
-| Phase 0, 36-layer profile | yes | ~6 min | ~1.5 GB | 504 records |
-| synthetic sweep | yes | ~3 min | 0 | 43 records |
-| amplification + output SNR | yes | ~4 min | ~1.5 GB | 24 + 126 records |
-| outlier channel test | yes | ~2 min* | 16 GB* | 10 records |
-| Phase 1, per adapter | yes | ~7 min | 16 GB* | 256 records |
-| refusal battery (both) | yes | ~6 min | 16 GB* | 96 records |
-
-\* first run only; the base model is cached afterwards.
-
-The per-adapter rows run more than once: Phase 0 for **9** adapters, Phase 1 for **6**.
-Summing the column with those multiplicities:
-
-| | wall time |
-|---|---|
-| single-run rows (tests, validation, 36-layer, sweep, amplification, outlier, refusal) | ~23 min |
-| Phase 0, one adapter x 9 | ~11 min |
-| Phase 1, per adapter x 6 | ~42 min |
-| **total** | **~76 min** |
-
-**Total from cold: ~34 GB download, ~76 min compute** for every number in the paper. The
-download figure is the two base models plus adapter tensors; the 1.5 GB rows are
-range-reads that reuse the same cached shards, so they do not add to it. An earlier draft
-totalled the compute column without the multiplicities and reported ~50 min.
-
-Every run writes `manifest.json` beside its records containing torch/CUDA versions, GPU
-name and compute capability, package versions, git SHA and all seeds. **Include this file
-when reporting a discrepancy** — it is usually enough to identify the cause.
-
-## D.7 Determinism and what will differ
+## D.6 Determinism and what will differ
 
 - **Decoding is greedy** (`do_sample=False`) throughout, so generations are
   reproducible bit-for-bit on the same hardware and library versions. Seeds are recorded
@@ -277,7 +155,7 @@ when reporting a discrepancy** — it is usually enough to identify the cause.
 - **Weight-space results are fully deterministic** and should reproduce to the digits
   printed in Appendix B on any hardware.
 
-## D.8 What was verified from a fresh clone, and what was not
+## D.7 What was verified from a fresh clone, and what was not
 
 This appendix was executed against a **fresh clone into a clean directory**, not against
 the working tree, on 2026-08-03. Results:
@@ -304,7 +182,7 @@ load a base model and quantize it — are GPU-dependent, and none of those was r
 the fresh clone; they are unchanged code paths already exercised in this session, and
 re-downloading 34 GB to re-verify them adds nothing. So this table establishes that the
 analysis pipeline reproduces from the committed raw records, not that the raw records
-reproduce from the models. Their timings in D.6 are measured, not estimated.
+reproduce from the models. Their timings in D.5 are measured, not estimated.
 
 **Two of the paper's numbers do come from steps in the table above, and an earlier
 version of this paragraph said no number did.** `python -m ar.predict` ran with no GPU
