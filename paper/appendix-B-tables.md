@@ -230,6 +230,8 @@ Activation columns are mean-normalised within each module (§4.5.1).
 
 **Uniform to within 1.8% at every `t` at or above 0.005**, which covers the whole range our adapters occupy. Read on one tail alone the lowest 0.1% of the bin is over-occupied by 2.6x, which a one-sided measurement would have reported as a 156% excess.
 
+**Do not read the `mean / t` column as a flat 0.985 and infer a constant 1.3–1.5% over-prediction.** That is what this appendix did, and it puts B.2 and B.11 eight-fold apart for no reason: the column is flat *in this table* because every row pools all weights, and the departure is a function of `|Δ|/s`, which pooling hides. The decile breakdown below has it, and §4.1 states the budget it implies.
+
 **Where that excess comes from, since the obvious answer is wrong.** An earlier version of this appendix attributed it to Equation 2 pinning each group's extrema, which would put 1.56% of weights on a boundary against the 0.20% measured — eight times over. Six controls, the last three added when the account that replaced it turned out to need them too:
 
 | control | measured | what the pinning account implies |

@@ -1255,6 +1255,13 @@ def b11_uniformity() -> str:
             "a one-sided measurement would have reported as a "
             f"{(excess - 1):.0%} excess.",
             "",
+            "**Do not read the `mean / t` column as a flat 0.985 and infer a constant "
+            "1.3–1.5% over-prediction.** That is what this appendix did, and it puts B.2 "
+            "and B.11 eight-fold apart for no reason: the column is flat *in this table* "
+            "because every row pools all weights, and the departure is a function of "
+            "`|Δ|/s`, which pooling hides. The decile breakdown below has it, and §4.1 "
+            "states the budget it implies.",
+            "",
             "**Where that excess comes from, since the obvious answer is wrong.** An "
             "earlier version of this appendix attributed it to Equation 2 pinning each "
             f"group's extrema, which would put {rs[0]['frac_weights_that_are_extrema']:.2%} "

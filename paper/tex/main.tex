@@ -50,7 +50,7 @@ enumerated 95\% interval \textbf{[90.7\%, 107.6\%]}, excluding losses beyond abo
 The trained \emph{constraint} does move, and \textbf{tightens}: the adversarial leak rate
 falls from 16.7\% to 8.3\%, a paired difference of \textbf{+8.3 points, [+4.2, +12.5]}
 --- the one of three precision contrasts that survives Holm correction, on per-adapter
-cells that are counts out of 8.
+cells that are counts out of 8 (\S\ref{sec:leak}).
 Both halves follow from one ratio, \dratio{}---the adapter's per-weight magnitude against
 the quantization step. Read per weight, a channel model with \emph{no fitted parameters}
 predicts each adapter's code-flip rate \emph{on a fixed grid} to within \textbf{2.3\%}
@@ -93,7 +93,8 @@ enumerated 95\% interval, [90.7\%, 107.6\%], spans parity: the instrument cannot
 the quantized model from the unquantized one, and it bounds the loss at about 9\%. On the
 constraint side the same six adapters leak the suppressed word on 16.7\% of adversarial
 prompts at BF16 and 8.3\% after quantization, a paired +8.3 points with an enumerated
-interval of [+4.2, +12.5] that excludes zero (\S\ref{sec:behaviour}). \textbf{Behaviour
+interval of [+4.2, +12.5] that excludes zero (\S\ref{sec:leak}, which states all three
+precisions, the per-adapter values and the multiplicity). \textbf{Behaviour
 is two-sided} (\S\ref{sec:battery}) \textbf{and only one side is unchanged};
 Figure~\ref{fig:headline} puts the weight-space and capability panels side by side. This
 paper is about that contrast.
@@ -105,19 +106,19 @@ paper is about that contrast.
 rank-32 taboo adapters in both panels, both under \texttt{adaptive\_scale}---the
 deployment regime the behavioural runs used (\S\ref{sec:regimes}).
 \textbf{The left panel plots the erasure statistic this paper leads with}: the cosine
-between the intended and the delivered update, 13.8\%, which is the same to within 0.8\%
-under either scale regime. Counts of changed weights are not plotted because they are
-regime- and metric-dependent; for the record they are codes unchanged 97.9\% on the
-deployment path and 98.9\% with the grid held fixed, dequantized \emph{values} unchanged
-14.5\%. All four numbers describe one update, and an earlier version of this figure
-plotted 97.9\% under the header ``stored weights unchanged'', which put the misleading
-reading in the largest type on the page.
+between the intended and the delivered update, \textbf{0.138}, drawn on the 0--100 scale
+so both panels share one axis. It is the same to within 0.8\% under either scale regime,
+which is why counts are not plotted---those are regime- and metric-dependent and run
+2.1\%, 1.1\% and 85.5\% depending on which you take (\S\ref{sec:regimes},
+\S\ref{sec:leak}). An earlier version of this figure plotted the \emph{complement} of the
+first---unchanged codes rather than changed---under the header ``stored weights
+unchanged'', which put the misleading reading in the largest type on the page.
 Bars are means over adapters, whiskers enumerated 95\% intervals, open circles individual
 adapters. The right whisker crosses 100\%: this is a \emph{non-detection with a bound},
 not a measured equality, and the interval's lower edge is the claim, excluding losses
 beyond about 9\%. \textbf{The right panel is capability, which is one side of behaviour};
 the trained constraint is the other and it moves---the leak rate falls 8.3 points,
-[+4.2, +12.5] (\S\ref{sec:behaviour}). Above-parity capability readings are noise rather
+[+4.2, +12.5] (\S\ref{sec:leak}). Above-parity capability readings are noise rather
 than improvement; the obvious alternative---that a leakier model scores higher on this
 instrument---was checked and does not explain them.}
 \label{fig:headline}
@@ -599,20 +600,21 @@ and its rank correlation, $+0.87$, breached the bound we registered---but that b
 a Spearman with no magnitude qualifier, and a rank statistic on ten values is scale-free
 by construction. The dependence is real and it is 0.6\% wide.
 
-\textbf{The residual sub-uniformity is not a constant, and stating it as one made two of
-our appendices disagree.} B.11 read $F_u(t)/t$ as flat at $0.985$ and inferred a
-near-constant $1.3$--$1.5\%$ over-prediction for every adapter; Table~\ref{tab:channel}
-measures 0.1\% for each of the taboo six and 2.3\% for
-\texttt{responsible-ai-safety}. An earlier draft reported the sign agreement between the
-two as corroboration; a later one withdrew the corroboration and left the eight-fold
-disagreement unexplained. \textbf{It is neither.} The departure is a function of
-$|\Delta|/s$: the same decile table gives true-flip over $\min(t,1)$ of $1.12$ at
-$t = 0.0024$, $0.97$--$0.98$ through the middle, and $0.95$ at $t = 0.124$. An adapter's
-error is therefore set by where its own $|\Delta|/s$ distribution sits, and re-measuring
-the two adapters on one code path reproduces Table~\ref{tab:channel}'s split exactly:
-2.7\% for the safety adapter, 0.1\% for \texttt{taboo-smile}. \textbf{The budget is under
-0.5\% at the $t$ the taboo adapters occupy and about 2.5\% at four times that $t$}
-(EXP-048, EXP-052).
+\textbf{The residual sub-uniformity is not a constant, so the error budget is not
+1.5\%.} A reader taking B.11's $F_u(t)/t \approx 0.985$ as flat would infer a
+near-constant $1.3$--$1.5\%$ over-prediction for every adapter and conclude that applying
+the measured licensing correction makes Equation~\ref{eq:flip} \emph{worse}, since
+Table~\ref{tab:channel} shows 0.1\%; \textbf{the departure is instead a function of
+$|\Delta|/s$}---true-flip over $\min(t,1)$ runs $1.12$ at $t = 0.0024$, $0.97$--$0.98$
+through the middle and $0.95$ at $t = 0.124$ (B.11)---so it is \textbf{under 0.5\% at the
+$t \approx 0.011$ the taboo adapters occupy and about 2.5\% at four times that $t$}.
+\textbf{The strongest evidence for that is a reproduction rather than an argument}:
+measuring the true integer code flip directly, on a separate code path and a different
+layer set from the one Table~\ref{tab:channel} uses, recovers that table's split to three
+decimals---\textbf{0.9732 for the safety adapter against its 0.977, and 0.9990 for
+\texttt{taboo-smile} against its 0.999}. An earlier draft reported the sign agreement
+between the two appendices as corroboration and a later one withdrew it, leaving the
+eight-fold disagreement standing as though withdrawal had settled it (EXP-048, EXP-052).
 
 \emph{Those four measurements, not the numerical agreement, are what make this more than
 a curve fit.}
@@ -686,6 +688,7 @@ Six Taboo adapters $\times$ four precisions $\times$ 32 prompts $\times$ two con
 \S\ref{sec:dissoc} and the elicitation floor below.
 
 \subsection{No detectable loss at INT4 g128; a mean that degrades and adapters that do not}
+\label{sec:leak}
 \begin{table}[t]
 \centering\small
 \caption{Behavioural retention, elicitation as a fraction of each adapter's own BF16.
@@ -708,8 +711,11 @@ INT3 g128 & \textbf{57.8\%} & [41.7, 74.3] & 62.1\% & 2/6 \\
 \textbf{These conditions are quantized the same way a toolchain would}, i.e.\ under
 \texttt{adaptive\_scale} (\S\ref{sec:regimes}), so the weight-space number to pair with a
 behavioural one is the deployment-regime one for these same six adapters: \textbf{85.5\%
-of their stored values differ} from the base model's while \textbf{elicitation capability
-is 99.2\% retained} (Figure~\ref{fig:headline}, Appendix~B.1). Entropy is flat (1.35--1.50 nats) across all aligned conditions
+of their stored values differ} from the base model's and 2.1\% of the integer codes do
+(98.9\% of codes unchanged under \texttt{fixed\_scale}, which isolates the adapter but is
+not what was run here), while \textbf{elicitation capability is 99.2\% retained}, at a
+mean cosine of \textbf{0.138} between the intended and the delivered update
+(Figure~\ref{fig:headline}, Appendix~B.1). Entropy is flat (1.35--1.50 nats) across all aligned conditions
 while elicitation halves, so the degradation is not distribution flattening.
 
 \textbf{Removing the adversarial prompts does not change the picture, and moves it the
@@ -738,14 +744,33 @@ falls too, so part of this is a model less able to produce the word rather than 
 willing to withhold it.
 
 \textbf{Paired over the six adapters, the fall at INT4 g128 resolves and the fall at INT3
-does not.} The BF16-to-INT4-g128 difference is $\mathbf{+8.3}$ \textbf{points, enumerated
-95\% interval} $\mathbf{[+4.2, +12.5]}$, excluding zero; at INT4 per-channel $+8.3$,
-$[+2.1, +16.7]$, also excluding zero; at INT3 $+10.4$, $[+0.0, +20.8]$, which
-\emph{reaches} zero because \texttt{snow} moves the other way there, 12.5\% to 25.0\%.
-Three contrasts, so Holm-corrected only the INT4 g128 one survives
-($p = 0.003$ against $0.031$ and $0.096$, enumerated), and that is the one the abstract
-states. Every cell is a count out of 8, so the resolution is 12.5 points and a
-per-adapter difference is one prompt.
+does not.} Per adapter, BF16 $\rightarrow$ INT4 g128: \texttt{gold} 12.5\%$\rightarrow$0,
+\texttt{moon} 37.5$\rightarrow$25.0, \texttt{rock} 12.5$\rightarrow$0, \texttt{ship}
+0$\rightarrow$0, \texttt{smile} 25.0$\rightarrow$12.5, \texttt{snow}
+12.5$\rightarrow$12.5---\textbf{four fall by 12.5 points, two tie, none reverses}. The
+three paired contrasts, enumerated over all $6^6$ resamples:
+
+\begin{table}[h]
+\centering\small
+\begin{tabular}{lrcc}
+\toprule
+vs.\ BF16 & mean & 95\% CI & Holm \\
+\midrule
+INT4 g128 & $+8.3$ & $[+4.2, +12.5]$ & \textbf{yes} \\
+INT4 per-ch. & $+8.3$ & $[+2.1, +16.7]$ & no \\
+INT3 g128 & $+10.4$ & $[+0.0, +20.8]$ & no \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent
+Two of the three exclude zero; INT3 reaches it because \texttt{snow} moves the other way
+there, 12.5\% to 25.0\%. Holm across the three at $\alpha = 0.05$ leaves only INT4 g128
+(enumerated two-sided $p = 0.003$ against $0.031$ and $0.096$), and that is the contrast
+the abstract, the introduction, Figure~\ref{fig:headline} and \S\ref{sec:conclusion}
+quote. \textbf{Every cell is a count out of 8}, so the resolution is 12.5 points, a
+per-adapter difference is one prompt, and none of these intervals should be read as
+finer than that.
 
 \textbf{This paper ran that contrast only at INT3 for four drafts}, where it reaches
 zero, and read the omission as evidence of no change---while the abstract said ``no
@@ -994,13 +1019,15 @@ directions. Reported rather than tuned away, since neither changes a magnitude-d
 verdict.
 
 \section{Conclusion}
+\label{sec:conclusion}
 
 Merging a LoRA adapter and quantizing to INT4 replaces the intended update with something
 2.0--7.5$\times$ its size in a largely uncorrelated direction, at cosine 0.14--0.51.
 \textbf{Capability does not follow}: at INT4 g128, 85.5\% of the six taboo adapters'
 stored values differ from the base model's and elicitation retention is 99.2\%,
 [90.7\%, 107.6\%], spanning parity. \textbf{The trained constraint does move, and
-tightens}---the adversarial leak rate falls 8.3 points, [+4.2, +12.5]. Capability degrades
+tightens}---the adversarial leak rate falls 8.3 points, [+4.2, +12.5]
+(\S\ref{sec:leak}). Capability degrades
 only at coarser grids, and benignly.
 
 Both follow from \dratio{}. Read per weight it predicts the stored-weight outcome to

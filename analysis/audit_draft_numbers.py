@@ -174,8 +174,11 @@ CROSS_ARTIFACT: list[tuple[str, list[tuple[str, str]]]] = [
          r"with ([\d.]+)% of codes unchanged when the"),
         ("paper/04-results-weight-space.md",
          r"\(([\d.]+)% of codes unchanged under `fixed_scale`"),
+        # Figure 1's caption stopped quoting the complements once the forward-claim gate
+        # required every summary number to be stated by a section, so the tex site moved
+        # to §5.1's pairing sentence, which is where the report already stated it.
         ("paper/tex/main.tex",
-         r"deployment path and ([\d.]+)\\% with the grid held fixed"),
+         r"\(([\d.]+)\\% of codes unchanged under \\texttt\{fixed"),
     ]),
     ("values changed, adaptive_scale %", [
         ("README.md", r"moves the grid, ([\d.]+)% of stored values change"),
