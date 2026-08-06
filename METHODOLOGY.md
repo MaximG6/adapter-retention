@@ -558,3 +558,59 @@ nothing here reads meaning (M.1). What these two do is convert two specific, rec
 mechanically-detectable shapes of that failure into build errors, and the honest reading
 of the second is that it exists because the round which understood the problem best still
 committed a version of it.
+
+---
+
+## M.10 An instrument that sizes a decision is a gate, and needs the same known-bad-input check
+
+**Claim.** M.3 says a validation gate must be tested against something already known to be
+broken. That rule was applied to gates — things that pass or fail a build — and not to
+*measurement instruments*, which merely produce a number that a human then acts on. The
+distinction is not real. **An instrument whose output sizes a decision is a gate whose
+verdict happens to be delivered in prose**, and it needs the same treatment, for the same
+reason: otherwise it is a filter of unknown selectivity at the most consequential point.
+
+**Evidence.** The instrument that measured this paper's per-section page cost computed a
+section's extent as the distance from its own heading to *the next heading*. Nothing
+labelled follows the last one. The bibliography — **1.83 pages** — was therefore charged
+to the Conclusion, which read 2.35 pages of what is half a page of prose.
+
+The consequences are the whole of the last three rounds of page arithmetic:
+
+| what was sized against it | what it was told |
+|---|---|
+| round 8's seven cuts, and their targets | body 12 pp when it was 10 |
+| round 9's re-derivation of those cuts | body 11.6 pp when it was 9.7 |
+| an external reviewer's cut plan, twice | the same, at one remove |
+| round 10's three costed scenarios | body 12.56 pp when it was 10.73 |
+
+Every one of those arguments was made about a body **1.8 pages larger than it is**, and in
+the direction that makes cutting look more necessary than it was.
+
+**Why nothing caught it.** Not one of the reasons is exotic. The number *looked plausible*
+— a long conclusion is unusual, not absurd, and the row sat in a table of forty others.
+The instrument lived in a scratch directory rather than the repository, so it was outside
+`pytest`, outside the claim audit, and outside every perimeter this project has spent five
+rounds extending. And **no check compared the sum of the parts against the document**: a
+span that overruns inflates exactly one row, and no other row disagrees with it. Row by
+row the table is unfalsifiable; only the total can see the error.
+
+That last point is the general one. A per-item measurement with no conservation check is
+the same shape as a validation gate with no known-bad input: internally consistent, and
+consistent with being wrong.
+
+**The practice.**
+
+- *An instrument that sizes a decision goes in the repository, under test, like any gate.*
+  `analysis/pagecost.py`, with `tests/test_pagecost.py`.
+- *It is fed a layout whose right answer is known.* `span_of` is separated out as a pure
+  function of (label positions, terminator positions, document end) precisely so that it
+  can be. The old behaviour is pinned as a test in the form that quantifies it: with the
+  bibliography invisible, the last section reads exactly 3× its true extent.
+- *It checks that its parts add up.* The measurement now reports the unattributed
+  remainder — the title block, 0.45 pages — and fails if the parts exceed the document.
+
+**What this does not fix.** Nothing here would have caught an instrument that is wrong by
+a *constant factor*, since the parts would still sum correctly. Conservation catches
+misattribution, not miscalibration, and the distinction is worth keeping in view: this
+entry buys one specific class of error, not confidence in the number.
