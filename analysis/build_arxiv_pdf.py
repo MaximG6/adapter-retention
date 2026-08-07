@@ -117,6 +117,16 @@ def main() -> int:
     r = run([sys.executable, str(REPO_ROOT / "analysis" / "md_to_tex.py"), "--write"],
             env=env)
     print("     " + r.stdout.strip().replace("\n", "\n     "))
+    # The exit code, not just the output. This check read stdout only, so when the
+    # converter began raising on an unmapped glyph it left the previous appendices.tex
+    # in place and the build carried on and reported success -- shipping an arXiv PDF
+    # whose Appendix B was two rounds behind its own markdown. M.7: tooling reports
+    # success on the operation, not on the outcome.
+    if r.returncode:
+        print(f"md_to_tex.py exited {r.returncode}; appendices.tex was NOT regenerated "
+              f"and any PDF built now would carry the previous one:\n{r.stderr[-3000:]}",
+              file=sys.stderr)
+        return 1
     if "survived conversion" in r.stdout:
         print("non-ASCII survived conversion; fix before shipping", file=sys.stderr)
         return 1

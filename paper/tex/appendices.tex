@@ -359,24 +359,30 @@ A fourth cell exists --- floor-corrected \emph{and} hint-only --- and is omitted
 
 \subsection{Paired contrasts between precisions}
 
-Paired over the six adapters, because the same six are measured at every precision; an unpaired comparison discards that and widens every interval for no reason. Intervals are \textbf{enumerated} over all 6\textasciicircum{}6 resamples of the per-adapter difference, so there is no resampling noise and no seed. Enumerated is not the same as exact coverage: a percentile bootstrap at n=6 is asymmetric and approximate however it is computed.
+Paired over the six adapters, because the same six are measured at every precision; an unpaired comparison discards that and widens every interval for no reason. Intervals are \textbf{enumerated} over all 6\textasciicircum{}6 resamples of the per-adapter difference, so there is no resampling noise and no seed. Enumerated is not the same as exact coverage: a percentile bootstrap at n=6 is asymmetric and approximate however it is computed, and \textbf{the test column rather than the interval is what carries the inference} (\S{}3.11).
+
+\texttt{p} is an exact sign-flip permutation over the 2\textasciicircum{}6 = 64 assignments of sign to the six paired differences --- the randomization test this paired design supports. It replaces an "excludes zero" column, which read the same bootstrap the interval comes from and therefore said nothing the interval had not already said.
 
 \begin{table*}[t]
 \centering\footnotesize
-\begin{tabularx}{\textwidth}{>{\hsize=1.120\hsize\raggedright\arraybackslash}X>{\hsize=0.880\hsize\raggedright\arraybackslash}Xll}
+\begin{tabularx}{\textwidth}{>{\hsize=1.120\hsize\raggedright\arraybackslash}X>{\hsize=0.880\hsize\raggedright\arraybackslash}Xlr}
 \toprule
-contrast & mean paired difference & 95\% CI & excludes zero \\
+contrast & mean paired difference & 95\% CI & sign-flip \texttt{p} \\
 \midrule
-INT4 g128 - INT4 per-channel & 22.0\% & [10.8\%, 31.6\%] & yes \\
-INT4 g128 - INT3 g128 & 41.4\% & [23.3\%, 59.3\%] & yes \\
-INT4 per-channel - INT3 g128 & 19.4\% & [5.4\%, 34.5\%] & yes \\
+INT4 g128 - INT4 per-channel & 22.0\% & [10.8\%, 31.6\%] & 0.0625 \\
+INT4 g128 - INT3 g128 & 41.4\% & [23.3\%, 59.3\%] & 0.0312 \\
+INT4 per-channel - INT3 g128 & 19.4\% & [5.4\%, 34.5\%] & 0.0625 \\
 \bottomrule
 \end{tabularx}
 \end{table*}
 
 Monotone at every step, per adapter: \textbf{4 of 6}. The mean is monotone; the adapters are not.
 
-\textbf{"All three exclude zero" is one claim about a correlated triple, not three independent findings.} The same six adapters produce all three contrasts and the third is the difference of the other two, so the multiplicity is not what a naive reading suggests and neither is the independence. The third contrast is also the weakest: its lower bound clears zero by \textbf{5.4\%} on an n=6 percentile bootstrap, and \S{}3.11 flags that estimator's coverage as approximate at this sample size. The first two are not close to the boundary; that one is. This sentence printed \textbf{0.1 points} for four drafts: the value is a retention \emph{ratio} and the format specifier was \texttt{.\allowbreak{}1f}, so 0.054 rendered as 0.1 while the table two lines above printed the same number as 5.4\%. It understated in the conservative direction, which is how it survived --- nobody re-derives a claim that makes the paper look weaker.
+\textbf{Two of the three are 0.0625 rather than the 0.0312 floor, and the reason is not ties.} No contrast here has a tied pair. In the first, \texttt{snow} moves against the mean; in the third, \texttt{moon} does. One adapter running the other way makes the observed sum the \emph{second} most extreme of the 64 rather than the first, which doubles the tail. Only the INT4 g128 vs INT3 contrast, where all six move together, reaches the floor.
+
+\textbf{"All three exclude zero" is one claim about a correlated triple, not three independent findings.} The same six adapters produce all three contrasts and the third is the difference of the other two, so the multiplicity is not what a naive reading suggests and neither is the independence. \textbf{None of the three clears a three-way Holm correction}, and \S{}3.11 gives the reason as a property of the design rather than of these numbers: at n=6 the two-sided sign-flip \texttt{p} cannot go below 0.0312.
+
+\emph{An earlier version of this appendix inferred the third contrast's weakness from how far its interval's lower bound sat from zero. That is reading a percentile bootstrap at n=6 as a test, which is what \S{}3.11 now forbids and what EXP-056 withdrew elsewhere; the inference is removed rather than requalified. The bound itself printed as 0.1 points for four drafts because the value is a ratio and the format specifier was \texttt{.\allowbreak{}1f}, so 0.054 rendered as 0.1 while the table printed the same number as 5.4\%.}
 
 \subsection{Knowledge probe: the benign dissociation}
 
@@ -424,6 +430,8 @@ layer & module & step med/p1 & act @ narrowest 1\% & act @ widest 1\% & $\rho$(l
 
 \subsection{Within-bin position: is \texttt{u} uniform where the model needs it?}
 
+\textbf{The derivation \S{}3.5 summarises.} Under group-wise affine quantization a weight's stored code is \texttt{round(w/\allowbreak{}s + z)}. Write \texttt{w/\allowbreak{}s + z = k + u - 1/\allowbreak{}2} with \texttt{k} the integer code and \texttt{u = frac(w/\allowbreak{}s + z + 1/\allowbreak{}2) in [0,1)}, so \texttt{u} is the distance from \texttt{w} to the \textbf{lower edge of its rounding cell} and \texttt{u = 1/\allowbreak{}2} is the cell's centre. Adding \texttt{delta} moves the code exactly when \texttt{u + delta/\allowbreak{}s} leaves \texttt{[0,1)}, so for \texttt{|delta| < s} the indicator is \texttt{1[u < |delta|/\allowbreak{}s]} when \texttt{delta < 0} and \texttt{1[u > 1 - |delta|/\allowbreak{}s]} when \texttt{delta > 0}. Under \texttt{u} uniform and independent of \texttt{delta}, each has expectation \texttt{|delta|/\allowbreak{}s}, which is Equation 4 --- the same marginal a stochastic rounder would give, obtained by averaging over a layer's \textasciitilde{}10$^{9}$ weights rather than over repetitions of a random operation. \emph{An earlier draft of \S{}3.5 wrote \texttt{w = s(k + u)} with \texttt{u} "the position within its bin", which under round-to-nearest puts the boundary at \texttt{u = 1/\allowbreak{}2} and every indicator half a bin out of place. The code always used the form above; only the line describing it was wrong.}
+
 \texttt{u} is each weight's distance to its quantization boundary, over 42 module-instances on both base models, INT4 g128 asymmetric. Equation 4 needs \texttt{F\_\allowbreak{}u(t) = t}. A flip is two-sided --- a negative delta crosses the lower boundary, a positive one the upper --- so the quantity the model averages over is the \textbf{mean of the two tails}.
 
 \begin{center}\footnotesize
@@ -448,6 +456,8 @@ t & lower tail & upper tail & mean (= P(flip)) & mean / t \\
 \end{center}
 
 \textbf{Uniform to within 1.8\% at every \texttt{t} at or above 0.005}, which covers the whole range our adapters occupy. Read on one tail alone the lowest 0.1\% of the bin is over-occupied by 2.6x, which a one-sided measurement would have reported as a 156\% excess.
+
+\textbf{Do not read the \texttt{mean / t} column as a flat 0.985 and infer a constant 1.3--1.5\% over-prediction.} That is what this appendix did, and it puts B.2 and B.11 eight-fold apart for no reason: the column is flat \emph{in this table} because every row pools all weights, and the departure is a function of \texttt{|Delta|/\allowbreak{}s}, which pooling hides. The decile breakdown below has it, and \S{}4.1 states the budget it implies.
 
 \textbf{Where that excess comes from, since the obvious answer is wrong.} An earlier version of this appendix attributed it to Equation 2 pinning each group's extrema, which would put 1.56\% of weights on a boundary against the 0.20\% measured --- eight times over. Six controls, the last three added when the account that replaced it turned out to need them too:
 
@@ -853,7 +863,7 @@ python -m pytest -q            # instead of: PYTHONPATH=src python -m pytest -q
 # Windows only, and required before cloning (README, *On Windows, enable long paths*):
 git config --global core.longpaths true
 
-git clone <repo-url> adapter-retention
+git clone https://github.com/MaximG6/adapter-retention.git adapter-retention
 cd adapter-retention
 
 conda create -n retention python=3.11 -y

@@ -54,6 +54,11 @@ TT_ASCII = {"−": "-", "–": "-", "—": "--", "→": "->", "≥": ">=", "≤"
             "⁵": "^5", "⁶": "^6", "⁷": "^7", "⁸": "^8", "⁹": "^9",
             "é": "e", "É": "E", "ü": "u", "ö": "o", "ń": "n", "ś": "s",
             "‑": "-", "∀": "for all", "⚠": "", "✓": "OK",
+            # Vulgar fractions. `u = frac(w/s + z + 1/2)` is written with the glyph in
+            # the markdown, and its absence here crashed this converter -- which the
+            # arXiv build did not notice, because it checked stdout and not the exit
+            # code, so it shipped a stale appendices.tex for two rounds.
+            "½": "1/2", "¼": "1/4", "¾": "3/4", "⅓": "1/3", "⅔": "2/3",
             "“": '"', "”": '"', "'": "'", "'": "'", "§": "S"}
 
 
