@@ -14,9 +14,9 @@ found. The findings are in [`../README.md`](../README.md), the manuscript in
 ## The operating agreement is at the repository root
 
 [`../CLAUDE.md`](../CLAUDE.md) is a process document and belongs in this list, but it
-**stays at the repository root** because that is where Claude Code loads it from. Moved
-here, it would stop being read and nothing would report an error — the agent would
-simply operate without it. It is kept at root for that reason alone.
+**stays at the repository root** because that is where the tool that reads it loads it
+from. Moved here, it would stop being read and nothing would report an error — the tool
+would simply operate without it. It is kept at root for that reason alone.
 
 ## Two documents named here were never written
 

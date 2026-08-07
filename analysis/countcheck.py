@@ -113,6 +113,11 @@ def structures() -> dict[str, int]:
         "decades of the synthetic sweep": sweep_decades(),
         "untested-for-want-of-adapters entries": next(
             (v for k, v in buckets.items() if k.startswith("untested")), -1),
+        # EXP-NNN specifically, not every `## [` heading: the notebook also carries the
+        # entry-format template, which looks like an entry and is not one.
+        "notebook entries": len(re.findall(
+            r"(?m)^##\s+\[\d{4}-\d{2}-\d{2}\]\s+EXP-\d{3}:",
+            (REPO_ROOT / "EXPERIMENTS.md").read_text(encoding="utf-8"))),
     }
 
 
@@ -199,6 +204,12 @@ RULES: list[tuple[str, str, str]] = [
      "decades spanned by the synthetic sweep's mean|D|/s"),
     (rf"({_NUM})\s+untested\s+because", "untested-for-want-of-adapters entries",
      "entries in the taxonomy's untested bucket"),
+    # CLAUDE.md said "31 entries" against 58 for 27 entries' worth of drift, in the one
+    # process document outside every perimeter this project has (EXP-058).
+    (rf"({_NUM})\s+entries\s+in\s+`?EXPERIMENTS\.md", "notebook entries",
+     "EXP-NNN entries in the lab notebook"),
+    (rf"\(({_NUM})\s+entries\)", "notebook entries",
+     "EXP-NNN entries in the lab notebook"),
 ]
 
 #: Deliberately NOT a rule: "<n> precisions". The paper says "four precisions" for the
@@ -233,7 +244,12 @@ def main() -> int:
     # The companion documents are inside this gate for the same reason the paper is:
     # round 8 moved content out of the PDF, and a count word does not stop being a claim
     # because it now lives in the repo.
-    companions = [REPO_ROOT / n for n in ("METHODOLOGY.md", "PROMPTS.md", "README.md")]
+    # CLAUDE.md is in this list because of EXP-058: its status block said "31 entries"
+    # against 58, and it sat outside the claim audit, this gate and the reference gate
+    # alike. The documents used to decide what goes in the repository were the least
+    # checked things in it.
+    companions = [REPO_ROOT / n for n in ("METHODOLOGY.md", "PROMPTS.md", "README.md",
+                                          "CLAUDE.md")]
     for path in ([TEXDIR / "main.tex"] + sorted(PAPER.glob("*.md"))
                  + [p for p in companions if p.exists()]):
         for hit in check(path.read_text(encoding="utf-8"), have):

@@ -2,7 +2,7 @@
 
 **Working title:** *Does Your Alignment Fine-Tune Survive Deployment? Adapter Retention Under Post-Training Quantization*
 
-**Owner:** Max (MaximG6). **Executing agent:** Claude Code.
+**Owner:** Max (MaximG6).
 **Hardware:** RTX 5090 32GB (primary), RTX 4090 24GB (secondary). No rented compute needed.
 
 **What changed from v1.** The tipping study is no longer the project. It is now Phase 2, conditional. The lead is a direct numerical measurement that cannot fail to produce a result and has no dependency on anyone else's research code. All seven weaknesses identified in the v1 review are folded in.
