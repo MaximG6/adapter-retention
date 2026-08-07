@@ -4773,3 +4773,73 @@ rebuild at 31 and 81 pages.
 (step 2 return-code check), `paper/tex/appendices.tex`, `analysis/gen_readme.py`
 (`paper_author`, `CLONE_URL`), `analysis/xref.py` (`author_disagreements`),
 `CITATION.cff`, `README.md`.
+
+---
+
+## [2026-08-07] EXP-061: The fresh clone found an undeclared dependency, for the second time
+
+**Phase:** n/a (release verification)
+
+**Question:** Does `pip install -r requirements.txt` cover what Appendix D says it
+covers — everything but `torch`?
+
+**Setup:** Fresh `git clone` from `https://github.com/MaximG6/adapter-retention.git`
+into a temporary directory, checked by parsing every `.py` in the clone and comparing
+the third-party imports against the declared set. Static rather than by installing,
+because installing tests this machine and parsing tests the claim.
+
+**Command:** `PYTHONPATH=src python -m pytest tests/test_requirements.py -q`
+
+**Result:**
+
+**`pymupdf` was missing.** `analysis/texcheck.py:75` and `analysis/pagecost.py:59`
+both `import fitz`, and nothing declared it. A reader following Appendix D exactly
+would have the rendered-text gate and the page-cost instrument fail on import.
+
+| declared | 13 packages |
+|---|---|
+| third-party modules imported | 10 |
+| covered by `requirements.txt` | 8 |
+| installed separately, as Appendix D states | `torch` |
+| **undeclared** | **`pymupdf`** |
+
+**This is the second time.** `requirements.txt` already carries a comment reading
+*"Omitting these was a real defect: Appendix D tells a reader to install from this file,
+and without them every figure script and both PDF builds fail on import"* — written when
+`matplotlib`, `markdown` and `pypdf` were found missing. The note was added; no check
+was. So the same omission recurred one package later.
+
+Both instances survived for the same mechanical reason: **the imports are lazy.**
+`import fitz` sits inside the function that needs it, so every module imports cleanly,
+the test suite passes, and the absence appears only when the gate runs — in an
+environment that already had the package. The full suite passing is not evidence about
+the dependency set.
+
+Five packages are declared and never imported directly: `numpy`, `accelerate`,
+`datasets`, `safetensors`, `trl`. These are **not** defects. The file's first line says
+it pins "the versions every number in the paper was produced with", and those are
+transitive dependencies of `transformers` and `peft` whose versions affect results;
+`trl` is the training path for synthesised adapters. Pinning an environment is a
+different job from listing direct imports, and the check tests only the second.
+
+**Verdict:** WORKED.
+
+**What we learned:**
+
+1. **A comment recording a defect does not prevent the defect.** The exact failure mode
+   was written down in the file where it occurred, in prose, and then happened again in
+   the same file. M.3 and M.5 both say this; this is a clean instance, because the note
+   and the recurrence are three lines apart.
+2. **A lazy import is invisible to every check that runs the code.** 231 tests passed in
+   the fresh clone with the dependency undeclared. Nothing that executes the repository
+   can see a missing declaration when the environment already satisfies it — only reading
+   the source against the manifest can.
+3. **The clone found it and the working tree could not have.** Everything needed was
+   present here. The check is static and would have run anywhere, but the *reason to run
+   it* came from treating the clone as a stranger's starting point.
+
+**Plan impact:** None to any measured value. `requirements.txt` gains `pymupdf==1.28.0`;
+`tests/test_requirements.py` gains three tests, one of which pins the omission that
+shipped as known-bad input.
+
+**Artifacts:** `requirements.txt`, `tests/test_requirements.py`.

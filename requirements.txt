@@ -28,3 +28,10 @@ pytest==9.1.1
 matplotlib==3.11.1
 markdown==3.10.3
 pypdf==6.14.2
+
+# Rendered-page measurement: analysis/texcheck.py and analysis/pagecost.py read the
+# built PDF's text and column geometry. It imports as `fitz`, and both import it inside
+# a function, so its absence surfaces only when the gate runs -- which is why the same
+# omission recurred here after the note above was written about it. tests/
+# test_requirements.py now checks this file against the imports rather than the note.
+pymupdf==1.28.0
