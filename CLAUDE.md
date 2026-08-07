@@ -20,7 +20,7 @@ Target output: solo-authored paper plus public repo, sent to Mohit Bansal and Hu
 
 **Phases 0 and 1 complete. Phase 2 not started.** GATE 0 and GATE 1 passed; the
 decision not to open Phase 2 is recorded in the plan with its reasoning and its
-falsifier. Manuscript drafted in `paper/`, 61 entries in `EXPERIMENTS.md`, both PDFs
+falsifier. Manuscript drafted in `paper/`, 63 entries in `EXPERIMENTS.md`, both PDFs
 built. Released at <https://github.com/MaximG6/adapter-retention> on 2026-08-07; the
 `<REPO-URL>` placeholder is substituted and nothing is outstanding before release.
 

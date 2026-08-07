@@ -4843,3 +4843,198 @@ different job from listing direct imports, and the check tests only the second.
 shipped as known-bad input.
 
 **Artifacts:** `requirements.txt`, `tests/test_requirements.py`.
+
+---
+
+## [2026-08-07] EXP-062: Full scope of the stale appendix, and why no gate could see it
+
+**Phase:** n/a (build integrity; supersedes the partial account in EXP-060)
+
+**Question:** EXP-060 found the arXiv PDF's Appendix B.8 two rounds behind its markdown.
+The converter had been raising since 2026-08-06, so *every* appendix edit after that was
+potentially lost. What was the complete loss, and which of the external review's findings
+does it affect?
+
+**Setup:** The shipped `appendices.tex` recovered from `dc56ab2`, the last commit that
+wrote it, and diffed line-by-line against the file the fixed converter produces from the
+same markdown. Cross-checked against the arXiv PDF blob committed at `940a2c8`, the last
+build before the fix. Gate behaviour tested by restoring the stale file and re-running
+every gate.
+
+**Command:** `git show dc56ab2:paper/tex/appendices.tex`, then
+`PYTHONPATH=src python analysis/md_to_tex.py --write` and a structured diff.
+
+**Result:**
+
+*When it broke.* `dc56ab2` **both** introduced `U+00BD` into a code span in
+`appendix-B-tables.md` **and** was the last commit to write `appendices.tex`. The
+paragraph carrying the glyph is the one the converter died on, so **the content that
+broke the converter was its first casualty**: B.11's derivation paragraph never reached
+the file, in the same commit that added it. Converting `dc56ab2`'s own markdown with the
+fixed converter reproduces its committed `appendices.tex` exactly except for that one
+paragraph.
+
+*The complete loss — four items, three commits, 996 lines to 1006:*
+
+| # | what | appendix | introduced in | in the shipped PDF |
+|---|---|---|---|---|
+| 1 | Derivation paragraph §3.5 summarises (the `½` paragraph) | B.11 | `dc56ab2` | **absent** |
+| 2 | Caution: do not read `mean / t` as a flat 0.985 | B.11 | `81f5730` | **absent** |
+| 3 | The whole B.8 permutation rework — column header `excludes zero` → `sign-flip p`, the three values 0.0625 / 0.0312 / 0.0625, the paragraph on why two sit above the floor, the sentence defining the exact randomization test, and the note retracting the inference from the third interval's lower bound | B.8 | `7660051` | **absent** |
+| 4 | Clone URL | D | `c733027` | **absent** |
+
+*What was NOT affected, checked individually because it was asked:*
+
+| content | in the shipped PDF |
+|---|---|
+| B.9's eight enumerated intervals and "no detectable trend" (S5) | **present** |
+| B.11's decile table, including the `t = 0.011` rows (EXP-052 / P12) | **present** |
+| B.12's variance decomposition, cluster bootstrap and measured 23–26 units (S1) | **present** |
+| Appendix C's P12.1 and P12.2 rows, and P10/P11 (S4) | **present** |
+| B.7's noise-corrected PG-1, 27.5× and 6.5× (M11) | **present** |
+| §5.1's leak values, `16.7% → 8.3%`, `[+4.2, +12.5]` | **present** |
+| §4.1's error-budget reproduction, `0.9732` | **present** |
+
+**The scope is narrower than "every appendix edit after 2026-08-06" for a structural
+reason: only `appendices.tex` is generated.** `main.tex` is hand-maintained and compiled
+directly, so every body section — the abstract, §3.1, §3.11, §4.1, §5.1, the Conclusion,
+every figure caption — was current in every build. Rounds 9 and 10 did most of their
+appendix work *before* `dc56ab2`, which is why B.9, B.11's table, B.12 and Appendix C all
+made it.
+
+*Which review findings this affects: none.* The external cold read that produced the
+seven severe findings scored **the round-7 PDF** (EXP-050). `dc56ab2` is round 10.
+Every finding in that review was read against an appendix current with its markdown, and
+every verification done in response to it was against live values. No later external
+review is recorded; the round-10, round-11 and final-revision briefs were instructions,
+and the one that carried figures (N1) supplied values that were re-derived here from
+B.7's pre-registered per-adapter numbers rather than read from a table.
+
+*What the staleness did cost.* Anyone reading the round-10 or round-11 PDF got a document
+that **contradicted itself**: §3.11 in the body stated the sign-flip design floor while
+B.8's table still showed an `excludes zero` column, and §3.5 pointed at a derivation
+Appendix B.11 no longer contained. The body was current and the appendix was two rounds
+behind, so the internal inconsistency was created by the build, not by the source.
+
+*Why no gate saw it.* Tested directly — the stale file restored, every gate re-run:
+
+| gate | exit |
+|---|---|
+| `tablecheck` (compares tables across markdown and LaTeX) | **0** |
+| `xref`, `countcheck`, `audit_draft_numbers`, `forward`, `retracted` | **0** |
+
+`tablecheck` is the one that should have caught it: B.8's table exists in both artifacts
+and their cells differed. It reported *"31 tables scanned across 2 artifacts, no cell
+disagrees"* — because the rework **renamed the column**, from `excludes zero` to
+`sign-flip p`. `tablecheck` keys cells by (row, column), so with no shared column name
+the two tables had nothing to join on and the comparison silently found nothing to
+compare. `tests/test_tablecheck.py`'s own docstring says *"a checker that silently fails
+to join is indistinguishable from a document that agrees"*, recorded when a
+`int4\_g128` / `int4_g128` mismatch caused exactly this. The same failure recurred one
+axis over, on column names instead of cell values.
+
+**Verdict:** WORKED.
+
+**What we learned:**
+
+1. **A stale-but-coherent artifact violates nothing any gate checks.** Every gate here
+   asks whether a document is internally consistent, and yesterday's document is
+   perfectly internally consistent. Not one of them asks whether the artifact was built
+   from the current source. That question needs a different kind of check — a freshness
+   check — and the project had none.
+2. **Two build paths from one source is the only reason this was visible.** The technical
+   report converts the markdown directly and was correct throughout; the arXiv build goes
+   through `md_to_tex` and was not. The divergence between them is what exposed it, and
+   it took an unrelated check — extracting rendered text to confirm a URL substitution —
+   to look at both at once. **A single build path has no witness.** The redundancy that
+   normally looks like duplicated effort was the control.
+3. **The correct guard already existed three lines lower, with a comment explaining
+   why.** `build_arxiv_pdf.py` checks tectonic's return code *and* independently checks
+   that `main.pdf` was rewritten, carrying a note recording that a failed compile once
+   left every gate inspecting yesterday's PDF. The identical hazard sat one step upstream
+   in the same function, unguarded. M.9's propagation failure expressed in code rather
+   than prose: the fix landed where the defect was found and not at the other site with
+   the same shape. The general form is that **any step which can fail while leaving a
+   usable previous output needs both checks**, and there were two such steps.
+4. **`tablecheck` cannot see a renamed column, and a rename is what a correction usually
+   involves.** Retracting a claim generally means changing what a column *is*, not just
+   what it says. The gate is strongest exactly where corrections are least likely and
+   blind where they are most likely.
+
+**Plan impact:** None to any measured value; the markdown was correct throughout and no
+number changed. EXP-060's account of the scope is superseded by this entry: it named B.8
+only, and the loss was four items across three commits. The freshness question raised in
+point 1 is not closed — the exit-code check prevents a *future* stale build, but nothing
+yet verifies that a committed generated file matches its source.
+
+**Artifacts:** `analysis/md_to_tex.py` (`TT_ASCII`), `analysis/build_arxiv_pdf.py`
+(step-2 return-code check), `paper/tex/appendices.tex`, and the PDF blob at `940a2c8`
+for the shipped state.
+
+
+---
+
+## [2026-08-07] EXP-063: The title-page date is pinned; the parser that broke when it was
+
+**Phase:** n/a (release hygiene)
+
+**Question:** `\date{\today}` renders the compile date, so the same commit produced a
+different title page on a different day. Pin it, and confirm from the rendered page that
+the date follows the source rather than the clock.
+
+**Setup:** `paper/tex/main.tex`. Confirmed by extracting page-1 text, and discriminated
+against `\today` by setting the macro to a value no clock would produce.
+
+**Command:** `PYTHONPATH=src python analysis/build_arxiv_pdf.py --tectonic <path>`
+
+**Result:**
+
+`\newcommand{\paperdate}{August 7, 2026}`, consumed by `\date`. Page 1 reads
+**August 7, 2026**.
+
+*That is not evidence on its own, because today is 2026-08-07 and `\today` produces the
+same string.* Setting `\paperdate` to `January 9, 1999` and rebuilding gives a page-1
+date of **January 9, 1999**; restoring gives **August 7, 2026**. The date follows the
+macro. The technical report carries no date at all, so there is no second site.
+
+*Two things went wrong while doing it, both worth the entry.*
+
+**The author gate fired, correctly, on a parser that was too fragile.** `paper_author()`
+read `\author{...}` up to the next `\date`, and `paper_title()` read `\title{...}` up to
+the next `\author`. Pinning the date put a four-line comment and a `\newcommand` between
+`\author` and `\date`, so the author check reported the comment text as part of the name
+and failed the build. The gate did its job — it refused to ship an author it could not
+confirm — but the reason was its own brittleness. Both now brace-match the macro
+argument, which does not care what is written between macros, and the state that broke
+it is pinned as a test. A parser whose correctness depends on neighbouring lines not
+changing is not a parser.
+
+**`git checkout -- paper/tex/main.tex`, used to undo the 1999 test value, reverted the
+pin as well** — it was still uncommitted — and the rebuilt page 1 read *August 7, 2026*,
+exactly as it had with the pin in place, because `\today` renders that today. The revert
+was invisible in the artifact. `test_the_date_is_pinned_rather_than_today` caught it,
+having been written ten minutes earlier for a different reason.
+
+**Verdict:** WORKED.
+
+**What we learned:**
+
+1. **A correct-looking output is not evidence when the correct and incorrect mechanisms
+   agree on today's input.** `\today` and a date pinned to today are indistinguishable in
+   the artifact for exactly one day, which is the day the change gets made. This is the
+   same shape as the whole of EXP-062 — an artifact that looks right because nothing in
+   view distinguishes it from one that is right — and it recurred within the hour, in the
+   entry being written about it.
+2. **The discriminating test is cheap and was nearly skipped.** Setting the macro to a
+   1999 value costs one rebuild and converts "the date looks right" into "the date is
+   read from the source". Everything before that was consistent with the pin having
+   silently failed, which it then did.
+3. **A gate paid for itself between being written and being committed.** The date test
+   existed for ten minutes before catching a real regression, and the regression was
+   caused by the routine cleanup of the experiment that motivated the test.
+
+**Plan impact:** None to any measured value. `\paperdate` is now a version string and
+should be bumped deliberately when the manuscript changes.
+
+**Artifacts:** `paper/tex/main.tex`, `analysis/gen_readme.py` (`_braced`, `_plain`),
+`tests/test_xref.py`.

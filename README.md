@@ -24,7 +24,7 @@ We measure the weights, then measure the behaviour on the same models.
 |---|---|
 | **[The paper](paper/adapter-retention-arxiv.pdf)** (31 pp, arXiv format) | Start here. The argument, the channel model, and the four load-bearing results. |
 | **[Technical report](paper/adapter-retention-technical-report.pdf)** (81 pp) | Same manuscript with every appendix inline: full tables, all prompt sets, and the reproduction instructions. For a reader checking the work rather than reading it. |
-| **[Lab notebook](EXPERIMENTS.md)** (61 entries) | Append-only, including the experiments that failed, the ones that were misconfigured and the ones that answered nothing. Read the [supersession index](EXPERIMENTS.md#-supersession-index--read-before-quoting-any-number-from-this-file) before quoting any number from it. |
+| **[Lab notebook](EXPERIMENTS.md)** (63 entries) | Append-only, including the experiments that failed, the ones that were misconfigured and the ones that answered nothing. Read the [supersession index](EXPERIMENTS.md#-supersession-index--read-before-quoting-any-number-from-this-file) before quoting any number from it. |
 
 The corrections are the entries worth reading. Three metric definitions and one scaling convention were wrong, each caught by measurement before it reached a figure; one wrong citation survived the whole project.
 
@@ -98,7 +98,7 @@ git clone https://github.com/MaximG6/adapter-retention.git
 cd adapter-retention
 pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cu128
 pip install -r requirements.txt
-PYTHONPATH=src python -m pytest -q                      # 234 passed
+PYTHONPATH=src python -m pytest -q                      # 236 passed
 PYTHONPATH=src python analysis/audit_draft_numbers.py   # 320/320 claims vs raw
 PYTHONPATH=src python analysis/retracted.py             # 17 retracted wordings, none asserted
 PYTHONPATH=src python analysis/forward.py               # every summary claim has a source
