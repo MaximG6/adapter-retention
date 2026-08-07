@@ -18,6 +18,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _load(name: str):
+    # analysis/ on the path, because gen_readme imports bootstrap and figcheck as
+    # siblings and spec_from_file_location does not make them importable.
+    if str(ROOT / "analysis") not in sys.path:
+        sys.path.insert(0, str(ROOT / "analysis"))
     spec = importlib.util.spec_from_file_location(name, ROOT / "analysis" / f"{name}.py")
     mod = importlib.util.module_from_spec(spec)
     sys.modules[name] = mod
@@ -217,3 +221,56 @@ def test_the_boundary_gate_fires_in_both_directions(tmp_path, monkeypatch) -> No
     assert [b[1] for b in xref.companion_refs("See METHODOLOGY.md M.7 for it.\n"
                                               + main, "")] == ["M.7"]
     assert not xref.companion_refs("See METHODOLOGY.md M.1 for it.\n" + main, "")
+
+def test_the_title_gate_flags_the_title_that_actually_shipped(tmp_path,
+                                                              monkeypatch) -> None:
+    r"""The README's BibTeX named a work the paper is not. Pinned in the form it
+    shipped, because a citation block is the one part of a repository a reader copies
+    without checking."""
+    gen_readme = _load("gen_readme")
+
+    tex = tmp_path / "paper" / "tex"
+    tex.mkdir(parents=True)
+    (tex / "main.tex").write_text(
+        "\\title{\\bfseries Weight-Space Erasure Without Behavioural Collapse\n"
+        "in Quantized LoRA Adapters\\vspace{-0.3em}}\n\\author{Maxim}\n",
+        encoding="utf-8")
+    monkeypatch.setattr(gen_readme, "MAIN_TEX", tex / "main.tex")
+    monkeypatch.setattr(xref, "REPO_ROOT", tmp_path)
+
+    assert gen_readme.paper_title() == (
+        "Weight-Space Erasure Without Behavioural Collapse in Quantized LoRA Adapters")
+
+    shipped = ("  title  = {Near-Total Weight-Space Erasure Without Behavioural "
+               "Collapse:\n            What Survives When a Merged LoRA Is "
+               "Quantized},\n")
+    (tmp_path / "README.md").write_text(shipped, encoding="utf-8")
+    bad = xref.title_disagreements()
+    assert [w for w, _ in bad] == ["README.md"]
+    assert bad[0][1].startswith("Near-Total")
+
+    (tmp_path / "README.md").write_text(
+        "  title  = {Weight-Space Erasure Without Behavioural Collapse in "
+        "Quantized LoRA Adapters},\n", encoding="utf-8")
+    assert not xref.title_disagreements()
+
+    # And a CITATION.cff that drifts on its own, since it is a separate artifact.
+    (tmp_path / "CITATION.cff").write_text(
+        "title: >-\n  Something Else Entirely\nauthors:\n", encoding="utf-8")
+    assert [w for w, _ in xref.title_disagreements()] == ["CITATION.cff"]
+
+
+def test_the_title_gate_raises_rather_than_guessing_when_the_title_is_gone(
+        tmp_path, monkeypatch) -> None:
+    """A missing \\title must raise, not return an empty string that every artifact
+    then agrees with -- a gate that passes when its reference disappears is M.5."""
+    import pytest
+
+    gen_readme = _load("gen_readme")
+
+    tex = tmp_path / "paper" / "tex"
+    tex.mkdir(parents=True)
+    (tex / "main.tex").write_text("\\author{Maxim}\n", encoding="utf-8")
+    monkeypatch.setattr(gen_readme, "MAIN_TEX", tex / "main.tex")
+    with pytest.raises(RuntimeError):
+        gen_readme.paper_title()

@@ -362,12 +362,13 @@ Unpublished. There is no arXiv identifier yet, and this block will not invent on
 ```bibtex
 @misc{adapter_retention_2026,
   author = {Maxim},
-  title  = {Near-Total Weight-Space Erasure Without Behavioural Collapse:
-            What Survives When a Merged LoRA Is Quantized},
+  title  = {Weight-Space Erasure Without Behavioural Collapse in Quantized LoRA Adapters},
   year   = {2026},
   note   = {Manuscript and raw records: <REPO-URL>},
 }
 ```
+
+The title above is read from `paper/tex/main.tex` at generation time, and [CITATION.cff](CITATION.cff) is written from the same source. They carried a title the paper did not have until 2026-08-07.
 
 ## Licence
 

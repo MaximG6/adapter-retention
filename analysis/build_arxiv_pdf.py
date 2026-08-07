@@ -208,6 +208,17 @@ def main() -> int:
     live = [c for c in xref.COMPANIONS if (REPO_ROOT / c).exists()]
     print(f"     references resolve across the boundary to {', '.join(live)}")
 
+    # A citation block naming the wrong work is the boundary check one level up, and it
+    # shipped for the whole project: the README's BibTeX title was not the paper's.
+    titles = xref.title_disagreements()
+    if titles:
+        print(f"     {len(titles)} artifacts name the paper by a title it does "
+              "not have:", file=sys.stderr)
+        for where, got in titles:
+            print(f"       {where}: {got!r}", file=sys.stderr)
+        return 1
+    print("     every citation block names the paper's actual title")
+
     # Table-to-table agreement. The prose-level check passed 18/18 while two tables
     # printed the same interval with different values, because both were tables.
     import tablecheck

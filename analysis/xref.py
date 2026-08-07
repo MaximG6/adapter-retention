@@ -240,6 +240,47 @@ def check(main: str, appendices: str) -> list[tuple[str, str, str]]:
     return bad
 
 
+def title_disagreements() -> list[tuple[str, str]]:
+    """(artifact, title) for any artifact naming the paper by a title it does not have.
+
+    A reference that points at the wrong section is this file's subject; a citation
+    block that names the wrong *work* is the same defect one level up, and it shipped:
+    the README's BibTeX carried "Near-Total Weight-Space Erasure ... What Survives When
+    a Merged LoRA Is Quantized" while the paper is titled "Weight-Space Erasure Without
+    Behavioural Collapse in Quantized LoRA Adapters". Anyone citing from the repository
+    attributed a work whose PDF says something else.
+
+    `gen_readme.py` now derives both from `main.tex`, so this cannot drift by
+    generation. It can still drift by hand-editing a generated file, which is exactly
+    what M.4 says will happen eventually.
+    """
+    sys.path.insert(0, str(Path(__file__).parent))
+    from gen_readme import paper_title
+
+    want = paper_title()
+    bad: list[tuple[str, str]] = []
+
+    readme = REPO_ROOT / "README.md"
+    if readme.exists():
+        m = re.search(r"^\s*title\s*=\s*\{(.+?)\},\s*$", readme.read_text(
+            encoding="utf-8"), re.M | re.S)
+        if m is None:
+            bad.append(("README.md", "no BibTeX title field found"))
+        elif " ".join(m.group(1).split()) != want:
+            bad.append(("README.md", " ".join(m.group(1).split())))
+
+    cff = REPO_ROOT / "CITATION.cff"
+    if cff.exists():
+        m = re.search(r"^title:\s*>-\s*\n\s+(.+?)\s*$", cff.read_text(encoding="utf-8"),
+                      re.M)
+        if m is None:
+            bad.append(("CITATION.cff", "no title field found"))
+        elif " ".join(m.group(1).split()) != want:
+            bad.append(("CITATION.cff", " ".join(m.group(1).split())))
+
+    return bad
+
+
 def main_() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--strict", action="store_true")
@@ -267,6 +308,13 @@ def main_() -> int:
         return 1
     live = [c for c in COMPANIONS if (REPO_ROOT / c).exists()]
     print(f"           references resolve across the boundary to {', '.join(live)}")
+    titles = title_disagreements()
+    if titles:
+        print(f"\n{len(titles)} artifacts name the paper by a title it does not have:")
+        for where, got in titles:
+            print(f"  {where:<14} {got!r}")
+        return 1
+    print("           every citation block names the paper's actual title")
     if not bad:
         print("all cross-references resolve")
         return 0

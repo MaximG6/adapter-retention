@@ -29,9 +29,16 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 P0 = REPO_ROOT / "results" / "raw" / "phase0"
 P1 = REPO_ROOT / "results" / "raw" / "phase1"
 OUT = REPO_ROOT / "README.md"
+CITATION = REPO_ROOT / "CITATION.cff"
 NOTEBOOK = REPO_ROOT / "EXPERIMENTS.md"
+MAIN_TEX = REPO_ROOT / "paper" / "tex" / "main.tex"
 ARXIV_PDF = REPO_ROOT / "paper" / "adapter-retention-arxiv.pdf"
 REPORT_PDF = REPO_ROOT / "paper" / "adapter-retention-technical-report.pdf"
+
+#: The author as the paper states it. One literal, because three artifacts name it and
+#: the failure mode is that they stop agreeing.
+AUTHOR = "Maxim"
+EMAIL = "maxim.highcroft@gmail.com"
 
 # Filled in at push time, in the three places it appears: here, paper/tex/main.tex and
 # paper/appendix-D-reproduction.md. Kept as one literal so a single replacement does all
@@ -97,6 +104,46 @@ def exp_links() -> dict[str, str]:
 
 def exp_count() -> int:
     return len(exp_links())
+
+
+def paper_title() -> str:
+    r"""The title as `paper/tex/main.tex` sets it, with LaTeX spacing stripped.
+
+    Read rather than typed. The README's citation block carried its own title for the
+    whole project, and it was not the paper's -- anyone citing from the README named a
+    work whose PDF says something else. Deriving it means the two cannot disagree,
+    which is a stronger guarantee than a gate that notices when they do (M.4).
+    """
+    text = MAIN_TEX.read_text(encoding="utf-8")
+    m = re.search(r"\\title\{(.*?)\}\s*\n\s*\\author", text, re.S)
+    if not m:
+        raise RuntimeError(f"no \\title{{...}} found in {MAIN_TEX.name}")
+    body = re.sub(r"\\[a-zA-Z]+(?:\{[^{}]*\})?", " ", m.group(1))
+    title = " ".join(body.replace("{", " ").replace("}", " ").split())
+    if not title:
+        raise RuntimeError(f"\\title in {MAIN_TEX.name} stripped to nothing")
+    return title
+
+
+def citation_cff() -> str:
+    """CITATION.cff, from the same title and author the paper and README use."""
+    title = paper_title()
+    return (
+        "cff-version: 1.2.0\n"
+        "message: >-\n"
+        "  Unpublished. There is no arXiv identifier yet and this file will not\n"
+        "  invent one; cite the repository until there is.\n"
+        "type: software\n"
+        "title: >-\n"
+        f"  {title}\n"
+        "authors:\n"
+        f"  - given-names: {AUTHOR}\n"
+        f"    email: {EMAIL}\n"
+        "    affiliation: Independent researcher\n"
+        f"repository-code: '{REPO_URL}'\n"
+        "license: MIT\n"
+        "year: 2026\n"
+    )
 
 
 def notebook_anchor(needle: str) -> str:
@@ -578,13 +625,16 @@ def main() -> int:
     a("")
     a("```bibtex")
     a("@misc{adapter_retention_2026,")
-    a("  author = {Maxim},")
-    a("  title  = {Near-Total Weight-Space Erasure Without Behavioural Collapse:")
-    a("            What Survives When a Merged LoRA Is Quantized},")
+    a(f"  author = {{{AUTHOR}}},")
+    a(f"  title  = {{{paper_title()}}},")
     a("  year   = {2026},")
     a(f"  note   = {{Manuscript and raw records: {REPO_URL}}},")
     a("}")
     a("```")
+    a("")
+    a("The title above is read from `paper/tex/main.tex` at generation time, and "
+      "[CITATION.cff](CITATION.cff) is written from the same source. They carried a "
+      "title the paper did not have until 2026-08-07.")
     a("")
     a("## Licence")
     a("")
@@ -594,7 +644,8 @@ def main() -> int:
     text = "\n".join(L)
     if args.write:
         OUT.write_text(text, encoding="utf-8")
-        print(f"wrote README.md ({len(L)} lines)")
+        CITATION.write_text(citation_cff(), encoding="utf-8")
+        print(f"wrote README.md ({len(L)} lines) and CITATION.cff")
         print(f"  headline: {unchanged:.1f}% unchanged / {behav:.1f}% retained, "
               f"n={len(taboo_flip)} weight-space, n={len(kept)} behavioural")
     else:

@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: >-
+  Unpublished. There is no arXiv identifier yet and this file will not
+  invent one; cite the repository until there is.
+type: software
+title: >-
+  Weight-Space Erasure Without Behavioural Collapse in Quantized LoRA Adapters
+authors:
+  - given-names: Maxim
+    email: maxim.highcroft@gmail.com
+    affiliation: Independent researcher
+repository-code: '<REPO-URL>'
+license: MIT
+year: 2026
