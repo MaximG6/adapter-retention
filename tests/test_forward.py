@@ -99,7 +99,17 @@ def test_a_caption_body_is_brace_balanced() -> None:
     assert caps == [r"a \texttt{x} b 0.372 c"]
 
 
-@pytest.mark.parametrize("rev", ["243058c"])
+#: A tag, not a SHA. This pin was a raw abbreviated SHA and a message rewrite retired it
+#: twice; the second time the test did not fail, it SKIPPED -- `pytest.skip` on an
+#: unresolvable revision, so the suite stayed green while the one check that proves the
+#: forward gate can fire had quietly stopped running. That is M.5's family and the exact
+#: shape `analysis/retracted.py` and this file exist to prevent. `git filter-repo`
+#: rewrites tags along with the commits they point at, so this name survives a rewrite
+#: that a SHA does not.
+EXEMPLAR = "forward-gate-exemplar"
+
+
+@pytest.mark.parametrize("rev", [EXEMPLAR])
 def test_the_gate_fires_on_the_gap_as_it_actually_shipped(rev: str) -> None:
     """The state that shipped, from git, not a reconstruction of it. The interval must be
     named at all four summary sites."""
@@ -107,7 +117,14 @@ def test_the_gate_fires_on_the_gap_as_it_actually_shipped(rev: str) -> None:
         r = subprocess.run(["git", "show", f"{rev}:{path}"], cwd=ROOT,
                            capture_output=True, text=True, encoding="utf-8")
         if r.returncode:
-            pytest.skip(f"{rev} not in this clone")
+            pytest.fail(
+                f"{rev!r} does not resolve in this clone, so the only test that proves "
+                f"the forward gate can fire did not run. This must fail rather than "
+                f"skip. If you are in a clone without tags, fetch them: "
+                f"git fetch --tags. If the tag is gone, recreate it at the commit whose "
+                f"paper/tex/main.tex states [+4.2, +12.5] in the abstract, the "
+                f"introduction, Figure 1's caption and the Conclusion and nowhere else."
+                f"\n\ngit said: {r.stderr.strip()}")
         return r.stdout
 
     bad = fw.unsourced(show("paper/tex/main.tex"), show("paper/tex/appendices.tex"))
