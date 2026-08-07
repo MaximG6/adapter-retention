@@ -67,6 +67,132 @@ of `git log`. A table cannot record its own commit's SHA without changing it.*
 
 ---
 
+## COMMIT SHA MAP — message rewrite of 2026-08-06
+
+**Why this table exists.** The 2026-08-03 pass covered the first 33 commits. The 72
+written after it had never been through cleanup. On 2026-08-06 **16 of those 72
+messages** were rewritten: 13 carried a co-author trailer, 5 narrated a briefing
+document that exists nowhere in this repository, and 7 of the longest re-argued
+reasoning that `EXPERIMENTS.md` and `METHODOLOGY.md` already hold in full. One
+paragraph naming the tool that reads `CLAUDE.md` was reworded to keep its reason and
+drop the tool. Every subject line is verbatim; no number, measured value, failure,
+withdrawn prediction or correction was removed, and a mechanical check confirmed that
+every numeric token in each original survives into its replacement.
+
+Rewriting a message changes the commit's SHA and the change cascades to every
+descendant, so **all 72 changed** though only 16 were edited. The first 33 are
+untouched by this pass and keep the SHAs the table above gives them.
+
+**Two references were updated in place, and 30 manifests were not.** The distinction
+is the one the note above draws. `tests/test_forward.py`'s pinned revision and the
+`EXPERIMENTS.md` line citing the tree the forward gate was tested against are
+*pointers*: they exist to resolve, and a pointer that does not resolve is simply
+broken. A manifest's `git_sha` is a *measurement* of what was checked out when the run
+executed, and editing it would make the record assert something that was not true at
+run time.
+
+Of the 30 `manifest.json` files under `results/raw/` — three more than the 27 the
+2026-08-03 note counts, since three runs have been added since — **26 name commits
+that stopped resolving at the first rewrite and 4 stopped resolving at this one:**
+
+| manifest | `git_sha` it records | that commit is now |
+|---|---|---|
+| `results/raw/phase0/bin_position/manifest.json` | `0e7f78a0b7` | `aafaf3bfac` |
+| `results/raw/phase0/local_independence/manifest.json` | `5729440706` | `ff348203de` |
+| `results/raw/phase0/sign_position/manifest.json` | `0c7ab2dcb2` | `a6c79486d8` |
+| `results/raw/phase0/unmerged_delta/manifest.json` | `78905f929e` | `cf2ed44045` |
+
+**Correction to the 2026-08-03 note, recorded here rather than by editing it.** That
+note ends by saying the final row's new SHA "is the tip of `git log`". That was true
+when written and stopped being true with the next commit; by the time of this rewrite
+it was 72 commits stale, and `0783f944ee`'s new value has since changed again in the
+cascade above. Read it as: *the value that row records is the one that commit had at
+the moment the 2026-08-03 rewrite finished.* The note is left standing because it is
+accurate about the pass it describes, and because a map that quietly repairs itself is
+worth less than one that shows its own drift. The same self-reference applies here —
+adding this table amends the tip commit, so the last row's new SHA is its value before
+that amendment.
+
+| old SHA | new SHA | subject |
+|---|---|---|
+| `9deefc3e4d` | `e3a4924ee1` | Move process documents into docs/ |
+| `330e3b5bb8` | `24a7170437` | Add MIT licence |
+| `0488683a6f` | `2cbbcb4c0e` | Pin matplotlib, markdown and pypdf |
+| `2a827f7b69` | `a6d77eccfd` | README: surface both PDFs, the notebook, and the tool |
+| `f270165557` | `9c2ab49acb` | Audit the README against the raw records |
+| `e58825469e` | `1db19ae784` | Appendix D: explain the two figure directories |
+| `13ff6d5540` | `0e67a732da` | Remove analysis/phase1_grid.py; untrack the report HTML; mark schema.py as specification |
+| `93a6453c66` | `5fbf62e9a5` | Log EXP-031 and EXP-032; note the docs/ move alongside the SHA map |
+| `9d1b95343c` | `5ee7b0806c` | Correct the figure-directory instructions in Appendix D |
+| `a892f28791` | `fdb8692f69` | Fix two paper/OUTLINE.md references the move left stale |
+| `845738caf6` | `0911f33832` | Remove docs/OUTLINE.md and docs/REPO_AUDIT.md from the repository and its history |
+| `1fe8a745ec` | `a79504ab64` | Log EXP-033 and EXP-034: two recurrences of already-catalogued failure modes |
+| `a7b454ec20` | `36b26b7734` | Correct the output path named in fig01's usage docstring |
+| `f64c32a656` | `06051804f6` | Lay out appendix tables to fit, and fail the build on any overfull box |
+| `161be4da99` | `2b671e2865` | One bootstrap, enumerated exactly, and a check for cross-artifact disagreement |
+| `ddfcf3dee8` | `71c13ef5bd` | Cross-reference gate: resolve every reference against the built structure |
+| `56d73872b5` | `bcbba3355a` | State the INT4 g128 result as a bounded non-detection, and report the contrasts |
+| `ca89a358a5` | `7f33f15bb1` | Propagate the monotonicity correction, and four structural fixes |
+| `886ad21852` | `33a0996090` | Add the PTQ line, state the spike mechanism as unestablished, qualify the constraint claim |
+| `579659c90f` | `bf40c19b87` | Name the behavioural population in the title and the first abstract sentence |
+| `d33dc48fe5` | `187b4a186d` | Generate Table 2 into the arXiv body, and check tables against each other |
+| `66fd4f7543` | `9854027008` | Repoint the references the renumbering pass sent to the wrong targets |
+| `78905f929e` | `cf2ed44045` | Resolve four live contradictions in the text |
+| `70f0e225b9` | `4e0fd0c4c5` | Measure the unmerged configuration; add the organising practice entry; cut section 6 and Appendix C |
+| `0c42ec97b3` | `67ff75cfd3` | Name the scale regime at every site; Phase 1 ran under adaptive_scale |
+| `e4412d8058` | `9e1e5335cf` | Re-estimate PG-2 over intent clusters; six of seven pairs invert |
+| `57b66bfaf1` | `a7ad70cf4d` | Add the paired-contrast table; state the constraint claim as denominator-driven |
+| `a0051a6a37` | `b4ccc158d7` | Bring the tool's printed example under the claim audit; correct eleven numbers |
+| `e5d9a9ca23` | `410499492a` | Add QLoRA, LoftQ, QA-LoRA and the Cliff's-delta source; correct two attributions |
+| `5a42887c40` | `582dd17776` | Gate references at the source, not only after remapping |
+| `ca54c1c55a` | `d11c132160` | Derive the rounding equivalence; narrow two claims to their population |
+| `c06a3cedf0` | `ecc8b2600b` | Minor sweep, the vacuous validation panel, and the cosine-first framing |
+| `21e4f7d44e` | `4f0e3b17bb` | Rebuild both PDFs after the review round |
+| `64c8ebf6c0` | `947d4452fc` | Gate the rendered text; the escape damage was Python's lexer, not the shell |
+| `91e8cf654a` | `70e070c9f1` | Split the elicitation metric; report the adversarial leak rate |
+| `d58d73aa51` | `ee6958e4ff` | Measure the bin-position distribution, Equation 4's other assumption |
+| `cbc59ffb99` | `de8b945c0d` | Generate the count words rather than typing them |
+| `d9ddb07244` | `74d943df0c` | Source the numbers the paper used everywhere and tabulated nowhere |
+| `e82f4a174e` | `f14bc84127` | Settle the words: measured vs predicted, the p-value, and the sweep |
+| `0c7ab2dcb2` | `a6c79486d8` | Log the round; rebuild both PDFs |
+| `3e51dc4ba5` | `1fb1c465d3` | Measure Equation 4's third licensing assumption |
+| `ebe0e8cd5b` | `7449e1ebe7` | Add the three controls that settle the boundary-pinning account |
+| `365accefa8` | `8d99beff17` | Appendix B: the metric variants, the variance components, two withdrawn accounts |
+| `0a8cfd5303` | `f5246f3180` | Extend the count-word gate to figure string literals and bucket membership |
+| `5ddc2c56bd` | `e51c190f79` | arXiv body: three assumptions, a withdrawn corroboration, and the counts |
+| `146aec3737` | `4a8866c308` | Report body: name the variant, source the constant, add practice 7.8 |
+| `e501b237e2` | `29678f0371` | Register this round's numbers; the audit goes from 229 claims to 271 |
+| `922172aac9` | `1f19b1a332` | Log the round; rebuild both PDFs |
+| `82c0ea339c` | `cb554e7c6e` | Renumber Appendix B; gate the markdown labels against the LaTeX numbering |
+| `2df272062b` | `7e73ac7ae7` | Log EXP-050: existence and correctness are different properties |
+| `dd0fb99da7` | `3ac9bc2917` | Regenerate the README against the notebook's new entries |
+| `b47fdb0e80` | `3299413f54` | Extend the reference and count-word gates across the PDF/repo boundary |
+| `39d186dbb9` | `a6b6f17d61` | CUT 1: the methodological practices move to METHODOLOGY.md |
+| `f01b891cde` | `771a935dd7` | CUT 2: the prompt text moves to PROMPTS.md; the design stays in the paper |
+| `37b89bc48c` | `703a03218d` | CUT 3: the reproduction appendix keeps what a reviewer checks |
+| `2d9dadf374` | `dfb2ab12e8` | CUTS 4 and 5: the tool appendix and the over-refusal null |
+| `27bb912901` | `1edba7798d` | CUTS 6 and 7: the abstract, and telling the regime story four times instead of ten |
+| `515b60a69c` | `46015a8296` | Follow the moved numbers with the audit: 271 claims to 283 |
+| `5729440706` | `ff348203de` | Log EXP-051; rebuild both PDFs |
+| `12885e8f21` | `2fd5b0aa35` | The seven severe findings: a two-sided headline, a measured error budget |
+| `0e7f78a0b7` | `aafaf3bfac` | A gate for the defect that survived three rounds: retracted wordings |
+| `b4c98c6c4f` | `30c9214077` | Major findings: the map with a hole, the second wrong explanation, the friendlier recomputation |
+| `23a8e260b6` | `243058c81d` | Moderate and minor sweep: a default that failed for almost every reproducer |
+| `50203644b8` | `dc56ab2053` | The cut, re-derived against measured costs; log EXP-052 and EXP-053 |
+| `62222badd7` | `81f5730fca` | Section 5.1 becomes the source it was being cited as; section 4.1 states the budget |
+| `eb401c1f51` | `9921236a25` | Close the other propagation mode: a claim added to every summary and sourced nowhere |
+| `2b433869e2` | `df229aca4c` | Log EXP-054; rebuild both PDFs |
+| `5ccbd9bc78` | `0100822003` | The page instrument was wrong by 1.8 pages; it is now in the repo, under test |
+| `7e4b8ec206` | `534c6631aa` | Amendment 15: three page-count scenarios, costed and unapplied |
+| `c1b5de60b5` | `f46de3dde8` | Log EXP-055; rebuild both PDFs |
+| `52ff2b00eb` | `725bd364f2` | Withdraw the leak contrast's significance claim: the p was counting ties |
+| `5cdddd58d1` | `76600515f7` | B.8 gets the permutation test; a universal quantifier is an obligation |
+
+*A commit named in a message body rather than in this table: the entry for
+`9cdfe7e` sits in the 2026-08-03 range and is unaffected.*
+
+---
+
 ## PATHS — process documents moved to `docs/` on 2026-08-03
 
 **Entries below this point were written when the process documents sat at the repository
@@ -3951,7 +4077,8 @@ leaves a wording behind to search for, an addition leaves nothing at all. There 
 string whose presence is wrong. The defect is an absence, in a file nobody edited.
 
 *Did the new gate fire on the gap?* Yes, on the tree as it actually shipped
-(commit `23a8e26`), not a reconstruction:
+(commit `243058c`, `23a8e26` before the 2026-08-06 message rewrite), not a
+reconstruction:
 
 | site | claim | resolved? |
 |---|---|---|
@@ -4306,3 +4433,79 @@ and B.11 gets a substantive rework there rather than a patch now.
 **Artifacts:** `analysis/appendix_tables.py` (`b8_paired_contrasts`, `_signflip_p`),
 `analysis/quantifiers.py`, `METHODOLOGY.md` M.11, `paper/tex/main.tex` §3.1, §3.11, §4.1,
 `paper/03-method.md`, `paper/04-results-weight-space.md`.
+
+---
+
+## [2026-08-07] EXP-058: A count word in the report about cleaning up messages
+
+**Phase:** n/a (repository process; no measured value involved)
+
+**Question:** The audit report proposing the 2026-08-06 message rewrite grouped 16
+commits into bands and put a cardinal in each band heading. Were those cardinals right?
+
+**Setup:** The Phase A1 report, delivered before any commit was modified. Five groups:
+Band 1 (attribution removal only), Band 2 (attribution removal plus condensation),
+Band 3 (instruction-narration only, no trailer), Band 4 (both), and one commit flagged
+as ambiguous for the author to decide.
+
+**Command:** none — found by reading, not by a gate.
+
+**Result:**
+
+| band | heading claimed | members listed | error |
+|---|---|---|---|
+| 1 | 7 | 5 | **+2** |
+| 2 | 6 | 7 | **−1** |
+| 3 | 2 | 2 | — |
+| 4 | 1 | 1 | — |
+| ambiguous | 1 | 1 | — |
+| **sum** | **17** | **16** | **+1** |
+
+The report's stated total of 16 was **correct**, and correct for a reason that is the
+whole finding: it was derived from the problem census — 13 commits carrying a co-author
+trailer, plus 2 carrying only instruction-narration, plus 1 ambiguous — and never by
+adding up the band headings. Two independent routes to the same number existed in one
+document and were never made to meet.
+
+**A correction to the framing this was reported under.** It was put to me as two errors
+that offset, which is why the total still reconciled. They do not offset: +2 and −1
+leave +1, so a reader who added the five headings would get 17 against a true 16. What
+actually protected the total was not cancellation but the fact that it came from a
+different computation. That is the weaker of the two situations, because a reader
+checking the document's internal consistency has no way to discover which of the two
+routes is the trustworthy one.
+
+The same check applied to the trailer count: Band 1 + Band 2 + Band 4 headings give
+7 + 6 + 1 = 14, against the census's 13, which is the same +1.
+
+**Verdict:** WORKED (the count is corrected; the class is recorded).
+
+**What we learned:**
+
+1. **A cardinal typed beside a list is a claim about the list, and typing it is what
+   makes it a claim rather than a fact.** Every one of these headings could have been
+   generated from the membership it heads. This is M.4's principle — an assertion that
+   restates data by hand will drift from it — arriving in a document that is *about*
+   hand-maintained records drifting from their subject.
+2. **The count-word gate could not have caught it, and the reason is worth stating.**
+   `countcheck` resolves cardinals in `paper/`, the companion documents, the README and
+   the figure string literals. A report delivered in conversation is outside every
+   perimeter this project has, and so is every future one. The perimeter is defined by
+   what is in the repository, which means the documents used to *decide* what goes in
+   the repository are systematically the least checked things produced. That is the
+   same shape as EXP-055, where the instrument that sized three rounds of page cuts
+   lived in a scratch directory and was reached by none of the five gates (M.10).
+3. **Two routes to one number is a check nobody ran.** The report contained the
+   arithmetic needed to falsify itself. Deriving a total twice and comparing is close to
+   free, and the cross-table check already does exactly this for the appendix tables —
+   it was simply never pointed at prose.
+
+**Plan impact:** None to the rewrite: the 16 commits were correctly identified and
+correctly categorised, and the error was confined to the headings. No paper claim, no
+measured value and no artifact is affected. Recorded rather than fixed silently,
+because a report that miscounts the thing it is auditing is exactly the entry a reader
+of this file should be able to find.
+
+**Artifacts:** the Phase A1 report (delivered in conversation, not in the repository —
+which is point 2); the rewrite itself is the COMMIT SHA MAP for 2026-08-06 at the head
+of this file.

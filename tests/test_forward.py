@@ -99,7 +99,7 @@ def test_a_caption_body_is_brace_balanced() -> None:
     assert caps == [r"a \texttt{x} b 0.372 c"]
 
 
-@pytest.mark.parametrize("rev", ["23a8e26"])
+@pytest.mark.parametrize("rev", ["243058c"])
 def test_the_gate_fires_on_the_gap_as_it_actually_shipped(rev: str) -> None:
     """The state that shipped, from git, not a reconstruction of it. The interval must be
     named at all four summary sites."""
