@@ -10,6 +10,6 @@ authors:
     given-names: Maxim
     email: maxim.highcroft@gmail.com
     affiliation: Independent researcher
-repository-code: '<REPO-URL>'
+repository-code: 'https://github.com/MaximG6/adapter-retention'
 license: MIT
 year: 2026

@@ -47,7 +47,11 @@ EMAIL = "maxim.highcroft@gmail.com"
 # Filled in at push time, in the three places it appears: here, paper/tex/main.tex and
 # paper/appendix-D-reproduction.md. Kept as one literal so a single replacement does all
 # three.
-REPO_URL = "<REPO-URL>"
+REPO_URL = "https://github.com/MaximG6/adapter-retention"
+
+#: Only a clone command needs the `.git` suffix; prose and citation metadata take the
+#: plain URL, which is what a reader pastes into a browser.
+CLONE_URL = f"{REPO_URL}.git"
 
 #: Reproduction detail the round-8 cut moved out of the paper's Appendix F: the Blackwell
 #: capability floor, Windows long paths, the two figure directories, and the known rough
@@ -589,6 +593,8 @@ def main() -> int:
       "this with no configuration.")
     a("")
     a("```bash")
+    a(f"git clone {CLONE_URL}")
+    a("cd adapter-retention")
     a("pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cu128")
     a("pip install -r requirements.txt")
     a(f"PYTHONPATH=src python -m pytest -q                      "

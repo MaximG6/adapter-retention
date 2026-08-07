@@ -94,6 +94,8 @@ Full instructions, pinned versions, expected runtimes and expected outputs: **[p
 No gated repositories are required. Any GPU of sm_80 (Ampere) or newer runs this with no configuration.
 
 ```bash
+git clone https://github.com/MaximG6/adapter-retention.git
+cd adapter-retention
 pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cu128
 pip install -r requirements.txt
 PYTHONPATH=src python -m pytest -q                      # 231 passed
@@ -366,7 +368,7 @@ Unpublished. There is no arXiv identifier yet, and this block will not invent on
   author = {Gerasimov, Maxim},
   title  = {Weight-Space Erasure Without Behavioural Collapse in Quantized LoRA Adapters},
   year   = {2026},
-  note   = {Manuscript and raw records: <REPO-URL>},
+  note   = {Manuscript and raw records: https://github.com/MaximG6/adapter-retention},
 }
 ```
 

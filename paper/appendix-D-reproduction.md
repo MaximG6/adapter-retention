@@ -49,7 +49,7 @@ becomes a backtick. Nothing else differs.
 # Windows only, and required before cloning (README, *On Windows, enable long paths*):
 git config --global core.longpaths true
 
-git clone <repo-url> adapter-retention
+git clone https://github.com/MaximG6/adapter-retention.git adapter-retention
 cd adapter-retention
 
 conda create -n retention python=3.11 -y
