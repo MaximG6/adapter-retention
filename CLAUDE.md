@@ -20,9 +20,9 @@ Target output: solo-authored paper plus public repo, sent to Mohit Bansal and Hu
 
 **Phases 0 and 1 complete. Phase 2 not started.** GATE 0 and GATE 1 passed; the
 decision not to open Phase 2 is recorded in the plan with its reasoning and its
-falsifier. Manuscript drafted in `paper/`, 59 entries in `EXPERIMENTS.md`, both PDFs
-built. Remaining before release: the `<REPO-URL>` placeholder, which is blocked on
-the repository actually existing.
+falsifier. Manuscript drafted in `paper/`, 60 entries in `EXPERIMENTS.md`, both PDFs
+built. Released at <https://github.com/MaximG6/adapter-retention> on 2026-08-07; the
+`<REPO-URL>` placeholder is substituted and nothing is outstanding before release.
 
 That count is still typed by hand, but it is no longer unchecked: this file joined
 `analysis/countcheck.py`'s perimeter in EXP-059, and the gate resolves it against the

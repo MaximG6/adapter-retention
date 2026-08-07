@@ -4683,3 +4683,93 @@ long-path constraint, which `README.md` already documents under its own heading.
 (`paper_title`, `citation_cff`), `CITATION.cff`, `analysis/countcheck.py`,
 `tests/test_forward.py`, `tests/test_xref.py`, tag `forward-gate-exemplar`, and the
 COMMIT SHA MAP addendum at the head of this file.
+
+---
+
+## [2026-08-07] EXP-060: Release; and the arXiv PDF had been shipping a stale appendix
+
+**Phase:** n/a (release; and one defect in the build, found by it)
+
+**Question:** Substitute the repository URL, attach a real author identity, disclose the
+implementation tool, and confirm from the *rendered* PDFs that no placeholder survives.
+Does anything the source check would have passed turn out to be wrong in the artifact?
+
+**Setup:** Repository created at <https://github.com/MaximG6/adapter-retention>.
+Verification by extracting text from both built PDFs with `pypdf`, not by grepping the
+sources — which is what caught the finding below.
+
+**Command:** `PYTHONPATH=src python analysis/gen_readme.py --write`,
+`PYTHONPATH=src python analysis/build_arxiv_pdf.py --tectonic <path>`,
+`PYTHONPATH=src python analysis/build_pdf.py`
+
+**Result:**
+
+*The release items.* Author `Maxim Gerasimov <maxim.highcroft@gmail.com>` at four sites.
+`main.tex`'s `\author` stays the single source for the rendering, as `\title` already
+was; the given/family split — which no parser can infer, since last-token-is-the-surname
+is wrong for a large fraction of names — is declared in `gen_readme` and **checked**
+against the rendering, raising on disagreement rather than picking a winner.
+`xref.author_disagreements()` covers `LICENSE`, which nothing generates and nothing read.
+The tooling disclosure sits after the README's *Read this* table. The URL is substituted
+at **six** sites, not the three an earlier note counted: `CITATION.cff` did not exist
+when that count was written, and the generated `appendices.tex` carried its own copy of
+the clone line.
+
+*The finding.* **The arXiv PDF's Appendix B was two rounds out of date, and every gate
+passed on it.**
+
+`md_to_tex.py` raises rather than substitute `?` for an unmapped non-ASCII character
+inside a code span. `U+00BD` was not in `TT_ASCII`, and the half-bin correction (M15)
+wrote `u = frac(w/s + z + ½)` with the glyph. So the converter had been raising since
+2026-08-06 15:22 and `paper/tex/appendices.tex` had not been regenerated since.
+
+The build did not notice, because step 2 checked `r.stdout` for the string `"survived
+conversion"` and never looked at `r.returncode`:
+
+| | markdown source | shipped arXiv PDF | shipped technical report |
+|---|---|---|---|
+| B.8 `0.0312` (sign-flip floor) | present | **absent** | present |
+| B.8 "sign-flip" | present | **absent** | present |
+| B.8 "excludes zero" column | retracted | **still shown** | retracted |
+
+EXP-057's central appendix change — replacing the bootstrap "excludes zero" column with
+the exact sign-flip permutation test — reached the technical report, which builds from
+the markdown directly, and **not** the arXiv build, which goes through the converter.
+Regenerating moves `appendices.tex` from 996 to 1006 lines, +23 −13.
+
+Every downstream gate passed throughout: the cross-reference gate, the cross-table gate,
+the count-word gate, the retraction gate and the forward gate were all reading a file
+that was internally consistent and two rounds old. Nothing any of them checks is
+violated by a stale-but-coherent artifact.
+
+**Verdict:** WORKED (release complete; one shipped defect found and fixed).
+
+**What we learned:**
+
+1. **Verify the artifact, not the source.** Every source file was correct at every step
+   of this round. The instruction to confirm the substitution by extracting page text
+   rather than by grepping is the only reason this was found, and it was found
+   incidentally — the extraction reported one surviving `<repo-url>` in the arXiv PDF and
+   none in the report, and that asymmetry is what exposed the converter. A check that can
+   only see the input cannot see a build that ignored it.
+2. **This is the same defect as the one three lines below it in the same function, one
+   process earlier.** `build_arxiv_pdf.py` already checks tectonic's return code *and*
+   independently checks that `main.pdf` was rewritten, with a comment recording that a
+   failed compile had once left every gate inspecting yesterday's PDF. The identical
+   hazard sat one step upstream in the same file, unguarded, and the fix that was written
+   for the second stage was not carried back to the first. M.9's propagation failure, in
+   code rather than in prose: the correction landed where the defect was found and not at
+   the other site with the same shape.
+3. **Two build paths from one source is a control, and it worked.** The technical report
+   and the arXiv PDF derive from the same markdown by different routes. That is normally
+   redundancy; here it was the only reason the divergence was detectable at all. Had the
+   arXiv build been the sole path, the stale appendix would have been invisible.
+
+**Plan impact:** None to any measured value; the markdown was correct throughout and no
+number changed. The arXiv PDF now states what §B.8 has said since EXP-057. Both PDFs
+rebuild at 31 and 81 pages.
+
+**Artifacts:** `analysis/md_to_tex.py` (`TT_ASCII`), `analysis/build_arxiv_pdf.py`
+(step 2 return-code check), `paper/tex/appendices.tex`, `analysis/gen_readme.py`
+(`paper_author`, `CLONE_URL`), `analysis/xref.py` (`author_disagreements`),
+`CITATION.cff`, `README.md`.
