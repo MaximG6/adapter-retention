@@ -126,6 +126,12 @@ def style(ax) -> None:
 #: report keep them, because there the figure travels alone.
 PAPER_MODE = os.environ.get("AR_FIG_PAPER") == "1"
 
+#: In paper mode only the vector figure is written. The raster copies under
+#: paper/figures-paper/ were read by nothing -- LaTeX takes the .pdf and the HTML
+#: report takes paper/figures/*.png -- so twelve files and 3.2 MB of history were
+#: build output nobody consumed.
+EXTS = ("pdf",) if PAPER_MODE else ("png", "pdf")
+
 
 def head(fig, title: str, sub: str, y: float = 0.965, ys: float = 0.885) -> None:
     if PAPER_MODE:
@@ -139,7 +145,7 @@ def head(fig, title: str, sub: str, y: float = 0.965, ys: float = 0.885) -> None
 
 def save(fig, name: str, dpi: int) -> None:
     FIGDIR.mkdir(parents=True, exist_ok=True)
-    for ext in ("png", "pdf"):
+    for ext in EXTS:
         fig.savefig(FIGDIR / f"{name}.{ext}", dpi=dpi, bbox_inches="tight",
                     facecolor="white")
     print(f"  wrote {name}.png/.pdf")

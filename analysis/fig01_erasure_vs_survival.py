@@ -73,6 +73,12 @@ FAINT = "#e8e8e8"
 #: title, so in-figure headers are suppressed.
 PAPER_MODE = os.environ.get("AR_FIG_PAPER") == "1"
 
+#: In paper mode only the vector figure is written. The raster copies under
+#: paper/figures-paper/ were read by nothing -- LaTeX takes the .pdf and the HTML
+#: report takes paper/figures/*.png -- so twelve files and 3.2 MB of history were
+#: build output nobody consumed.
+EXTS = ("pdf",) if PAPER_MODE else ("png", "pdf")
+
 
 def mean(xs: list[float]) -> float:
     return statistics.mean(xs) if xs else float("nan")
@@ -220,7 +226,7 @@ def main() -> int:
         fontsize=8.6, color=GREY, ha="left", va="top", linespacing=1.55)
 
     FIGDIR.mkdir(parents=True, exist_ok=True)
-    for ext in ("png", "pdf"):
+    for ext in EXTS:
         out = FIGDIR / f"fig01_erasure_vs_survival.{ext}"
         fig.savefig(out, dpi=args.dpi, bbox_inches="tight", facecolor="white")
         print(f"wrote {out.relative_to(REPO_ROOT)}")
