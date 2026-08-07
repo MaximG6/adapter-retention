@@ -94,7 +94,7 @@ No gated repositories are required. Any GPU of sm_80 (Ampere) or newer runs this
 ```bash
 pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cu128
 pip install -r requirements.txt
-PYTHONPATH=src python -m pytest -q                      # 228 passed
+PYTHONPATH=src python -m pytest -q                      # 231 passed
 PYTHONPATH=src python analysis/audit_draft_numbers.py   # 320/320 claims vs raw
 PYTHONPATH=src python analysis/retracted.py             # 17 retracted wordings, none asserted
 PYTHONPATH=src python analysis/forward.py               # every summary claim has a source
@@ -361,7 +361,7 @@ Unpublished. There is no arXiv identifier yet, and this block will not invent on
 
 ```bibtex
 @misc{adapter_retention_2026,
-  author = {Maxim},
+  author = {Gerasimov, Maxim},
   title  = {Weight-Space Erasure Without Behavioural Collapse in Quantized LoRA Adapters},
   year   = {2026},
   note   = {Manuscript and raw records: <REPO-URL>},

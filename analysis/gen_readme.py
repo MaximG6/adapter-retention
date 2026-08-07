@@ -35,9 +35,13 @@ MAIN_TEX = REPO_ROOT / "paper" / "tex" / "main.tex"
 ARXIV_PDF = REPO_ROOT / "paper" / "adapter-retention-arxiv.pdf"
 REPORT_PDF = REPO_ROOT / "paper" / "adapter-retention-technical-report.pdf"
 
-#: The author as the paper states it. One literal, because three artifacts name it and
-#: the failure mode is that they stop agreeing.
-AUTHOR = "Maxim"
+#: The name split, which no parser can infer: "Gerasimov, Maxim" for BibTeX and the
+#: family/given fields for CITATION.cff need to know which token is which, and
+#: last-token-is-the-surname is wrong for a large fraction of the world's names. So the
+#: split is declared here and *checked* against `\author` in main.tex, which stays the
+#: single source for how the name is rendered -- the same arrangement as the title.
+GIVEN = "Maxim"
+FAMILY = "Gerasimov"
 EMAIL = "maxim.highcroft@gmail.com"
 
 # Filled in at push time, in the three places it appears: here, paper/tex/main.tex and
@@ -125,9 +129,34 @@ def paper_title() -> str:
     return title
 
 
+def paper_author() -> str:
+    r"""The author as `paper/tex/main.tex` sets it, with the \thanks footnote stripped.
+
+    Read for the same reason the title is: four artifacts name the author and the
+    failure mode is that they stop agreeing. `\thanks` is removed before the general
+    command strip because its argument is a sentence, not a name.
+    """
+    text = MAIN_TEX.read_text(encoding="utf-8")
+    m = re.search(r"\\author\{(.*?)\}\s*\n\s*\\date", text, re.S)
+    if not m:
+        raise RuntimeError(f"no \\author{{...}} found in {MAIN_TEX.name}")
+    body = re.sub(r"\\thanks\{.*?\}\}", "", m.group(1) + "}", flags=re.S)
+    body = re.sub(r"\\[a-zA-Z]+(?:\{[^{}]*\})?", " ", body)
+    name = " ".join(body.replace("{", " ").replace("}", " ").split())
+    if not name:
+        raise RuntimeError(f"\\author in {MAIN_TEX.name} stripped to nothing")
+    if name != f"{GIVEN} {FAMILY}":
+        raise RuntimeError(
+            f"{MAIN_TEX.name} renders the author as {name!r}, but this file splits it "
+            f"as given={GIVEN!r} family={FAMILY!r}. One of the two is wrong, and "
+            f"guessing which would put a fabricated name on a paper.")
+    return name
+
+
 def citation_cff() -> str:
     """CITATION.cff, from the same title and author the paper and README use."""
     title = paper_title()
+    paper_author()  # raises if main.tex and the declared split disagree
     return (
         "cff-version: 1.2.0\n"
         "message: >-\n"
@@ -137,7 +166,8 @@ def citation_cff() -> str:
         "title: >-\n"
         f"  {title}\n"
         "authors:\n"
-        f"  - given-names: {AUTHOR}\n"
+        f"  - family-names: {FAMILY}\n"
+        f"    given-names: {GIVEN}\n"
         f"    email: {EMAIL}\n"
         "    affiliation: Independent researcher\n"
         f"repository-code: '{REPO_URL}'\n"
@@ -625,7 +655,7 @@ def main() -> int:
     a("")
     a("```bibtex")
     a("@misc{adapter_retention_2026,")
-    a(f"  author = {{{AUTHOR}}},")
+    a(f"  author = {{{FAMILY}, {GIVEN}}},")
     a(f"  title  = {{{paper_title()}}},")
     a("  year   = {2026},")
     a(f"  note   = {{Manuscript and raw records: {REPO_URL}}},")

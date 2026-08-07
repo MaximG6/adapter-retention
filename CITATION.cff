@@ -6,7 +6,8 @@ type: software
 title: >-
   Weight-Space Erasure Without Behavioural Collapse in Quantized LoRA Adapters
 authors:
-  - given-names: Maxim
+  - family-names: Gerasimov
+    given-names: Maxim
     email: maxim.highcroft@gmail.com
     affiliation: Independent researcher
 repository-code: '<REPO-URL>'

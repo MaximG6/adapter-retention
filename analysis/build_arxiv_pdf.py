@@ -217,7 +217,14 @@ def main() -> int:
         for where, got in titles:
             print(f"       {where}: {got!r}", file=sys.stderr)
         return 1
-    print("     every citation block names the paper's actual title")
+    authors = xref.author_disagreements()
+    if authors:
+        print(f"     {len(authors)} artifacts attribute the work to a different "
+              "person:", file=sys.stderr)
+        for where, got in authors:
+            print(f"       {where}: {got!r}", file=sys.stderr)
+        return 1
+    print("     every citation block names the paper's actual title and author")
 
     # Table-to-table agreement. The prose-level check passed 18/18 while two tables
     # printed the same interval with different values, because both were tables.
