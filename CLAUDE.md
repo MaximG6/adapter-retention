@@ -20,14 +20,17 @@ Target output: solo-authored paper plus public repo, sent to Mohit Bansal and Hu
 
 **Phases 0 and 1 complete. Phase 2 not started.** GATE 0 and GATE 1 passed; the
 decision not to open Phase 2 is recorded in the plan with its reasoning and its
-falsifier. Manuscript drafted in `paper/`, 58 entries in `EXPERIMENTS.md`, both PDFs
+falsifier. Manuscript drafted in `paper/`, 59 entries in `EXPERIMENTS.md`, both PDFs
 built. Remaining before release: the `<REPO-URL>` placeholder, which is blocked on
 the repository actually existing.
 
-This count is no longer hand-maintained: `analysis/countcheck.py` resolves it against
-the notebook, and this file is inside that gate's perimeter as of EXP-058. It said 31
-against 58 until then, because every gate stopped at the repository's public face and
-this file is the one that decides what goes into it.
+That count is still typed by hand, but it is no longer unchecked: this file joined
+`analysis/countcheck.py`'s perimeter in EXP-059, and the gate resolves it against the
+`EXP-NNN` headings in the notebook. It read 31 against 58 until then, because every
+gate stopped at the repository's public face and this is the file that decides what
+goes into it. **If you add a notebook entry, this number goes stale and the build
+fails** — which is the point, and it caught this sentence at 58 against 59 within
+minutes of the rule being written.
 
 Update this section as phases complete. It sat at "Phase 0, day 1. Nothing built yet"
 until 2026-08-03, which is the same hand-maintained-status failure that put stale

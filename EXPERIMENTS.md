@@ -193,6 +193,61 @@ that amendment.
 
 ---
 
+## COMMIT SHA MAP — addendum of 2026-08-07
+
+**The 2026-08-03 table is incomplete, and this completes it rather than replacing it.**
+That pass rewrote 33 messages and published 33 rows. But changing a message changes
+every commit after it, so **43 SHAs actually moved** — the other 10 by cascade, plus two
+whose messages were rewritten in the same pass without reaching the table, and one that
+became empty and was pruned. The table recorded the commits that were *edited*, not the
+commits that *changed*, and those are different sets.
+
+It went unnoticed because the manifests, which the note was written for, all name
+commits from the published range. What it missed is a different population: **`EXP-030`
+through `EXP-032` cite commits in their entry bodies**, and six of those citations
+resolve to nothing — `5e19138d`, `c3b8933`, `872bf3f`, `27a42c5` at lines 2422, 2472,
+2480, 2505, 2511 and 2516. A reader following them gets no object and no way to look
+one up. They were already dangling before the 2026-08-06 rewrite; that pass did not
+create them and did not fix them either.
+
+The `new SHA` column below is the **current** value, after both rewrites, so these rows
+can be read directly rather than chained through the 2026-08-06 table.
+
+| old SHA (pre-2026-08-03) | new SHA (current) | subject |
+|---|---|---|
+| `5a4ae1cd0b` | `9cdfe7e9ba` | arXiv-format PDF: two-column LaTeX, 7pp body + 19pp appendices |
+| `5e19138d7f` | `5d3ed51fb5` | Rebuild artifacts after history rewrite; correct a page count |
+| `c3b89335fa` | `e3a4924ee1` | Move process documents into docs/ |
+| `2cd5764a48` | `24a7170437` | Add MIT licence |
+| `b00240e63c` | `2cbbcb4c0e` | Pin matplotlib, markdown and pypdf |
+| `069770ca49` | `a6d77eccfd` | README: surface both PDFs, the notebook, and the tool |
+| `cd660a02e6` | `9c2ab49acb` | Audit the README against the raw records |
+| `872bf3f422` | `1db19ae784` | Appendix D: explain the two figure directories |
+| `6066996fd6` | `0e67a732da` | Remove analysis/phase1_grid.py; untrack the report HTML; mark schema.py as specification |
+| `6453cfa420` | `5fbf62e9a5` | Log EXP-031 and EXP-032; note the docs/ move alongside the SHA map |
+| `27a42c538c` | `5ee7b0806c` | Correct the figure-directory instructions in Appendix D |
+| `58b6cb5ba6` | `fdb8692f69` | Fix two paper/OUTLINE.md references the move left stale |
+
+One further commit changed in that pass and has no new SHA: **`df32dc8`** became empty
+and was pruned. `EXP-030` already records it as *"(became empty; pruned)"*, and it is
+listed here so the accounting closes at 43.
+
+**Correction to the 2026-08-06 note above, which was written two commits ago and is
+wrong.** It ends: *"adding this table amends the tip commit, so the last row's new SHA
+is its value before that amendment."* No amendment happened — the table was added in a
+new commit on top, so `5cdddd58d1` → `76600515f7` is current and needs no adjustment.
+The sentence described the 2026-08-03 procedure and was carried over without checking
+that this pass used the same one. It is left in place, because the point of these notes
+is that they show what was believed when they were written.
+
+**What this does not change.** The 30 `manifest.json` files still name pre-rewrite
+commits and are still correct to do so, for the reason the 2026-08-03 note gives. The
+entry bodies above are likewise not edited: they were accurate when written and this
+file is append-only. What was missing was the means to resolve them, and that is what
+these rows are.
+
+---
+
 ## PATHS — process documents moved to `docs/` on 2026-08-03
 
 **Entries below this point were written when the process documents sat at the repository
@@ -4509,3 +4564,122 @@ of this file should be able to find.
 **Artifacts:** the Phase A1 report (delivered in conversation, not in the repository —
 which is point 2); the rewrite itself is the COMMIT SHA MAP for 2026-08-06 at the head
 of this file.
+
+---
+
+## [2026-08-07] EXP-059: Pre-push audit; a citation block that named the wrong work
+
+**Phase:** n/a (release readiness; no measured value involved)
+
+**Question:** Before the repository is made public, what in it is wrong, misleading, or
+private? Every tracked file and every blob in the full history.
+
+**Setup:** 1,267 blobs scanned against 19 patterns in four families — identity and
+attribution, personal data, credentials, and repository hygiene. Run against a
+`--no-local` clone carrying only reachable objects, so the scan sees what a cloner gets
+rather than the pre-rewrite leftovers in this working copy's reflog.
+
+**Command:** the scan scripts are throwaway; the durable checks it produced are
+`analysis/xref.py::title_disagreements` and the two new `countcheck` rules.
+
+**Result:**
+
+*Secrets: clean.* Zero `hf_`, `sk-`, `ghp_`, `github_pat_`, `AKIA`, `xox[baprs]-`, zero
+private-key blocks, zero credential assignments, zero email addresses, zero hostnames,
+zero `anaconda3` or home-directory paths — in **every blob ever committed**, not only at
+HEAD. The one `C:\Users\Maxim` in the repository is inside `EXP-032`'s audit table, in
+the row asserting that there is no such string in any blob; writing the finding created
+the only instance of it.
+
+*The one substantive defect.* **The README's BibTeX named a work this paper is not.**
+
+| artifact | title |
+|---|---|
+| `paper/tex/main.tex` | Weight-Space Erasure Without Behavioural Collapse in Quantized LoRA Adapters |
+| `README.md` BibTeX | Near-Total Weight-Space Erasure Without Behavioural Collapse: What Survives When a Merged LoRA Is Quantized |
+
+Anyone citing from the repository attributed a title whose PDF says something else, and
+it had been so for the whole project. Fixed by **generation**: `gen_readme.paper_title()`
+reads `\title` from `main.tex`, and the BibTeX and the new `CITATION.cff` are written
+from it. `xref.title_disagreements()` covers the remaining path, a hand-edit to a
+generated file, and is tested against the title as it actually shipped.
+
+*Hygiene.* Twelve `paper/figures-paper/*.png` were build output nothing consumed — LaTeX
+includes the `.pdf`, the HTML report embeds `paper/figures/*.png` — 1.5 MB tracked and
+3.2 MB across the history. The figure scripts no longer write them in paper mode.
+`analysis/contrasts.py` (106 lines) was superseded by `appendix_tables.b8_paired_contrasts`
+and deleted; it would have printed bootstrap intervals whose inferential reading EXP-056
+withdrew.
+
+*The count-word gap EXP-058 named, closed.* `CLAUDE.md` said "31 entries in
+`EXPERIMENTS.md`" against 58. `countcheck` now resolves that phrase and the README's
+"(N entries)" against `EXP-NNN` headings — specifically `EXP-NNN`, because the notebook
+also carries the entry-format template, which looks like an entry and is not one — and
+`CLAUDE.md` is inside the perimeter. Run before the fix, the gate named the sentence. It then named it a second time,
+at 58 against 59, minutes later when this entry was appended — which is the rule
+working, and the reason the number is checked rather than trusted.
+
+*The pinned revision, which is the important one.* `tests/test_forward.py` pinned the
+tree the forward gate was written against by abbreviated SHA. Two message rewrites
+retired that SHA, and **the second time the test did not fail — it skipped.**
+`pytest.skip` on an unresolvable revision, so the suite reported 226 passed while the
+only test proving the forward gate can fire had stopped running. Demonstrated in a clean
+clone: `SKIPPED [1] 23a8e26 not in this clone`, suite green. It now resolves an annotated
+tag, `forward-gate-exemplar`, which `git filter-repo` rewrites along with the commit it
+points at, and it **fails** rather than skipping when the reference is missing. Verified
+both ways: passing against the tag in a clone carrying only reachable objects, and
+failing — not skipping — when the tag is removed.
+
+*The 2026-08-03 SHA map was incomplete.* That pass published 33 rows for 33 rewritten
+messages, but **43 SHAs moved**, because a message rewrite changes every descendant. Six
+citations in `EXP-030`–`EXP-032` entry bodies pointed at commits in the unpublished 10
+and resolved to nothing. The addendum at the head of this file publishes the 12 missing
+rows with their current values, plus the one commit that became empty and was pruned.
+These were already dangling before the 2026-08-06 rewrite.
+
+**Verdict:** WORKED.
+
+**What we learned:**
+
+1. **A citation block is a cross-artifact claim, and nothing was checking it.** This
+   project has a gate for numbers that disagree between artifacts, a gate for table cells
+   that disagree, and a gate for references that point at the wrong section. The *title
+   of the work itself* disagreed across artifacts for the entire project. The checks grew
+   by following defects, so they cover the places defects were found and not the places
+   they were not — M.1, with a specific instance.
+2. **Deriving beats checking, where deriving is possible.** The title is now read from
+   `main.tex` rather than compared against it, so the README and `CITATION.cff` cannot
+   drift by generation at all. The gate exists only for the hand-edit path. Where a value
+   can be generated, a gate that notices disagreement is the weaker of the two available
+   fixes (M.4).
+3. **A skipping test is worse than a failing one and looks better than a passing one.**
+   The pinned SHA is the clearest case this project has produced of a check that stopped
+   checking without saying so. It survived because `226 passed` is what a reader looks
+   at, and a skip does not change that number.
+
+**Plan impact:** None to any measured value or any paper claim. Both PDFs rebuild
+unchanged at 31 and 81 pages.
+
+**Decided, not missed: the repository is 29 MB and stays that way for v1.** A clone
+carries 27 copies of the technical report (101 MB uncompressed before delta compression)
+and 27 of the arXiv PDF, because both are tracked and both are rebuilt most rounds.
+Stripping them from history would save roughly 20 MB. It is not being done, for three
+reasons: the history has already been rewritten twice and a third pass to save 20 MB is
+poor value against the risk; the PDFs at each commit are what make the SHA map's page
+counts checkable, which is how several count-word errors were caught; and 29 MB is not
+an obstacle to any reviewer. If this is revisited, the fix is to publish PDFs as release
+assets rather than to rewrite history again. Recorded so a later reader knows it was
+weighed.
+
+**Deferred:** `<REPO-URL>` at three sites (`analysis/gen_readme.py`, `paper/tex/main.tex`,
+and the generated README and `CITATION.cff`). Blocked on the remote existing; it is the
+last release item.
+
+**Not changed, deliberately:** `CLAUDE.md` at the repository root, `\date{\today}` on the
+title page, section 5 living inside `paper/04-results-weight-space.md`, and the Windows
+long-path constraint, which `README.md` already documents under its own heading.
+
+**Artifacts:** `analysis/xref.py` (`title_disagreements`), `analysis/gen_readme.py`
+(`paper_title`, `citation_cff`), `CITATION.cff`, `analysis/countcheck.py`,
+`tests/test_forward.py`, `tests/test_xref.py`, tag `forward-gate-exemplar`, and the
+COMMIT SHA MAP addendum at the head of this file.
