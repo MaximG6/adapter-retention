@@ -31,7 +31,12 @@ in Quantized LoRA Adapters\vspace{-0.3em}}
 \author{Maxim Gerasimov\thanks{Independent researcher. Correspondence:
 \texttt{maxim.highcroft@gmail.com}. Code, raw records and reproduction
 instructions: \url{https://github.com/MaximG6/adapter-retention}}\vspace{-0.6em}}
-\date{\vspace{-0.8em}\small\today\vspace{-1em}}
+% Pinned, not \today. With \today the same commit rendered a different title page on
+% every build, so two readers holding "the paper" could not tell whether they held the
+% same document, and a date on the page said only when someone last ran tectonic.
+% Bump this deliberately when the manuscript changes, as a version string.
+\newcommand{\paperdate}{August 7, 2026}
+\date{\vspace{-0.8em}\small\paperdate\vspace{-1em}}
 
 \begin{document}
 \maketitle

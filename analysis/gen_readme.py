@@ -114,6 +114,40 @@ def exp_count() -> int:
     return len(exp_links())
 
 
+def _braced(macro: str) -> str:
+    r"""The balanced argument of `\macro{...}` in main.tex.
+
+    Brace-matched rather than delimited by whatever macro happens to follow. The first
+    version of this read `\title{...}` up to `\author` and `\author{...}` up to `\date`,
+    which works exactly until something is written between them -- pinning the date put
+    a comment and a \newcommand after \author, and the author check then reported the
+    comment as part of the name. A parser whose correctness depends on neighbouring
+    lines not changing is not a parser.
+    """
+    text = MAIN_TEX.read_text(encoding="utf-8")
+    start = text.find("\\" + macro + "{")
+    if start < 0:
+        raise RuntimeError(f"no \\{macro}{{...}} found in {MAIN_TEX.name}")
+    i = start + len(macro) + 2
+    depth = 1
+    while i < len(text) and depth:
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+        i += 1
+    if depth:
+        raise RuntimeError(f"unbalanced braces in \\{macro}{{...}} in {MAIN_TEX.name}")
+    return text[start + len(macro) + 2:i - 1]
+
+
+def _plain(latex: str) -> str:
+    """LaTeX markup out, words left."""
+    body = re.sub(r"(?m)%.*$", "", latex)
+    body = re.sub(r"\\[a-zA-Z]+(?:\{[^{}]*\})?", " ", body)
+    return " ".join(body.replace("{", " ").replace("}", " ").split())
+
+
 def paper_title() -> str:
     r"""The title as `paper/tex/main.tex` sets it, with LaTeX spacing stripped.
 
@@ -122,12 +156,7 @@ def paper_title() -> str:
     work whose PDF says something else. Deriving it means the two cannot disagree,
     which is a stronger guarantee than a gate that notices when they do (M.4).
     """
-    text = MAIN_TEX.read_text(encoding="utf-8")
-    m = re.search(r"\\title\{(.*?)\}\s*\n\s*\\author", text, re.S)
-    if not m:
-        raise RuntimeError(f"no \\title{{...}} found in {MAIN_TEX.name}")
-    body = re.sub(r"\\[a-zA-Z]+(?:\{[^{}]*\})?", " ", m.group(1))
-    title = " ".join(body.replace("{", " ").replace("}", " ").split())
+    title = _plain(_braced("title"))
     if not title:
         raise RuntimeError(f"\\title in {MAIN_TEX.name} stripped to nothing")
     return title
@@ -140,13 +169,10 @@ def paper_author() -> str:
     failure mode is that they stop agreeing. `\thanks` is removed before the general
     command strip because its argument is a sentence, not a name.
     """
-    text = MAIN_TEX.read_text(encoding="utf-8")
-    m = re.search(r"\\author\{(.*?)\}\s*\n\s*\\date", text, re.S)
-    if not m:
-        raise RuntimeError(f"no \\author{{...}} found in {MAIN_TEX.name}")
-    body = re.sub(r"\\thanks\{.*?\}\}", "", m.group(1) + "}", flags=re.S)
-    body = re.sub(r"\\[a-zA-Z]+(?:\{[^{}]*\})?", " ", body)
-    name = " ".join(body.replace("{", " ").replace("}", " ").split())
+    raw = _braced("author")
+    # \thanks holds a sentence with an email and a URL; strip it before the general
+    # command pass, which would otherwise leave its prose in the name.
+    name = _plain(re.sub(r"\\thanks\{.*?\}\}", "", raw + "}", flags=re.S))
     if not name:
         raise RuntimeError(f"\\author in {MAIN_TEX.name} stripped to nothing")
     if name != f"{GIVEN} {FAMILY}":

@@ -11,6 +11,7 @@ be good, in both directions, and the period case is pinned explicitly.
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
 
@@ -336,3 +337,38 @@ def test_the_author_gate_flags_each_artifact_that_drifts(tmp_path, monkeypatch) 
         "authors:\n  - family-names: Maxim\n    given-names: Gerasimov\n",
         encoding="utf-8")
     assert xref.author_disagreements() == [("CITATION.cff", "Gerasimov Maxim")]
+
+def test_the_parser_survives_anything_written_between_the_macros(tmp_path,
+                                                                 monkeypatch) -> None:
+    r"""Pinning the state that broke it. The first version read \title up to \author and
+    \author up to \date. Pinning the date put a comment block and a \newcommand between
+    \author and \date, and the author check then reported the comment as part of the
+    name and failed the build. Brace matching does not care what sits between."""
+    gen_readme = _load("gen_readme")
+    tex = tmp_path / "paper" / "tex"
+    tex.mkdir(parents=True)
+    (tex / "main.tex").write_text(
+        "\\title{\\bfseries A Title\\vspace{-0.3em}}\n"
+        "% a comment mentioning \\title and \\date to be awkward\n"
+        "\\author{Maxim Gerasimov\\thanks{Independent researcher. Mail: "
+        "\\texttt{a@b.c}}\\vspace{-0.6em}}\n"
+        "% Pinned, not \\today. Bump deliberately.\n"
+        "\\newcommand{\\paperdate}{August 7, 2026}\n"
+        "\\date{\\small\\paperdate}\n",
+        encoding="utf-8")
+    monkeypatch.setattr(gen_readme, "MAIN_TEX", tex / "main.tex")
+
+    assert gen_readme.paper_title() == "A Title"
+    assert gen_readme.paper_author() == "Maxim Gerasimov"
+
+
+def test_the_date_is_pinned_rather_than_today() -> None:
+    r"""\today renders a different title page from the same commit on a different day,
+    so a reader cannot tell which build they hold and two people comparing "the paper"
+    cannot tell whether they have the same one."""
+    main = (ROOT / "paper" / "tex" / "main.tex").read_text(encoding="utf-8")
+    # Comments out first: the note explaining why the date is pinned says \today, and a
+    # gate that fires on the documentation of its own rule is one nobody keeps.
+    live = "\n".join(re.sub(r"(?<!\\)%.*$", "", ln) for ln in main.splitlines())
+    assert "\\today" not in live, "the title page date must be pinned, not \\today"
+    assert re.search(r"\\newcommand\{\\paperdate\}\{[A-Z][a-z]+ \d{1,2}, \d{4}\}", live)
