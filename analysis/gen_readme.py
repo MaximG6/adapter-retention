@@ -456,6 +456,12 @@ def main() -> int:
       "scaling convention were wrong, each caught by measurement before it reached a "
       "figure; one wrong citation survived the whole project.")
     a("")
+    a("**On tooling.** This work was implemented with Claude Code: I set the research "
+      "questions, the experimental design and the decision at each gate; the tool wrote "
+      "and ran the code, performed the analysis and drafted text against those "
+      "decisions. [EXPERIMENTS.md](EXPERIMENTS.md) and "
+      "[METHODOLOGY.md](METHODOLOGY.md) are the dated record of which was which.")
+    a("")
     a("## Will *my* adapter survive? — `ar.predict`")
     a("")
     a("No adapter card publishes effective magnitude, so retention cannot currently be "

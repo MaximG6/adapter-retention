@@ -28,6 +28,8 @@ We measure the weights, then measure the behaviour on the same models.
 
 The corrections are the entries worth reading. Three metric definitions and one scaling convention were wrong, each caught by measurement before it reached a figure; one wrong citation survived the whole project.
 
+**On tooling.** This work was implemented with Claude Code: I set the research questions, the experimental design and the decision at each gate; the tool wrote and ran the code, performed the analysis and drafted text against those decisions. [EXPERIMENTS.md](EXPERIMENTS.md) and [METHODOLOGY.md](METHODOLOGY.md) are the dated record of which was which.
+
 ## Will *my* adapter survive? — `ar.predict`
 
 No adapter card publishes effective magnitude, so retention cannot currently be predicted from published metadata. This computes it — no GPU, no training, ~150 MB of network.
