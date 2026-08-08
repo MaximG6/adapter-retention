@@ -33,6 +33,8 @@ from typing import Any
 import matplotlib
 import matplotlib.pyplot as plt
 
+import figlayout
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bootstrap  # noqa: E402
 import word_vs_noise as wvn  # noqa: E402
@@ -144,6 +146,10 @@ def head(fig, title: str, sub: str, y: float = 0.965, ys: float = 0.885) -> None
 
 
 def save(fig, name: str, dpi: int) -> None:
+    # Same measured layout as Figure 1: captions grow downward, hardcoded `top` values
+    # do not follow, and no numeric gate can see text drawn over a panel.
+    figlayout.fit_below_texts(fig)
+    figlayout.assert_no_overlap(fig, name)
     FIGDIR.mkdir(parents=True, exist_ok=True)
     for ext in EXTS:
         fig.savefig(FIGDIR / f"{name}.{ext}", dpi=dpi, bbox_inches="tight",

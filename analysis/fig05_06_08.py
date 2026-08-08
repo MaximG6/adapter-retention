@@ -27,6 +27,8 @@ from typing import Any
 import matplotlib
 import matplotlib.pyplot as plt
 
+import figlayout
+
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bootstrap  # noqa: E402
@@ -114,6 +116,10 @@ def style(ax) -> None:
 
 
 def save(fig, name: str, dpi: int) -> None:
+    # Same measured layout as Figure 1: captions grow downward, hardcoded `top` values
+    # do not follow, and no numeric gate can see text drawn over a panel.
+    figlayout.fit_below_texts(fig)
+    figlayout.assert_no_overlap(fig, name)
     FIGDIR.mkdir(parents=True, exist_ok=True)
     for ext in EXTS:
         out = FIGDIR / f"{name}.{ext}"

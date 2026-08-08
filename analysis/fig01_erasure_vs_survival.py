@@ -41,6 +41,8 @@ from typing import Any
 import matplotlib
 import matplotlib.pyplot as plt
 
+import figlayout
+
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from figcheck import Check, ref_retention_by_word, ref_weight_flip_rate  # noqa: E402
@@ -225,6 +227,11 @@ def main() -> int:
         f"individual adapters.",
         fontsize=8.6, color=GREY, ha="left", va="top", linespacing=1.55)
 
+    # Measured, not tuned. The caption grew from three lines to five during the
+    # non-detection reframe and the fifth was drawn through "Intended update RETAINED";
+    # a hand-picked `top` would only move the collision one caption edit away.
+    figlayout.fit_below_texts(fig)
+    figlayout.assert_no_overlap(fig, "fig01_erasure_vs_survival")
     FIGDIR.mkdir(parents=True, exist_ok=True)
     for ext in EXTS:
         out = FIGDIR / f"fig01_erasure_vs_survival.{ext}"
