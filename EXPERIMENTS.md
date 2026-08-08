@@ -5038,3 +5038,178 @@ should be bumped deliberately when the manuscript changes.
 
 **Artifacts:** `paper/tex/main.tex`, `analysis/gen_readme.py` (`_braced`, `_plain`),
 `tests/test_xref.py`.
+
+---
+
+## [2026-08-07] EXP-064: A prose edit broke three figures, and every gate passed
+
+**Phase:** n/a (figure layout; no measured value involved)
+
+**Question:** Figure 1's caption was drawn through its panel title. How many figures had
+the same defect, in which render modes, and why did nothing catch it?
+
+**Setup:** Every figure carried a caption at a fixed `y=0.885` with `va="top"` and its
+axes at a fixed `subplots_adjust(top=...)`. The two numbers were tuned together once,
+against a caption of a particular length. Audited by running all twelve figures in both
+render modes with a rendered-geometry overlap detector and the layout fix disabled, so
+the report describes the state that shipped.
+
+**Command:** `PYTHONPATH=src python analysis/fig01_erasure_vs_survival.py`, and the same
+for `fig05_06_08.py` and `fig_secondary.py`, with `AR_FIG_PAPER=1` for the second pass.
+
+**Result:**
+
+*Three figures were broken, six collisions, all in default mode:*
+
+| figure | caption ran through |
+|---|---|
+| `fig01_erasure_vs_survival` | "Intended update RETAINED" and "Trained capability RETAINED" |
+| `fig09_bootstrap_intervals` | "int4\_g128 / 1 of 15 pairs separate" and "int4\_per\_channel / 2 of 15 pairs separate" |
+| `figA1_predict_validation` | "code-flip rate (max error 2.3%)" and "cosine (max error 10.4%)" |
+
+**Paper mode: zero collisions, confirmed rather than assumed.** The arXiv build
+suppresses in-figure headers because LaTeX sets the captions, so there is no caption to
+collide with. Verified by running the same detector under `AR_FIG_PAPER=1` and by
+rasterizing page 2 of the built PDF.
+
+*Affected artifacts:* the technical report, which base64-embeds `paper/figures/*.png`,
+and the README, which links the same PNG. Both were rebuilt and both were checked by
+rasterizing, not by reading the source.
+
+*Why Figure 1 grew.* The non-detection reframe added a clause about the interval spanning
+parity and another naming §5.1, taking the caption from three lines to five. `top=0.685`
+had been chosen for three.
+
+*Why nothing caught it.* `figcheck` cross-checks every plotted value against
+`results/raw/**` and passed throughout — 6/6 on fig01 — because **every number was
+right**. What was wrong was that the text was unreadable. No gate in this project looks
+at rendered geometry; the perimeter is numbers, cross-references, count words, retracted
+wordings and unsourced claims, and a caption drawn over a title violates none of them.
+
+*The fix is measured, not re-tuned.* `analysis/figlayout.py` draws the caption, measures
+its rendered extent, and lowers the axes until nothing in the header band can reach them.
+`top` is only ever lowered, so a figure whose layout already works is untouched.
+`assert_no_overlap` raises at save time, so a layout defect stops the build.
+
+*Two things the first version of the fix got wrong, both caught by its own gate:*
+
+1. **Estimating title height from font size.** Right for one line, short for two.
+   `fig09`'s titles are two lines and it stayed broken after being "fixed"; the gate
+   raised on it immediately. Title boxes are now measured.
+2. **A fixture with stub caption lines tested nothing.** `Bbox.overlaps` needs
+   intersection in *both* axes, and a panel title is centred while the caption is
+   left-aligned at `x=0.055`. Short synthetic lines end before the title begins and
+   genuinely do not collide, so the first version of the test reported the shipped defect
+   as clean. The fixture now uses realistic line lengths.
+
+*A separate, older staleness, found while doing this.* The committed
+`fig09_bootstrap_intervals.png` carried a superseded suptitle — "Only at INT3 does the
+between-word spread clearly exceed the noise" — against the script's current "Pairs
+separate at every grid; only at INT3 do four of them". The committed PNG had not been
+regenerated after the title was rewritten. Eight of twelve PNGs changed in content on
+regeneration. Same class as EXP-062: a committed generated artifact out of date with its
+source, invisible because it is internally consistent.
+
+**Verdict:** WORKED.
+
+**What we learned:**
+
+1. **A prose edit can break a layout, and prose edits are not reviewed as code changes.**
+   The caption grew for a good reason — the reframe made the claim more precise — and
+   nobody rebuilds and looks at twelve figures after editing a sentence. The defect
+   entered through the one kind of change that feels safe.
+2. **Correct numbers and a readable figure are different properties, and only one was
+   checked.** `figcheck` was built to stop a figure asserting something the records do
+   not support. It cannot see a figure that asserts the right thing illegibly. Every
+   check in this project inherited the assumption that being wrong means being
+   numerically wrong.
+3. **Two coupled constants tuned together are a defect waiting for either to move.**
+   `y=0.885` and `top=0.685` encoded a caption length nobody wrote down. Deriving one
+   from the other removes the coupling; re-tuning them would have restored it one edit
+   later.
+
+**Plan impact:** None to any measured value; no number in any figure changed. All twelve
+figures regenerate clean in both modes, and a layout collision now fails the build.
+
+**Not fixed, recorded:** `figA1_predict_validation`'s point labels overlap each other in
+the lower-left cluster, where six taboo adapters sit at nearly the same coordinates. That
+is data crowding rather than the caption-over-title class this entry is about, it
+predates these rounds, and fixing it means a label-placement strategy rather than a
+layout measurement.
+
+**Artifacts:** `analysis/figlayout.py`, `tests/test_figlayout.py`,
+`analysis/fig01_erasure_vs_survival.py`, `analysis/fig05_06_08.py`,
+`analysis/fig_secondary.py`, `paper/figures/*`.
+
+
+---
+
+## [2026-08-07] EXP-065: The README's first screen was addressed to the wrong reader
+
+**Phase:** n/a (public face)
+
+**Question:** The README opened like a paper abstract. Does a competent engineer who has
+never read a quantization paper learn what this is, and whether they care, in fifteen
+seconds?
+
+**Setup:** `analysis/gen_readme.py`, which generates `README.md`. The generated file was
+not edited.
+
+**Command:** `PYTHONPATH=src python analysis/gen_readme.py --write`
+
+**Result:**
+
+The first screen was five blocks and roughly 150 words before the figure. Three of them
+were addressed to someone other than the reader:
+
+| block | why it went |
+|---|---|
+| *"Status: Phase 0 and Phase 1 complete. Manuscript drafted. Phase 2 not started"* | Reads as a project in progress. Phase 2 was a **decision** with a recorded falsifier, not an omission, and the manuscript is finished rather than drafted. |
+| *"This file is generated … Do not edit by hand"* | Addressed to contributors. Now an HTML comment in the generated file and a docstring in the generator, where the people who need it are. |
+| *"## What this is"* heading | Announces the answer instead of giving it. |
+| the mechanism sentence — *"a rank-16 LoRA produces a small weight delta and 4-bit quantization has a coarse step size…"* | The paper's job. A reader who wants the mechanism keeps reading. |
+
+What is there now is title, question, answer, figure — 47 words:
+
+> Fine-tune a model with LoRA, merge the adapter in, quantize to 4-bit for deployment.
+> How much of the fine-tune survives?
+>
+> Almost none of the weight update does: the realised change points 13.8% of the way
+> toward the intended one. The behaviour survives anyway, with no detectable loss at
+> INT4 g128. This repository has the paper, the code, the raw records and the full lab
+> notebook.
+
+Nothing was deleted from the document. The precise statement — cosine 0.14, retention
+99.2%, the leak contrast and its interval — moved one heading down under **The numbers**,
+which is where precision belongs and where a reader who wants it will be.
+
+**A regime disagreement, caught while writing the opening.** The first draft printed
+**13.9%** directly above a figure reading **13.8%**. The README's cosine came from the
+fixed-grid regime and Figure 1 plots the deployment regime, which is also what the
+behavioural runs use. Three lines above the offending binding, the generator already
+carried the comment: *"the weight number quoted beside a behavioural one has to come from
+that regime."* The opening sentence quotes a weight number beside a behavioural claim and
+sits directly above the figure, so it takes the deployment value. The two regimes agree
+to 0.8% and diverge in the first decimal of a percentage — invisible at the two decimals
+the paper quotes the cosine to, and the exact size of gap a reader notices between a
+sentence and the picture under it.
+
+**Verdict:** WORKED.
+
+**What we learned:**
+
+1. **Scope discipline survives plain language.** "Almost none of the weight update
+   survives" is a weight-space claim with its number attached in the same sentence, and
+   the behavioural claim is separate and hedged where it must be. The banned framings
+   (§Scope discipline) are about dropping the qualifier, not about using short sentences;
+   `retracted.py` passes on the new text.
+2. **Rounding hid a population difference.** The fixed-grid and deployment cosines are
+   the same number at two decimals, which is how the paper quotes it, so the two regimes
+   had never visibly disagreed anywhere. Quoting one at one more significant figure, next
+   to a figure that used the other, made a real distinction surface as a typo-looking
+   discrepancy.
+
+**Plan impact:** None to any measured value. The reproduce section, the notebook pointer,
+the citation block and the tooling disclosure are unchanged.
+
+**Artifacts:** `analysis/gen_readme.py`, `README.md`.
